@@ -1,0 +1,116 @@
+name: Build ChainBox APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - '.github/workflows/build-chainbox.yml'
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.24.5'
+  JAVA_VERSION: '17'
+
+jobs:
+  build-libbox-and-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout ChainBox app
+        uses: actions/checkout@v4
+        with:
+          path: sing-box-for-android
+
+      - name: Checkout Chain sing-box kernel
+        uses: actions/checkout@v4
+        with:
+          repository: dukangalex/sing-box
+          ref: chain-dev
+          path: sing-box
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          set -e
+          sdkmanager --install "ndk;27.0.12077973" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+
+      - name: Install gomobile
+        working-directory: sing-box
+        run: |
+          set -e
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          gomobile init
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Build libbox.aar (arm64 focus for speed)
+        working-directory: sing-box
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+        run: |
+          set -e
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          # Debug/faster: only arm64; full multi-arch can be enabled later
+          go run ./cmd/internal/build_libbox -target android -platform android/arm64 || {
+            echo "build_libbox failed, trying direct gomobile bind..."
+            TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_low_memory,badlinkname,tfogo_checklinkname0"
+            gomobile bind -v -o libbox.aar -target android/arm64 -androidapi 24 \
+              -javapkg=io.nekohasekai -libname=box \
+              -trimpath -tags "$TAGS" \
+              ./experimental/libbox
+          }
+          ls -lh libbox*.aar || true
+          mkdir -p ../sing-box-for-android/app/libs
+          cp -f libbox.aar ../sing-box-for-android/app/libs/ 2>/dev/null || true
+          # legacy optional
+          if [ -f libbox-legacy.aar ]; then
+            cp -f libbox-legacy.aar ../sing-box-for-android/app/libs/
+          else
+            cp -f libbox.aar ../sing-box-for-android/app/libs/libbox-legacy.aar
+          fi
+          ls -lh ../sing-box-for-android/app/libs/
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble otherDebug APK
+        working-directory: sing-box-for-android
+        run: |
+          set -e
+          chmod +x gradlew
+          ./gradlew :app:assembleOtherDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChainBox-apk
+          path: |
+            sing-box-for-android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
+
+      - name: Upload libbox
+        uses: actions/upload-artifact@v4
+        with:
+          name: libbox-aar
+          path: sing-box-for-android/app/libs/*.aar
+          if-no-files-found: warn
