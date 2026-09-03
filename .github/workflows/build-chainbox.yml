@@ -2,6 +2,16 @@ name: Build ChainBox APK
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish APK to GitHub Releases'
+        required: false
+        default: 'false'
+        type: boolean
+      version_tag:
+        description: 'Release tag when publishing (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
   push:
     branches: [dev]
     paths:
@@ -98,7 +108,6 @@ jobs:
           set -o pipefail
           chmod +x gradlew
           ls -lah app/libs/
-          # Skip style checks that often fail forks; focus on compile+package
           ./gradlew :app:assembleOtherDebug \
             -x lint \
             -x lintDebug \
@@ -123,6 +132,13 @@ jobs:
           set -e
           mkdir -p dist
           find sing-box-for-android -type f -name "*.apk" -exec cp -v {} dist/ \;
+          # Stable name for releases
+          for f in dist/*.apk; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f")
+            cp -f "$f" "dist/ChainBox-android.apk"
+            break
+          done
           ls -lah dist || true
           test "$(ls -A dist 2>/dev/null)"
 
@@ -133,3 +149,24 @@ jobs:
           name: ChainBox-apk
           path: dist/*.apk
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.publish_release == true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version_tag }}
+          name: ChainBox ${{ inputs.version_tag }}
+          body: |
+            ChainBox independent Android client with syncable Chain kernel.
+
+            - Package: `io.chainbox.app`
+            - Kernel: dukangalex/sing-box `chain-dev`
+            - Features: chain outbound, group→node / group→group builder
+
+            Install the APK, open **工具 → 链式代理**, then rebuild service after writing chain.
+          files: |
+            dist/ChainBox-android.apk
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
