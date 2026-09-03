@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
+      - 'scripts/wire_chain_ui.py'
       - '.github/workflows/wire-chain-ui.yml'
 
 permissions:
@@ -14,99 +15,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Patch files
-        run: |
-          set -e
-          python3 << 'PY'
-          from pathlib import Path
-
-          nav = Path('app/src/main/java/io/nekohasekai/sfa/compose/navigation/Navigation.kt')
-          t = nav.read_text()
-          if 'ChainBuilderScreen' not in t:
-              t = t.replace(
-                  'import io.nekohasekai.sfa.compose.screen.tools.OutboundPickerScreen',
-                  'import io.nekohasekai.sfa.compose.screen.tools.ChainBuilderScreen\nimport io.nekohasekai.sfa.compose.screen.tools.OutboundPickerScreen',
-              )
-          if 'tools/chain_builder' not in t:
-              marker = 'route = "tools/stun_test"'
-              idx = t.find(marker)
-              assert idx > 0
-              # insert after the stun_test composable block closes - find matching closing before next composable with enterTransition after stun
-              # Insert right before tools/usbip composable which follows stun in current file order, or after stun block
-              insert_at = t.find('route = "tools/usbip/{serverTag}"', idx)
-              if insert_at < 0:
-                  insert_at = t.find('route = "tools/outbound_picker', idx)
-              # go back to start of that composable(
-              insert_at = t.rfind('composable(', 0, insert_at)
-              block = '''
-        composable(
-            route = "tools/chain_builder",
-            enterTransition = slideInFromRight,
-            exitTransition = slideOutToLeft,
-            popEnterTransition = slideInFromLeft,
-            popExitTransition = slideOutToRight,
-        ) {
-            ChainBuilderScreen(navController = navController)
-        }
-
-'''
-              t = t[:insert_at] + block + t[insert_at:]
-          nav.write_text(t)
-          print('nav ok', 'chain_builder' in t)
-
-          tools = Path('app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ToolsScreen.kt')
-          t = tools.read_text()
-          if 'tools/chain_builder' not in t:
-              marker = 'stringResource(R.string.network_quality)'
-              idx = t.find(marker)
-              card_start = t.rfind('Card(', 0, idx)
-              insert = '''
-        Card(
-            modifier = Modifier\n                .fillMaxWidth()\n                .padding(horizontal = 16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            ),
-        ) {
-            ListItem(
-                headlineContent = {
-                    Text(
-                        "链式代理生成器",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                },
-                supportingContent = {
-                    Text(
-                        "点选节点顺序，生成 chain 配置",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                },
-                leadingContent = {
-                    Icon(
-                        imageVector = Icons.Outlined.Route,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                },
-                modifier = Modifier\n                    .clip(RoundedCornerShape(12.dp))\n                    .clickable { navController.navigate("tools/chain_builder") },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-        }
-
-'''
-              # fix escaped newlines from yaml - write real newlines
-              insert = insert.replace('\\n', '\n')
-              t = t[:card_start] + insert + t[card_start:]
-              tools.write_text(t)
-          print('tools ok', 'chain_builder' in tools.read_text())
-          PY
-
+      - name: Run wire script
+        run: python3 scripts/wire_chain_ui.py
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --staged --stat
-          if git diff --staged --quiet; then echo none; exit 0; fi
+          git add app/src/main/java/io/nekohasekai/sfa/compose/navigation/Navigation.kt \
+                  app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ToolsScreen.kt
+          if git diff --staged --quiet; then
+            echo "No changes"
+            exit 0
+          fi
           git commit -m "feat: wire Chain builder into Tools and Navigation"
           git push
