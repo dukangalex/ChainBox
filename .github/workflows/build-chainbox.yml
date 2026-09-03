@@ -50,21 +50,15 @@ jobs:
           echo "ANDROID_HOME=${ANDROID_HOME}" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=${ANDROID_HOME}" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/28.0.13004108" >> $GITHUB_ENV
-          ls -la "${ANDROID_HOME}/ndk/28.0.13004108" | head
-          java --version
 
-      - name: Install gomobile (SagerNet preferred)
+      - name: Install gomobile
         working-directory: sing-box
         run: |
           set -e
           export PATH="$(go env GOPATH)/bin:$PATH"
-          # Try SagerNet gomobile first, fall back to upstream
           go install github.com/sagernet/gomobile/cmd/gomobile@latest 2>/dev/null || go install golang.org/x/mobile/cmd/gomobile@latest
           go install github.com/sagernet/gomobile/cmd/gobind@latest 2>/dev/null || go install golang.org/x/mobile/cmd/gobind@latest
           gomobile init || true
-          which gomobile
-          which gobind
-          ls -la "$(go env GOPATH)/bin"
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Build libbox.aar
@@ -77,11 +71,7 @@ jobs:
           set -e
           export PATH="$(go env GOPATH)/bin:$PATH"
           export ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          java --version
 
-          # Prefer official helper; -platform limits to arm64 for faster CI
           if go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug; then
             echo "build_libbox succeeded"
           else
@@ -103,23 +93,34 @@ jobs:
           fi
           ls -lh ../sing-box-for-android/app/libs/
 
+      - name: Upload libbox (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libbox-aar
+          path: sing-box-for-android/app/libs/*.aar
+          if-no-files-found: warn
+
       - name: Assemble otherDebug APK
         working-directory: sing-box-for-android
         run: |
           set -e
           chmod +x gradlew
-          ./gradlew :app:assembleOtherDebug --stacktrace
+          ls -lah app/libs/
+          ./gradlew :app:assembleOtherDebug --stacktrace 2>&1 | tee /tmp/gradle.log
+          # print tail of log on failure is handled by set -e
+
+      - name: Show gradle log tail on failure
+        if: failure()
+        run: |
+          echo "===== gradle log (last 200 lines) ====="
+          tail -200 /tmp/gradle.log || true
+          find sing-box-for-android -name "*.apk" 2>/dev/null || true
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ChainBox-apk
           path: sing-box-for-android/app/build/outputs/apk/**/*.apk
-          if-no-files-found: warn
-
-      - name: Upload libbox
-        uses: actions/upload-artifact@v4
-        with:
-          name: libbox-aar
-          path: sing-box-for-android/app/libs/*.aar
           if-no-files-found: warn
