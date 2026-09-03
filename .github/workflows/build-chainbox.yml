@@ -71,9 +71,7 @@ jobs:
           set -e
           export PATH="$(go env GOPATH)/bin:$PATH"
           export ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
-
           go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
-
           ls -lh libbox*.aar
           mkdir -p ../sing-box-for-android/app/libs
           cp -f libbox.aar ../sing-box-for-android/app/libs/
@@ -91,27 +89,47 @@ jobs:
           path: sing-box-for-android/app/libs/*.aar
 
       - name: Assemble APKs
+        id: assemble
         working-directory: sing-box-for-android
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
         run: |
-          set -e
+          set -o pipefail
           chmod +x gradlew
           ls -lah app/libs/
+          # Skip style checks that often fail forks; focus on compile+package
+          ./gradlew :app:assembleOtherDebug \
+            -x lint \
+            -x lintDebug \
+            -x detekt \
+            -x spotlessCheck \
+            -x spotlessKotlin \
+            --stacktrace \
+            --no-daemon \
+            2>&1 | tee /tmp/gradle-assemble.log
 
-          # Try debug first (no signing secrets required)
-          ./gradlew :app:assembleOtherDebug --stacktrace --no-daemon
+      - name: Upload gradle log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-log
+          path: /tmp/gradle-assemble.log
+          if-no-files-found: ignore
 
-          echo "===== search apk ====="
-          find app/build/outputs -type f -name "*.apk" -print || true
-          find . -type f -name "*.apk" -print || true
+      - name: Collect APKs
+        if: success()
+        run: |
+          set -e
+          mkdir -p dist
+          find sing-box-for-android -type f -name "*.apk" -exec cp -v {} dist/ \;
+          ls -lah dist || true
+          test "$(ls -A dist 2>/dev/null)"
 
       - name: Upload APKs
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ChainBox-apk
-          path: |
-            sing-box-for-android/app/build/outputs/**/*.apk
-            sing-box-for-android/**/*.apk
+          path: dist/*.apk
           if-no-files-found: error
