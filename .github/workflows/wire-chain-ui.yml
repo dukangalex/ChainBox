@@ -1,0 +1,127 @@
+name: Wire Chain UI and rebuild
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/wire-chain-ui.yml'
+      - 'app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ChainBuilderScreen.kt'
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch ToolsScreen and Navigation
+        run: |
+          set -e
+          TOOLS=app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ToolsScreen.kt
+          NAV=app/src/main/java/io/nekohasekai/sfa/compose/navigation/Navigation.kt
+
+          # Import ChainBuilderScreen in Navigation if missing
+          if ! grep -q 'ChainBuilderScreen' "$NAV"; then
+            sed -i 's/import io.nekohasekai.sfa.compose.screen.tools.OutboundPickerScreen/import io.nekohasekai.sfa.compose.screen.tools.ChainBuilderScreen\nimport io.nekohasekai.sfa.compose.screen.tools.OutboundPickerScreen/' "$NAV"
+          fi
+
+          # Add composable route after stun_test if missing
+          if ! grep -q 'tools/chain_builder' "$NAV"; then
+            python3 << 'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/io/nekohasekai/sfa/compose/navigation/Navigation.kt")
+          t = p.read_text()
+          needle = 'route = "tools/stun_test"'
+          idx = t.find(needle)
+          if idx < 0:
+              raise SystemExit('stun_test route not found')
+          # find end of that composable block roughly - insert after the stun_test composable
+          # Look for next composable after stun_test
+          after = t.find('composable(', idx + len(needle))
+          if after < 0:
+              after = t.find('OutboundPickerScreen', idx)
+          insert = '''
+        composable(route = "tools/chain_builder") {
+            ChainBuilderScreen(navController = navController)
+        }
+'''
+          t = t[:after] + insert + t[after:]
+          p.write_text(t)
+          print('Navigation patched')
+          PY
+          fi
+
+          # Add Tools menu entry before network_quality card end / after network quality section
+          if ! grep -q 'tools/chain_builder' "$TOOLS"; then
+            python3 << 'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ToolsScreen.kt")
+          t = p.read_text()
+          # Insert a new Card for Chain builder before network_quality ListItem
+          marker = 'stringResource(R.string.network_quality)'
+          idx = t.find(marker)
+          if idx < 0:
+              raise SystemExit('network_quality marker not found')
+          # find the Card( before this ListItem
+          card_start = t.rfind('Card(', 0, idx)
+          if card_start < 0:
+              raise SystemExit('Card start not found')
+          insert = '''
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ),
+        ) {
+            ListItem(
+                headlineContent = {
+                    Text(
+                        "链式代理生成器",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        "点选节点顺序，生成 chain 配置",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.Route,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { navController.navigate("tools/chain_builder") },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+        }
+
+'''
+          t = t[:card_start] + insert + t[card_start:]
+          p.write_text(t)
+          print('ToolsScreen patched')
+          PY
+          fi
+
+          grep -n 'chain_builder\|ChainBuilder' "$NAV" "$TOOLS" | head -20
+
+      - name: Commit patches
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/io/nekohasekai/sfa/compose/navigation/Navigation.kt \
+                  app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ToolsScreen.kt
+          if git diff --staged --quiet; then
+            echo "No nav/tools changes"
+          else
+            git commit -m "feat: expose Chain builder in Tools menu and navigation"
+            git push origin HEAD:dev
+          fi
