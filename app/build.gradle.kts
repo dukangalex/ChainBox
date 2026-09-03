@@ -100,4 +100,37 @@ android {
             }
         }
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
+    }
+
+    buildFeatures {
+        compose = true
+        aidl = true
+        buildConfig = true
+    }
+
+    flavorDimensions += "vendor"
+    productFlavors {
+        create("play") {
+            dimension = "vendor"
+        }
+        create("other") {
+            dimension = "vendor"
+        }
+        create("otherLegacy") {
+            dimension = "vendor"
+            minSdk = 21
+        }
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    "playImplementation"(files("libs/libbox.aar"))
+    "otherImplementation"(files("libs/libbox.aar"))
+    "otherLegacyImplementation"(files("libs/libbox-legacy.aar"))
 }
