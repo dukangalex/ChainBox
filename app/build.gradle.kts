@@ -68,7 +68,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.dukangalex.chainbox"
+        applicationId = "io.chainbox.app"
         minSdk = 24
         targetSdk = 37
         versionCode = getVersionProps("VERSION_CODE").toInt()
