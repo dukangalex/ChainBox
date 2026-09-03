@@ -4,16 +4,15 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -53,10 +52,6 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Fool-proof Chain outbound builder.
- * User picks hop tags in order; app generates valid chain JSON to paste into profile.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChainBuilderScreen(navController: NavController) {
@@ -202,7 +197,7 @@ fun ChainBuilderScreen(navController: NavController) {
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier = Modifier.width(8.dp))
+                Box(modifier = Modifier.size(8.dp))
                 Button(
                     onClick = {
                         val tag = hopInput.trim()
@@ -220,7 +215,7 @@ fun ChainBuilderScreen(navController: NavController) {
                     },
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(modifier = Modifier.size(8.dp))
                     Text("添加")
                 }
             }
@@ -258,7 +253,7 @@ fun ChainBuilderScreen(navController: NavController) {
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(modifier = Modifier.size(8.dp))
                         Button(
                             onClick = {
                                 val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -268,7 +263,7 @@ fun ChainBuilderScreen(navController: NavController) {
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Icon(Icons.Default.ContentCopy, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(modifier = Modifier.size(8.dp))
                             Text("复制 JSON")
                         }
                     }
