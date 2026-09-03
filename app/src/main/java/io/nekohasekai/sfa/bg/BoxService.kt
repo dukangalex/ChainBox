@@ -94,8 +94,7 @@ class BoxService(private val service: Service, private val platformInterface: Pl
         }
 
     private fun startCommandServer() {
-        Libbox.promoteOOMDraft()
-        Libbox.discardPowerReportDraft()
+        // ChainBox: promoteOOMDraft/discardPowerReportDraft may be missing in custom libbox
         val commandServer = CommandServer(this, platformInterface)
         commandServer.start()
         this.commandServer = commandServer
@@ -293,8 +292,8 @@ class BoxService(private val service: Service, private val platformInterface: Pl
                 close()
 //                Seq.destroyRef(refnum)
             }
-            Libbox.discardPowerReportDraft()
-            PowerReportManager.refresh()
+            // ChainBox: discardPowerReportDraft may be missing in custom libbox
+            runCatching { PowerReportManager.refresh() }
             Settings.startedByUser = false
             withContext(Dispatchers.Main) {
                 status.value = Status.Stopped
