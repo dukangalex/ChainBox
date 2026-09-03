@@ -1,0 +1,53 @@
+name: Fix ChainBox rebrand files
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-rebrand.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore and rebrand
+        run: |
+          set -e
+          # Restore full files from last known good upstream commit on this fork history
+          git show fc87019086e60a7bceac5e65d45438a928199553:app/build.gradle.kts > app/build.gradle.kts
+          git show fc87019086e60a7bceac5e65d45438a928199553:app/src/main/res/values/strings.xml > app/src/main/res/values/strings.xml
+
+          # applicationId
+          sed -i 's/applicationId = "io.nekohasekai.sfa"/applicationId = "io.github.dukangalex.chainbox"/' app/build.gradle.kts
+
+          # archives name if present
+          sed -i 's/SFA-/ChainBox-/g' app/build.gradle.kts
+
+          # app display name
+          sed -i 's/<string name="app_name" translatable="false">sing-box<\/string>/<string name="app_name" translatable="false">ChainBox<\/string>/' app/src/main/res/values/strings.xml
+
+          echo "--- verify ---"
+          grep -n applicationId app/build.gradle.kts | head -3
+          grep -n app_name app/src/main/res/values/strings.xml | head -3
+          wc -l app/build.gradle.kts app/src/main/res/values/strings.xml
+
+      - name: Commit and push
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/build.gradle.kts app/src/main/res/values/strings.xml
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "fix: restore full gradle/strings and apply ChainBox branding"
+          git push origin HEAD:dev
