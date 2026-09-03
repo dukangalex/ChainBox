@@ -369,7 +369,43 @@ fun ToolsScreen(
             modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp),
         )
 
+        
         Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ),
+        ) {
+            ListItem(
+                headlineContent = {
+                    Text(
+                        "链式代理生成器",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        "点选节点顺序，生成 chain 配置",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.Route,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { navController.navigate("tools/chain_builder") },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+        }
+
+Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),

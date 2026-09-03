@@ -52,6 +52,7 @@ import io.nekohasekai.sfa.compose.screen.tools.OpenConnectEndpointScreen
 import io.nekohasekai.sfa.compose.screen.tools.OpenConnectStatusViewModel
 import io.nekohasekai.sfa.compose.screen.tools.OpenVPNEndpointScreen
 import io.nekohasekai.sfa.compose.screen.tools.OpenVPNStatusViewModel
+import io.nekohasekai.sfa.compose.screen.tools.ChainBuilderScreen
 import io.nekohasekai.sfa.compose.screen.tools.OutboundPickerScreen
 import io.nekohasekai.sfa.compose.screen.tools.PowerReportDetailScreen
 import io.nekohasekai.sfa.compose.screen.tools.PowerReportFileContentScreen
@@ -283,7 +284,18 @@ fun NavHost(
             STUNTestScreen(navController = navController, serviceStatus = serviceStatus)
         }
 
+        
         composable(
+            route = "tools/chain_builder",
+            enterTransition = slideInFromRight,
+            exitTransition = slideOutToLeft,
+            popEnterTransition = slideInFromLeft,
+            popExitTransition = slideOutToRight,
+        ) {
+            ChainBuilderScreen(navController = navController)
+        }
+
+composable(
             route = "tools/usbip/{serverTag}",
             arguments = listOf(navArgument("serverTag") { type = NavType.StringType }),
             enterTransition = slideInFromRight,
