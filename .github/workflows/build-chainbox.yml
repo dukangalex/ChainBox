@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  build-libbox-and-apk:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -72,16 +72,7 @@ jobs:
           export PATH="$(go env GOPATH)/bin:$PATH"
           export ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
 
-          if go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug; then
-            echo "build_libbox succeeded"
-          else
-            echo "build_libbox failed, fallback gomobile bind"
-            TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_low_memory,badlinkname,tfogo_checklinkname0"
-            gomobile bind -v -o libbox.aar -target android/arm64 -androidapi 24 \
-              -javapkg=io.nekohasekai -libname=box \
-              -trimpath -tags "$TAGS" \
-              ./experimental/libbox
-          fi
+          go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
 
           ls -lh libbox*.aar
           mkdir -p ../sing-box-for-android/app/libs
@@ -93,34 +84,34 @@ jobs:
           fi
           ls -lh ../sing-box-for-android/app/libs/
 
-      - name: Upload libbox (always)
-        if: always()
+      - name: Upload libbox
         uses: actions/upload-artifact@v4
         with:
           name: libbox-aar
           path: sing-box-for-android/app/libs/*.aar
-          if-no-files-found: warn
 
-      - name: Assemble otherDebug APK
+      - name: Assemble APKs
         working-directory: sing-box-for-android
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
         run: |
           set -e
           chmod +x gradlew
           ls -lah app/libs/
-          ./gradlew :app:assembleOtherDebug --stacktrace 2>&1 | tee /tmp/gradle.log
-          # print tail of log on failure is handled by set -e
 
-      - name: Show gradle log tail on failure
-        if: failure()
-        run: |
-          echo "===== gradle log (last 200 lines) ====="
-          tail -200 /tmp/gradle.log || true
-          find sing-box-for-android -name "*.apk" 2>/dev/null || true
+          # Try debug first (no signing secrets required)
+          ./gradlew :app:assembleOtherDebug --stacktrace --no-daemon
 
-      - name: Upload APK
-        if: success()
+          echo "===== search apk ====="
+          find app/build/outputs -type f -name "*.apk" -print || true
+          find . -type f -name "*.apk" -print || true
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: ChainBox-apk
-          path: sing-box-for-android/app/build/outputs/apk/**/*.apk
-          if-no-files-found: warn
+          path: |
+            sing-box-for-android/app/build/outputs/**/*.apk
+            sing-box-for-android/**/*.apk
+          if-no-files-found: error
