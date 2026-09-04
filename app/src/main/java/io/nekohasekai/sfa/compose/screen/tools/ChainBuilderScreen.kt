@@ -43,7 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier.Modifier
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -203,6 +203,7 @@ fun ChainBuilderScreen(navController: NavController) {
                 try {
                     val file = File(path)
                     val root = JSONObject(file.readText())
+                    // Remove previous broken ext-* imports from earlier saves
                     var outs = root.optJSONArray("outbounds") ?: JSONArray()
                     val cleanedBase = JSONArray()
                     for (i in 0 until outs.length()) {
@@ -369,7 +370,7 @@ fun ChainBuilderScreen(navController: NavController) {
                                         modifier = Modifier.fillMaxWidth().clickable { pickerProfileId = pc.id }.padding(vertical = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
+                                        Column(Modifier.weight(1f)) {
                                             Text(pc.name, fontWeight = FontWeight.Medium)
                                             Text(
                                                 "${pc.hops.count { it.isGroup }} 分组 · ${pc.hops.count { !it.isGroup }} 节点",
@@ -416,7 +417,7 @@ fun ChainBuilderScreen(navController: NavController) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier.padding(12.dp)) {
                     Text("当前配置（使用其分组，随你切换节点）", style = MaterialTheme.typography.labelMedium)
                     Text(currentProfileName.ifBlank { "（未选择）" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
@@ -499,7 +500,7 @@ private fun buildChainHint(front: HopRef?, main: String?, exit: HopRef?, current
 }
 
 private fun resolveCurrentMainTag(outs: JSONArray, routeFinal: String): String? {
-    // Foolproof: follow the user's current route.final (including GLOBAL).
+    // Foolproof: strictly follow the user's current route.final (including GLOBAL).
     // Kernel expand already strips direct/block/dns from intermediate hops.
     if (routeFinal.isNotEmpty() && routeFinal != CHAIN_TAG && !routeFinal.startsWith("ext-")) {
         for (i in 0 until outs.length()) {
@@ -510,6 +511,7 @@ private fun resolveCurrentMainTag(outs: JSONArray, routeFinal: String): String? 
             if (type != "direct" && type != "block" && type != "dns" && type != "chain") return routeFinal
         }
     }
+    // Fallback only when route.final is empty/missing: pick any selector/urltest
     data class Cand(val tag: String, val score: Int)
     val cands = mutableListOf<Cand>()
     for (i in 0 until outs.length()) {
@@ -519,8 +521,8 @@ private fun resolveCurrentMainTag(outs: JSONArray, routeFinal: String): String? 
         if (tag.isEmpty() || tag == CHAIN_TAG || tag.startsWith("ext-")) continue
         if (type != "selector" && type != "urltest") continue
         var score = 50
-        if (tag.equals("GLOBAL", true)) score = 10
-        if (tag.contains("节点") || tag.contains("选择") || tag.contains("自动")) score += 20
+        if (tag.equals("GLOBAL", true)) score = 40
+        if (tag.contains("节点") || tag.contains("选择") || tag.contains("自动")) score += 10
         if (type == "urltest") score += 5
         cands.add(Cand(tag, score))
     }
