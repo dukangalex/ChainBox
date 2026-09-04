@@ -370,7 +370,7 @@ fun ChainBuilderScreen(navController: NavController) {
                                         modifier = Modifier.fillMaxWidth().clickable { pickerProfileId = pc.id }.padding(vertical = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        Column(Modifier.weight(1f)) {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(pc.name, fontWeight = FontWeight.Medium)
                                             Text(
                                                 "${pc.hops.count { it.isGroup }} 分组 · ${pc.hops.count { !it.isGroup }} 节点",
@@ -417,7 +417,7 @@ fun ChainBuilderScreen(navController: NavController) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Text("当前配置（使用其分组，随你切换节点）", style = MaterialTheme.typography.labelMedium)
                     Text(currentProfileName.ifBlank { "（未选择）" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
