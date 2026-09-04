@@ -78,6 +78,9 @@ object Settings {
     var autoRedirect by dataStore.boolean(SettingsKey.AUTO_REDIRECT) { false }
     var disableQuic by dataStore.boolean(SettingsKey.DISABLE_QUIC) { false }
     var excludeCnQuic by dataStore.boolean(SettingsKey.EXCLUDE_CN_QUIC) { false }
+    var strictRoute by dataStore.boolean(SettingsKey.STRICT_ROUTE) { false }
+    var dnsProtect by dataStore.boolean(SettingsKey.DNS_PROTECT) { false }
+    var disableIpv6 by dataStore.boolean(SettingsKey.DISABLE_IPV6) { false }
     var perAppProxyEnabled by dataStore.boolean(SettingsKey.PER_APP_PROXY_ENABLED) { false }
     var perAppProxyMode by dataStore.int(SettingsKey.PER_APP_PROXY_MODE) { PER_APP_PROXY_EXCLUDE }
     var perAppProxyList by dataStore.stringSet(SettingsKey.PER_APP_PROXY_LIST) { emptySet() }
@@ -121,7 +124,6 @@ object Settings {
 
     var activeRemoteServerId by dataStore.long(SettingsKey.ACTIVE_REMOTE_SERVER_ID) { 0L }
 
-    // Tailscale SSH
     var tailscaleSSHRememberedUsernames by dataStore.map(SettingsKey.TAILSCALE_SSH_REMEMBERED_USERNAMES)
     var tailscaleSSHRememberedTerminalTypes by dataStore.map(SettingsKey.TAILSCALE_SSH_REMEMBERED_TERMINAL_TYPES)
     var tailscaleSSHQuickConnectPeers by dataStore.stringSet(SettingsKey.TAILSCALE_SSH_QUICK_CONNECT_PEERS)
