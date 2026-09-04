@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -64,19 +65,13 @@ private data class OutboundItem(
         get() = when (type) {
             "urltest" -> "自动优选分组"
             "selector" -> "手动选择分组"
-            else -> type.ifBlank { "节点" }
+            else -> "节点"
         }
 
     val displayLine: String
         get() = if (isGroup) "$tag · $typeLabel" else tag
 }
 
-/**
- * v2rayNG-style chain editor:
- * - 前置代理：点选 → 弹窗选分组/节点（入口）
- * - 落地代理：点选 → 弹窗选分组/节点（出口）
- * Writes native type:chain outbound into current profile.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChainBuilderScreen(navController: NavController) {
@@ -94,9 +89,10 @@ fun ChainBuilderScreen(navController: NavController) {
     var exitTag by remember { mutableStateOf<String?>(null) }
     var setAsFinal by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
+    var savedHint by remember { mutableStateOf<String?>(null) }
 
-    // null = closed; "front" / "exit" = which field is picking
     var pickerRole by remember { mutableStateOf<String?>(null) }
+    var pickerQuery by remember { mutableStateOf("") }
 
     fun allItems(): List<OutboundItem> = groups + nodes
 
@@ -130,20 +126,59 @@ fun ChainBuilderScreen(navController: NavController) {
                     val outs = root.optJSONArray("outbounds") ?: JSONArray()
                     val g = mutableListOf<OutboundItem>()
                     val n = mutableListOf<OutboundItem>()
+                    var loadedFront: String? = null
+                    var loadedExit: String? = null
+                    var loadedChainTag: String? = null
+                    var finalIsChain = false
+
+                    val routeFinal = root.optJSONObject("route")?.optString("final")?.trim().orEmpty()
+
                     for (i in 0 until outs.length()) {
                         val o = outs.optJSONObject(i) ?: continue
                         val tag = o.optString("tag").trim()
                         val type = o.optString("type").trim()
                         if (tag.isEmpty()) continue
-                        if (type in listOf("direct", "block", "dns", "chain")) continue
+
+                        if (type == "chain") {
+                            // Prefer chain that matches route.final, else first chain, else my-chain name
+                            val hops = o.optJSONArray("outbounds")
+                            if (hops != null && hops.length() >= 2) {
+                                val prefer = when {
+                                    routeFinal == tag -> true
+                                    loadedChainTag == null -> true
+                                    tag == chainTag -> true
+                                    else -> false
+                                }
+                                if (prefer || loadedChainTag == null) {
+                                    loadedChainTag = tag
+                                    loadedFront = hops.optString(0)
+                                    loadedExit = hops.optString(hops.length() - 1)
+                                    if (routeFinal == tag) finalIsChain = true
+                                }
+                            }
+                            continue
+                        }
+
+                        if (type in listOf("direct", "block", "dns")) continue
                         if (tag in listOf("direct", "block", "dns", "global")) continue
+                        // skip internal synthetic tags
+                        if (tag.contains(":chain:")) continue
+
                         val item = OutboundItem(tag, type)
                         if (item.isGroup) g.add(item) else n.add(item)
                     }
+
                     profileName = profile.name
                     profilePath = path
                     groups = g
                     nodes = n
+                    if (loadedChainTag != null) {
+                        chainTag = loadedChainTag!!
+                        frontTag = loadedFront
+                        exitTag = loadedExit
+                        if (finalIsChain) setAsFinal = true
+                        savedHint = "已加载配置中的链式：${loadedFront} → ${loadedExit}"
+                    }
                     loadError = when {
                         g.isEmpty() && n.isEmpty() -> "配置里没有可串联的分组或节点"
                         else -> null
@@ -183,7 +218,8 @@ fun ChainBuilderScreen(navController: NavController) {
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 try {
-                    val root = JSONObject(File(path).readText())
+                    val file = File(path)
+                    val root = JSONObject(file.readText())
                     val outs = root.optJSONArray("outbounds") ?: JSONArray().also { root.put("outbounds", it) }
                     val cleaned = JSONArray()
                     for (i in 0 until outs.length()) {
@@ -204,15 +240,28 @@ fun ChainBuilderScreen(navController: NavController) {
                         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
                         route.put("final", chainTag.trim())
                     }
-                    File(path).writeText(root.toString(2))
-                    Result.success(Unit)
+                    file.writeText(root.toString(2))
+                    // Verify write
+                    val verify = JSONObject(file.readText())
+                    val vOuts = verify.optJSONArray("outbounds") ?: JSONArray()
+                    var found = false
+                    for (i in 0 until vOuts.length()) {
+                        val o = vOuts.optJSONObject(i) ?: continue
+                        if (o.optString("tag") == chainTag.trim() && o.optString("type") == "chain") {
+                            found = true
+                            break
+                        }
+                    }
+                    if (!found) Result.failure(IllegalStateException("写入后未找到 chain"))
+                    else Result.success(Unit)
                 } catch (e: Exception) {
                     Result.failure(e)
                 }
             }
             busy = false
             if (result.isSuccess) {
-                snackbar.showSnackbar("已保存。请停止服务后重新启动")
+                savedHint = "已保存：$front → $exit"
+                snackbar.showSnackbar("保存成功。请回到仪表盘停止并重新启动服务")
             } else {
                 snackbar.showSnackbar("保存失败: ${result.exceptionOrNull()?.message}")
             }
@@ -223,54 +272,84 @@ fun ChainBuilderScreen(navController: NavController) {
         val isFront = pickerRole == "front"
         val title = if (isFront) "选择前置代理" else "选择落地代理"
         val exclude = if (isFront) exitTag else frontTag
+        val q = pickerQuery.trim().lowercase()
+        fun match(item: OutboundItem): Boolean {
+            if (item.tag == exclude) return false
+            if (q.isEmpty()) return true
+            return item.tag.lowercase().contains(q) || item.typeLabel.contains(q)
+        }
+        val filteredGroups = groups.filter { match(it) }
+        val filteredNodes = nodes.filter { match(it) }
+
         AlertDialog(
-            onDismissRequest = { pickerRole = null },
+            onDismissRequest = {
+                pickerRole = null
+                pickerQuery = ""
+            },
             title = { Text(title) },
             text = {
-                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                    if (groups.isNotEmpty()) {
-                        item {
-                            Text(
-                                "订阅分组（可自动优选）",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(vertical = 8.dp),
-                            )
-                        }
-                        items(groups.filter { it.tag != exclude }) { item ->
-                            PickerRow(item) {
-                                if (isFront) frontTag = item.tag else exitTag = item.tag
-                                pickerRole = null
+                Column {
+                    OutlinedTextField(
+                        value = pickerQuery,
+                        onValueChange = { pickerQuery = it },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        placeholder = { Text("搜索分组或节点") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    )
+                    LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                        if (filteredGroups.isNotEmpty()) {
+                            item {
+                                Text(
+                                    "分组（推荐作前置，可自动优选）",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                )
+                            }
+                            items(filteredGroups) { item ->
+                                PickerRow(item) {
+                                    if (isFront) frontTag = item.tag else exitTag = item.tag
+                                    pickerRole = null
+                                    pickerQuery = ""
+                                }
                             }
                         }
-                    }
-                    if (nodes.isNotEmpty()) {
-                        item {
-                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                            Text(
-                                "节点",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(vertical = 8.dp),
-                            )
-                        }
-                        items(nodes.filter { it.tag != exclude }) { item ->
-                            PickerRow(item) {
-                                if (isFront) frontTag = item.tag else exitTag = item.tag
-                                pickerRole = null
+                        if (filteredNodes.isNotEmpty()) {
+                            item {
+                                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                                Text(
+                                    "节点",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                )
+                            }
+                            items(filteredNodes) { item ->
+                                PickerRow(item) {
+                                    if (isFront) frontTag = item.tag else exitTag = item.tag
+                                    pickerRole = null
+                                    pickerQuery = ""
+                                }
                             }
                         }
-                    }
-                    if (groups.isEmpty() && nodes.isEmpty()) {
-                        item {
-                            Text(
-                                "没有可选项目。请先在配置中添加分组或节点。",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                        if (filteredGroups.isEmpty() && filteredNodes.isEmpty()) {
+                            item {
+                                Text(
+                                    if (q.isNotEmpty()) "没有匹配「$pickerQuery」的项"
+                                    else "没有可选项目",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { pickerRole = null }) { Text("取消") }
+                TextButton(onClick = {
+                    pickerRole = null
+                    pickerQuery = ""
+                }) { Text("取消") }
             },
         )
     }
@@ -319,6 +398,13 @@ fun ChainBuilderScreen(navController: NavController) {
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 4.dp),
                         )
+                    } else if (savedHint != null) {
+                        Text(
+                            savedHint!!,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
                     }
                 }
             }
@@ -331,22 +417,26 @@ fun ChainBuilderScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            // 前置 — v2rayNG style
             SelectField(
                 title = "前置代理",
-                subtitle = "作为代理链入口。可选自动优选分组或节点。",
+                subtitle = "入口。建议选「自动优选分组」。",
                 value = labelOf(frontTag),
-                onClick = { pickerRole = "front" },
+                onClick = {
+                    pickerQuery = ""
+                    pickerRole = "front"
+                },
                 onClear = { frontTag = null },
                 showClear = frontTag != null,
             )
 
-            // 落地 — v2rayNG style
             SelectField(
                 title = "落地代理",
-                subtitle = "作为代理链出口。可选分组或单节点。",
+                subtitle = "出口。可选分组或单个节点。",
                 value = labelOf(exitTag),
-                onClick = { pickerRole = "exit" },
+                onClick = {
+                    pickerQuery = ""
+                    pickerRole = "exit"
+                },
                 onClear = { exitTag = null },
                 showClear = exitTag != null,
             )
@@ -372,7 +462,7 @@ fun ChainBuilderScreen(navController: NavController) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("设为默认出口")
                     Text(
-                        "开启后 route.final 指向这条链",
+                        "开启后全局默认走这条链",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -385,11 +475,12 @@ fun ChainBuilderScreen(navController: NavController) {
                 enabled = !busy && frontTag != null && exitTag != null && chainTag.isNotBlank() && profilePath != null,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (busy) "保存中…" else "保存")
+                Text(if (busy) "保存中…" else "保存到配置")
             }
 
             Text(
-                "说明：类似 v2rayNG——点「前置 / 落地」弹出选择列表；分组可保留 urltest 自动优选。保存后请重启服务。",
+                "保存后请回到仪表盘：先停止服务，再启动。\n" +
+                    "若启动报 rule-set / geoip 404，是订阅里规则集地址失效，与链式无关，需更新或删除那些 rule-set。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
