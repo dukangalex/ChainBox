@@ -57,7 +57,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** A selectable hop that may come from another profile. */
 private data class HopRef(
     val profileId: Long,
     val profileName: String,
@@ -71,7 +70,6 @@ private data class HopRef(
             "selector" -> "手动选择分组"
             else -> "节点"
         }
-    /** Tag written into current config after merge. */
     val mergedTag: String get() = "ext-${profileId}-$tag"
     val displayLine: String get() = "$profileName / $tag · $typeLabel"
 }
@@ -101,10 +99,8 @@ fun ChainBuilderScreen(navController: NavController) {
     var busy by remember { mutableStateOf(false) }
     var savedHint by remember { mutableStateOf<String?>(null) }
 
-    // picker: null closed; "front"/"exit" open
     var pickerRole by remember { mutableStateOf<String?>(null) }
     var pickerQuery by remember { mutableStateOf("") }
-    // which other profile is expanded in picker; null = list profiles first
     var pickerProfileId by remember { mutableStateOf<Long?>(null) }
 
     fun reload() {
@@ -126,7 +122,6 @@ fun ChainBuilderScreen(navController: NavController) {
                     currentProfileName = current.name
                     currentProfilePath = current.typed.path
 
-                    // Load other profiles only — 候选不能来自当前配置
                     val all = ProfileManager.list()
                     val choices = mutableListOf<ProfileChoice>()
                     for (p in all) {
@@ -138,7 +133,6 @@ fun ChainBuilderScreen(navController: NavController) {
                     }
                     otherProfiles = choices
 
-                    // Reload saved chain from current config if present
                     val root = JSONObject(File(current.typed.path).readText())
                     val outs = root.optJSONArray("outbounds") ?: JSONArray()
                     val routeFinal = root.optJSONObject("route")?.optString("final")?.trim().orEmpty()
@@ -198,11 +192,13 @@ fun ChainBuilderScreen(navController: NavController) {
                     val root = JSONObject(file.readText())
                     var outs = root.optJSONArray("outbounds") ?: JSONArray().also { root.put("outbounds", it) }
 
-                    // Merge needed outbounds from other profiles into current config
-                    outs = mergeHopTree(outs, f)
-                    outs = mergeHopTree(outs, e)
+                    val fProfile = ProfileManager.get(f.profileId)
+                        ?: return@withContext Result.failure(IllegalStateException("找不到前置所属配置"))
+                    val eProfile = ProfileManager.get(e.profileId)
+                        ?: return@withContext Result.failure(IllegalStateException("找不到落地所属配置"))
+                    outs = mergeHopTree(outs, f, fProfile.typed.path)
+                    outs = mergeHopTree(outs, e, eProfile.typed.path)
 
-                    // Remove old chain with same tag
                     val cleaned = JSONArray()
                     for (i in 0 until outs.length()) {
                         val o = outs.optJSONObject(i) ?: continue
@@ -239,7 +235,6 @@ fun ChainBuilderScreen(navController: NavController) {
         }
     }
 
-    // —— Picker dialog: other profiles only ——
     if (pickerRole != null) {
         val isFront = pickerRole == "front"
         val title = if (isFront) "选择前置代理（其他订阅）" else "选择落地代理（其他订阅）"
@@ -271,9 +266,7 @@ fun ChainBuilderScreen(navController: NavController) {
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                             placeholder = { Text("搜索") },
                             singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         )
                         val hops = expanded.hops.filter {
                             q.isEmpty() || it.tag.lowercase().contains(q) || it.typeLabel.contains(q)
@@ -321,10 +314,7 @@ fun ChainBuilderScreen(navController: NavController) {
                             } else {
                                 items(otherProfiles) { pc ->
                                     Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { pickerProfileId = pc.id }
-                                            .padding(vertical = 12.dp),
+                                        modifier = Modifier.fillMaxWidth().clickable { pickerProfileId = pc.id }.padding(vertical = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Column(Modifier.weight(1f)) {
@@ -372,11 +362,7 @@ fun ChainBuilderScreen(navController: NavController) {
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Card(
@@ -391,12 +377,9 @@ fun ChainBuilderScreen(navController: NavController) {
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = loadError
-                            ?: savedHint
-                            ?: "前置/落地只能从「其他订阅」选择，不会出现当前配置里的节点。",
+                        text = loadError ?: savedHint ?: "前置/落地只能从「其他订阅」选择，不会出现当前配置里的节点。",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (loadError != null) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (loadError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
@@ -414,11 +397,7 @@ fun ChainBuilderScreen(navController: NavController) {
                 title = "前置代理",
                 subtitle = "从其他订阅中选择入口（分组可自动优选）",
                 value = front?.displayLine ?: "点击选择其他订阅",
-                onClick = {
-                    pickerQuery = ""
-                    pickerProfileId = null
-                    pickerRole = "front"
-                },
+                onClick = { pickerQuery = ""; pickerProfileId = null; pickerRole = "front" },
                 onClear = { front = null },
                 showClear = front != null,
             )
@@ -427,11 +406,7 @@ fun ChainBuilderScreen(navController: NavController) {
                 title = "落地代理",
                 subtitle = "从其他订阅中选择出口",
                 value = exit?.displayLine ?: "点击选择其他订阅",
-                onClick = {
-                    pickerQuery = ""
-                    pickerProfileId = null
-                    pickerRole = "exit"
-                },
+                onClick = { pickerQuery = ""; pickerProfileId = null; pickerRole = "exit" },
                 onClear = { exit = null },
                 showClear = exit != null,
             )
@@ -450,17 +425,10 @@ fun ChainBuilderScreen(navController: NavController) {
                 }
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("设为默认出口")
-                    Text(
-                        "开启后全局默认走这条链",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text("开启后全局默认走这条链", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = setAsFinal, onCheckedChange = { setAsFinal = it })
             }
@@ -505,7 +473,6 @@ private fun parseHopsFromProfile(profile: Profile): List<HopRef> {
 }
 
 private fun resolveMergedTag(mergedOrRaw: String, choices: List<ProfileChoice>): HopRef? {
-    // ext-{profileId}-{originalTag}
     if (mergedOrRaw.startsWith("ext-")) {
         val rest = mergedOrRaw.removePrefix("ext-")
         val dash = rest.indexOf('-')
@@ -520,15 +487,8 @@ private fun resolveMergedTag(mergedOrRaw: String, choices: List<ProfileChoice>):
     return choices.flatMap { it.hops }.find { it.tag == mergedOrRaw || it.mergedTag == mergedOrRaw }
 }
 
-/** Copy hop (+ group members) from source profile into outs with merged tags. */
-private fun mergeHopTree(outs: JSONArray, hop: HopRef): JSONArray {
-    val sourceProfile = runCatching {
-        // Read via path from ProfileManager in caller context — open file from hop
-        null
-    }
-    // Load source JSON by scanning outs is insufficient; load from disk
-    val profile = kotlinx.coroutines.runBlocking { ProfileManager.get(hop.profileId) } ?: return outs
-    val srcRoot = JSONObject(File(profile.typed.path).readText())
+private fun mergeHopTree(outs: JSONArray, hop: HopRef, sourcePath: String): JSONArray {
+    val srcRoot = JSONObject(File(sourcePath).readText())
     val srcOuts = srcRoot.optJSONArray("outbounds") ?: return outs
 
     fun findSrc(tag: String): JSONObject? {
@@ -550,7 +510,6 @@ private fun mergeHopTree(outs: JSONArray, hop: HopRef): JSONArray {
         if (alreadyHas(newTag)) return
         val clone = JSONObject(src.toString())
         clone.put("tag", newTag)
-        // Remap group members to merged tags
         if (clone.optString("type") == "selector" || clone.optString("type") == "urltest") {
             val members = clone.optJSONArray("outbounds") ?: JSONArray()
             val mapped = JSONArray()
@@ -595,22 +554,16 @@ private fun SelectField(
         Text(title, style = MaterialTheme.typography.titleSmall)
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick),
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(value, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                 if (showClear) {
-                    IconButton(onClick = onClear) {
-                        Icon(Icons.Default.Clear, contentDescription = "清除")
-                    }
+                    IconButton(onClick = onClear) { Icon(Icons.Default.Clear, contentDescription = "清除") }
                 }
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             }
@@ -621,10 +574,7 @@ private fun SelectField(
 @Composable
 private fun HopRow(hop: HopRef, onSelect: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .padding(vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onSelect).padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
