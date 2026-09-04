@@ -76,6 +76,8 @@ object Settings {
     const val PER_APP_PROXY_INCLUDE = 2
 
     var autoRedirect by dataStore.boolean(SettingsKey.AUTO_REDIRECT) { false }
+    var disableQuic by dataStore.boolean(SettingsKey.DISABLE_QUIC) { false }
+    var excludeCnQuic by dataStore.boolean(SettingsKey.EXCLUDE_CN_QUIC) { false }
     var perAppProxyEnabled by dataStore.boolean(SettingsKey.PER_APP_PROXY_ENABLED) { false }
     var perAppProxyMode by dataStore.int(SettingsKey.PER_APP_PROXY_MODE) { PER_APP_PROXY_EXCLUDE }
     var perAppProxyList by dataStore.stringSet(SettingsKey.PER_APP_PROXY_LIST) { emptySet() }
