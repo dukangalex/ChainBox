@@ -7,9 +7,10 @@ import org.json.JSONObject
 /**
  * Runtime config overrides driven by Profile Override switches.
  * Does not modify the profile file on disk — only the JSON passed to the core.
+ *
+ * Important: never inject fields unknown to sing-box (strict JSON decoding).
  */
 object ConfigQuicOverride {
-    private const val QUIC_MARKER = "_chainbox_quic"
 
     fun apply(content: String): String {
         if (!Settings.disableQuic && !Settings.strictRoute && !Settings.dnsProtect && !Settings.disableIpv6) {
@@ -31,39 +32,31 @@ object ConfigQuicOverride {
         ensureBlockOutbound(root)
         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
         val oldRules = route.optJSONArray("rules") ?: JSONArray()
-        val kept = JSONArray()
-        for (i in 0 until oldRules.length()) {
-            val r = oldRules.optJSONObject(i) ?: continue
-            if (r.optString(QUIC_MARKER).isNotEmpty()) continue
-            kept.put(r)
-        }
         val injected = JSONArray()
         if (Settings.excludeCnQuic) {
+            // Allow CN UDP/443 first, then block other QUIC
             injected.put(
                 JSONObject()
                     .put("network", "udp")
                     .put("port", 443)
                     .put("geoip", JSONArray().put("cn"))
-                    .put("outbound", "direct")
-                    .put(QUIC_MARKER, "cn-direct"),
+                    .put("outbound", "direct"),
             )
         }
         injected.put(
             JSONObject()
                 .put("network", "udp")
                 .put("port", 443)
-                .put("outbound", "block")
-                .put(QUIC_MARKER, "block"),
+                .put("outbound", "block"),
         )
         val merged = JSONArray()
         for (i in 0 until injected.length()) merged.put(injected.get(i))
-        for (i in 0 until kept.length()) merged.put(kept.get(i))
+        for (i in 0 until oldRules.length()) merged.put(oldRules.get(i))
         route.put("rules", merged)
     }
 
+    /** strict_route is a TUN inbound field, not under route. */
     private fun applyStrictRoute(root: JSONObject) {
-        val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
-        route.put("strict_route", true)
         val inbounds = root.optJSONArray("inbounds") ?: return
         for (i in 0 until inbounds.length()) {
             val ib = inbounds.optJSONObject(i) ?: continue
@@ -87,26 +80,15 @@ object ConfigQuicOverride {
     private fun applyDisableIpv6(root: JSONObject) {
         val dns = root.optJSONObject("dns") ?: JSONObject().also { root.put("dns", it) }
         dns.put("strategy", "ipv4_only")
+        ensureBlockOutbound(root)
         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
-        val rules = route.optJSONArray("rules") ?: JSONArray().also { route.put("rules", it) }
-        var hasV6Block = false
-        for (i in 0 until rules.length()) {
-            val r = rules.optJSONObject(i) ?: continue
-            if (r.optString("_chainbox_v6") == "block") {
-                hasV6Block = true
-                break
-            }
-        }
-        if (!hasV6Block) {
-            ensureBlockOutbound(root)
-            val v6 = JSONObject()
-                .put("ip_version", 6)
-                .put("outbound", "block")
-                .put("_chainbox_v6", "block")
-            val merged = JSONArray().put(v6)
-            for (i in 0 until rules.length()) merged.put(rules.get(i))
-            route.put("rules", merged)
-        }
+        val rules = route.optJSONArray("rules") ?: JSONArray()
+        val v6 = JSONObject()
+            .put("ip_version", 6)
+            .put("outbound", "block")
+        val merged = JSONArray().put(v6)
+        for (i in 0 until rules.length()) merged.put(rules.get(i))
+        route.put("rules", merged)
     }
 
     private fun ensureBlockOutbound(root: JSONObject) {
