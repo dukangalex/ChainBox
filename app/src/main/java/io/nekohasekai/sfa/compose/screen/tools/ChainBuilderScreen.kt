@@ -58,7 +58,6 @@ import org.json.JSONObject
 import java.io.File
 
 private const val CHAIN_TAG = "my-chain"
-private const val META_ORIGINAL_FINAL = "_chainbox_original_final"
 
 private data class HopRef(
     val profileId: Long,
@@ -123,7 +122,14 @@ fun ChainBuilderScreen(navController: NavController) {
                     currentProfileName = current.name
                     currentProfilePath = current.typed.path
 
-                    val root = JSONObject(File(current.typed.path).readText())
+                    val file = File(current.typed.path)
+                    val root = JSONObject(file.readText())
+                    // Strip illegal custom fields that break official sing-box decoder
+                    val routeObj = root.optJSONObject("route")
+                    if (routeObj != null && routeObj.has("_chainbox_original_final")) {
+                        routeObj.remove("_chainbox_original_final")
+                        file.writeText(root.toString(2))
+                    }
                     val outs = root.optJSONArray("outbounds") ?: JSONArray()
                     val route = root.optJSONObject("route")
                     val routeFinal = route?.optString("final")?.trim().orEmpty()
@@ -200,13 +206,9 @@ fun ChainBuilderScreen(navController: NavController) {
                     var outs = root.optJSONArray("outbounds") ?: JSONArray().also { root.put("outbounds", it) }
                     val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
 
-                    if (!route.has(META_ORIGINAL_FINAL)) {
-                        val prev = route.optString("final").trim()
-                        if (prev.isNotEmpty() && prev != CHAIN_TAG) {
-                            route.put(META_ORIGINAL_FINAL, prev)
-                        } else if (main != CHAIN_TAG) {
-                            route.put(META_ORIGINAL_FINAL, main)
-                        }
+                    // Never write non-schema fields into route — sing-box rejects unknown keys
+                    if (route.has("_chainbox_original_final")) {
+                        route.remove("_chainbox_original_final")
                     }
 
                     front?.let { hop ->
@@ -276,11 +278,10 @@ fun ChainBuilderScreen(navController: NavController) {
                     }
                     root.put("outbounds", cleaned)
                     val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
-                    val original = route.optString(META_ORIGINAL_FINAL).trim()
-                    if (original.isNotEmpty()) {
-                        route.put("final", original)
-                        route.remove(META_ORIGINAL_FINAL)
-                    } else if (route.optString("final") == CHAIN_TAG) {
+                    if (route.has("_chainbox_original_final")) {
+                        route.remove("_chainbox_original_final")
+                    }
+                    if (route.optString("final") == CHAIN_TAG) {
                         currentMainTag?.let { route.put("final", it) }
                     }
                     file.writeText(root.toString(2))
@@ -440,7 +441,7 @@ fun ChainBuilderScreen(navController: NavController) {
 
             SelectField(
                 title = "前置代理（可选）",
-                subtitle = "其他订阅 → 当前配置。只设前置也可以。",
+                subtitle = "其他订阅 → 当前配置（当前作落地）。只设前置也可以。",
                 value = front?.displayLine ?: "不使用前置",
                 onClick = { pickerQuery = ""; pickerProfileId = null; pickerRole = "front" },
                 onClear = { front = null },
@@ -449,7 +450,7 @@ fun ChainBuilderScreen(navController: NavController) {
 
             SelectField(
                 title = "落地代理（可选）",
-                subtitle = "当前配置 → 其他订阅。只设落地也可以。",
+                subtitle = "当前配置 → 其他订阅（当前作前置）。只设落地也可以。",
                 value = exit?.displayLine ?: "不使用落地",
                 onClick = { pickerQuery = ""; pickerProfileId = null; pickerRole = "exit" },
                 onClear = { exit = null },
