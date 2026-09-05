@@ -132,17 +132,41 @@ object BackupManager {
         localFile
     }
 
+    /**
+     * Reachability check. Some hosts (e.g. TeraCloud) reject or mishandle PROPFIND
+     * while PUT/GET still work — try several safe methods and treat any HTTP
+     * response as "reachable".
+     */
     fun webdavProbe(baseUrl: String, username: String, password: String): Result<Boolean> = runCatching {
-        val conn = openWebDav(baseUrl, username, password).apply {
-            requestMethod = "PROPFIND"
-            setRequestProperty("Depth", "0")
+        val methods = listOf("OPTIONS", "PROPFIND", "HEAD", "GET")
+        var lastError: Exception? = null
+        for (method in methods) {
+            val conn = openWebDav(baseUrl, username, password).apply {
+                requestMethod = method
+                if (method == "PROPFIND") {
+                    setRequestProperty("Depth", "0")
+                    setRequestProperty("Content-Type", "application/xml; charset=utf-8")
+                }
+                if (method == "GET") {
+                    setRequestProperty("Range", "bytes=0-0")
+                }
+            }
+            try {
+                val code = conn.responseCode
+                if (code in 100..599) {
+                    return@runCatching true
+                }
+            } catch (e: Exception) {
+                lastError = e
+            } finally {
+                try {
+                    conn.disconnect()
+                } catch (_: Exception) {
+                }
+            }
         }
-        val code = try {
-            conn.responseCode
-        } finally {
-            conn.disconnect()
-        }
-        code in 200..299 || code == 207 || code == 401 || code == 403 || code == 405 || code == 501
+        if (lastError != null) throw lastError
+        false
     }
 
     private fun openWebDav(url: String, username: String, password: String): HttpURLConnection {
