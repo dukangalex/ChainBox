@@ -3,10 +3,6 @@ package io.nekohasekai.sfa.utils
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Conservative runtime normalize for common sing-box config issues.
- * Does not rewrite subscription files on disk.
- */
 object ConfigNormalize {
     fun apply(content: String): String {
         return try {
@@ -38,11 +34,6 @@ object ConfigNormalize {
         }
     }
 
-    /**
-     * sing-box removed legacy geoip/geosite databases in 1.12.
-     * Strip deprecated fields from route/dns rules so the config can start.
-     * Matching may become less precise until the subscription uses rule_set.
-     */
     private fun stripDeprecatedGeoDatabases(root: JSONObject) {
         val route = root.optJSONObject("route")
         if (route != null) {
@@ -62,7 +53,6 @@ object ConfigNormalize {
             val r = rules.optJSONObject(i) ?: continue
             r.remove("geoip")
             r.remove("geosite")
-            // legacy keys sometimes appear nested
             r.remove("geo_ip")
             r.remove("geo_site")
         }
