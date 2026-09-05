@@ -60,6 +60,7 @@ fun ProfileOverrideScreen(
     val scope = rememberCoroutineScope()
     val notifyApplyChange = rememberApplyServiceChangeNotifier(serviceStatus)
 
+    var configNormalize by remember { mutableStateOf(Settings.configNormalize) }
     var disableQuic by remember { mutableStateOf(Settings.disableQuic) }
     var excludeCnQuic by remember { mutableStateOf(Settings.excludeCnQuic) }
     var strictRoute by remember { mutableStateOf(Settings.strictRoute) }
@@ -106,16 +107,47 @@ fun ProfileOverrideScreen(
                 .padding(16.dp),
         ) {
             Text(
-                text = "网络增强",
+                text = "配置修复",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             Text(
-                text = "开关仅影响运行时配置，不修改订阅文件。点 ⓘ 可查看详细说明。",
+                text = "开关仅影响运行时配置，不修改订阅文件。点 ⓘ 查看说明。链式在「工具 → 链式代理」设置后会在订阅更新后自动保持。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 12.dp),
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            ) {
+                OverrideSwitch(
+                    title = "配置规范化",
+                    subtitle = "启动时自动修补常见格式/规则集问题，降低报错",
+                    checked = configNormalize,
+                    onHelp = {
+                        help = SwitchHelp(
+                            "配置规范化",
+                            "作用：在不改动磁盘订阅文件的前提下，启动/重载时自动做保守修复：\n· 补齐缺失的 direct / block 出站\n· 清理无效 rule_set（缺 type/path/url）\n· 为 remote 规则集补默认更新间隔\n· 若 route.final 指向不存在的出站则清除，避免硬失败\n\n适合：机场配置格式不规范、规则集报错、缺出站标签时。\n\n注意：不会重写整份分流逻辑，也不会下载缺失的规则集文件。\n\n生效：切换后自动重载服务。",
+                        )
+                    },
+                    onCheckedChange = {
+                        configNormalize = it
+                        scope.launch(Dispatchers.IO) {
+                            Settings.configNormalize = it
+                            withContext(Dispatchers.Main) { reload() }
+                        }
+                    },
+                )
+            }
+
+            Text(
+                text = "网络增强",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp),
             )
 
             Card(
@@ -129,7 +161,7 @@ fun ProfileOverrideScreen(
                     onHelp = {
                         help = SwitchHelp(
                             "严格路由",
-                            "作用：尽量让系统流量只走 VPN/TUN 隧道，降低 WebRTC、旁路 DNS 等泄漏。\n\n适合：需要更严格防泄漏时开启。\n\n注意：部分局域网共享、投屏、车机互联可能受影响，出现异常可关闭。\n\n生效：切换后自动重载服务。",
+                            "作用：在 TUN 入站上开启 strict_route。\n\n适合：防泄漏。注意需配置含 TUN。\n\n生效：切换后自动重载。",
                         )
                     },
                     onCheckedChange = {
@@ -142,12 +174,12 @@ fun ProfileOverrideScreen(
                 )
                 OverrideSwitch(
                     title = "DNS 防泄漏倾向",
-                    subtitle = "加强 DNS 走代理栈的倾向，降低明文 DNS 旁路",
+                    subtitle = "加强 DNS 走代理栈的倾向",
                     checked = dnsProtect,
                     onHelp = {
                         help = SwitchHelp(
                             "DNS 防泄漏倾向",
-                            "作用：在不推翻你原有 DNS 服务器列表的前提下，开启独立缓存、自动探测网卡等，降低 DNS 查询绕过代理的概率。\n\n适合：检测网站提示 DNS 泄漏，或希望查询更稳定走隧道时。\n\n注意：不会完全重写机场自带 DNS；若订阅 DNS 本身有问题，仍需改配置或换订阅。\n\n生效：切换后自动重载服务。",
+                            "作用：开启 independent_cache、auto_detect_interface 等。\n\n生效：切换后自动重载。",
                         )
                     },
                     onCheckedChange = {
@@ -165,7 +197,7 @@ fun ProfileOverrideScreen(
                     onHelp = {
                         help = SwitchHelp(
                             "禁用 IPv6",
-                            "作用：DNS 策略改为仅 IPv4，并拦截 IPv6 流量，避免在仅代理 IPv4 时出现 IPv6 直连泄漏。\n\n适合：检测仍暴露真实 IPv6，或网络 IPv6 不稳定时。\n\n注意：纯 IPv6 站点将无法访问。\n\n生效：切换后自动重载服务。",
+                            "作用：DNS strategy=ipv4_only，并拦截 IPv6。\n\n生效：切换后自动重载。",
                         )
                     },
                     onCheckedChange = {
@@ -178,12 +210,12 @@ fun ProfileOverrideScreen(
                 )
                 OverrideSwitch(
                     title = "禁用 QUIC",
-                    subtitle = "拦截 UDP 443，强制浏览器回落 TCP/HTTP2",
+                    subtitle = "拦截 UDP 443，强制回落 TCP/HTTP2",
                     checked = disableQuic,
                     onHelp = {
                         help = SwitchHelp(
                             "禁用 QUIC",
-                            "作用：拦截 UDP 443（HTTP/3 / QUIC），让浏览器用 TCP，可缓解部分网站打不开或异常超时。\n\n适合：个别站点异常、与代理兼容性不好时。\n\n注意：会略微影响依赖 HTTP/3 的站点体验。\n\n生效：切换后自动重载服务。",
+                            "作用：拦截 UDP 443。\n\n生效：切换后自动重载。",
                         )
                     },
                     onCheckedChange = {
@@ -204,7 +236,7 @@ fun ProfileOverrideScreen(
                     onHelp = {
                         help = SwitchHelp(
                             "排除国内 QUIC",
-                            "作用：在开启「禁用 QUIC」时，对中国大陆 IP 的 UDP 443 放行，只拦截境外 QUIC。\n\n适合：希望国内视频/应用仍可用 HTTP/3，同时限制境外 QUIC。\n\n注意：依赖 geoip:cn，订阅需带有可用的 geoip 数据。\n\n生效：需先开启「禁用 QUIC」；切换后自动重载服务。",
+                            "作用：禁用 QUIC 时对中国大陆 UDP 443 放行。需 geoip:cn。",
                         )
                     },
                     onCheckedChange = {
@@ -216,13 +248,6 @@ fun ProfileOverrideScreen(
                     },
                 )
             }
-
-            Text(
-                text = "分应用代理、自动重定向等将在后续版本恢复到本页。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 16.dp),
-            )
         }
     }
 }
