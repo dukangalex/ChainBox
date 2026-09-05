@@ -4,7 +4,7 @@
 
 **与 SagerNet / 官方 sing-box 无隶属关系。不得使用官方名称上架应用商店。**
 
-[Releases](https://github.com/dukangalex/sing-box-for-android/releases) · [Actions](https://github.com/dukangalex/sing-box-for-android/actions) · [使用说明](docs/USER_GUIDE.md)
+[Releases](https://github.com/dukangalex/ChainBox/releases) · [Actions](https://github.com/dukangalex/ChainBox/actions) · [使用说明](docs/USER_GUIDE.md)
 
 ## 特点
 
@@ -20,7 +20,7 @@
 |------|-----|
 | 应用名 | ChainBox |
 | 包名 | `io.chainbox.app` |
-| 客户端 | 本仓库 `dev` |
+| 客户端仓库 | [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox) `dev` |
 | 内核 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) `chain-dev` |
 
 ## 链式怎么走
@@ -42,8 +42,8 @@
 
 ## 下载
 
-到 [Releases](https://github.com/dukangalex/sing-box-for-android/releases) 下载最新 APK。  
-未出 Release 时可在 [Actions → Build ChainBox APK](https://github.com/dukangalex/sing-box-for-android/actions) 取构建产物。
+到 [Releases](https://github.com/dukangalex/ChainBox/releases) 下载最新 APK。  
+未出 Release 时可在 [Actions → Build ChainBox APK](https://github.com/dukangalex/ChainBox/actions) 取构建产物。
 
 首次覆盖安装需要同一签名。自行构建请在仓库 Settings → Secrets 配置：
 
