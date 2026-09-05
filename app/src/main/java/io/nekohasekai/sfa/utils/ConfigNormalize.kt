@@ -5,10 +5,6 @@ import org.json.JSONObject
 
 /**
  * Runtime-only config hygiene for typical China subscription JSON.
- * - strip deprecated geoip/geosite fields
- * - drop broken rule_set entries
- * - ensure direct/block outbounds exist
- * - inject high-priority anti-leak rules (WebRTC/STUN/TURN)
  * Does NOT rewrite profile files on disk.
  */
 object ConfigNormalize {
@@ -113,38 +109,40 @@ object ConfigNormalize {
         route.remove("final")
     }
 
-    /**
-     * China-network oriented anti-leak rules (prepended, highest priority):
-     * Block classic STUN/TURN ports so WebRTC cannot learn the real ISP IP via
-     * domestic STUN (Bilibili / Xiaomi / Mango etc. are often matched as
-     * "CN direct" by subscription rules).
-     */
     private fun injectChinaAntiLeakRules(root: JSONObject) {
+        ensureBasicOutbounds(root)
         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
         val old = route.optJSONArray("rules") ?: JSONArray()
-        for (i in 0 until old.length()) {
-            val r = old.optJSONObject(i) ?: continue
-            if (r.optString("outbound") != "block") continue
-            if (r.optString("network") != "udp") continue
-            val port = r.opt("port") ?: continue
-            val hits = when (port) {
-                is Int -> port == 3478
-                is JSONArray -> (0 until port.length()).any { port.optInt(it) == 3478 }
-                else -> false
-            }
-            if (hits) return
-        }
-        val injected = JSONArray()
-        injected.put(
-            JSONObject()
-                .put("network", "udp")
-                .put("port", JSONArray().put(3478).put(19302).put(5349))
-                .put("outbound", "block"),
-        )
+        if (alreadyHasStunBlock(old)) return
+        val ports = intArrayOf(3478, 19302, 5349)
         val merged = JSONArray()
-        for (i in 0 until injected.length()) merged.put(injected.get(i))
+        for (p in ports) {
+            merged.put(
+                JSONObject()
+                    .put("network", "udp")
+                    .put("port", p)
+                    .put("outbound", "block"),
+            )
+        }
         for (i in 0 until old.length()) merged.put(old.get(i))
         route.put("rules", merged)
+    }
+
+    private fun alreadyHasStunBlock(rules: JSONArray): Boolean {
+        for (i in 0 until rules.length()) {
+            val r = rules.optJSONObject(i) ?: continue
+            if (r.optString("outbound") != "block") continue
+            if (r.optString("network") != "udp") continue
+            when (val port = r.opt("port")) {
+                is Number -> if (port.toInt() == 3478) return true
+                is JSONArray -> {
+                    for (j in 0 until port.length()) {
+                        if (port.optInt(j) == 3478) return true
+                    }
+                }
+            }
+        }
+        return false
     }
 
     private fun hardenDns(root: JSONObject) {
