@@ -1,14 +1,18 @@
 # ChainBox
 
-**独立 Android 代理客户端**：在可跟随官方 [sing-box](https://github.com/SagerNet/sing-box) 同步的内核上，提供**傻瓜式链式代理（Chain）**。
+独立的 Android 代理客户端。基于 [sing-box](https://github.com/SagerNet/sing-box) 内核，面向「前置机场 + 落地 VPS」场景，把链式代理做成可点选、可固定、订阅更新后仍能保持的功能。
 
-> 与 SagerNet / 官方 sing-box **无隶属关系**。不得以官方名义上架应用商店。
+**与 SagerNet / 官方 sing-box 无隶属关系。不得使用官方名称上架应用商店。**
 
-## 为什么是独立 App？
+[Releases](https://github.com/dukangalex/sing-box-for-android/releases) · [Actions](https://github.com/dukangalex/sing-box-for-android/actions) · [使用说明](docs/USER_GUIDE.md)
 
-- **内核可维护**：Chain 做在低耦合 outbound 层，官方内核升级时主要合并 `chain-dev` 再编 libbox。
-- **体验独立**：组链按 NekoBox 思路（点选分组/节点），并保留 sing-box 的 **urltest/selector 自动优选**（含分组→分组）。
-- **不绑架官方客户端仓库**：App 只消费 `libbox.aar`，不向官方提交补丁。
+## 特点
+
+- **傻瓜式链式代理**：当前配置为入口，另选落地（通常是你的 VPS）。出网 IP 为落地。
+- **订阅更新不丢链**：落地选择写在本地设置里，更新机场订阅后启动仍会自动套回。
+- **显式配置覆盖**：规范化、严格路由、DNS 防泄漏、禁用 IPv6、禁用 QUIC、排除国内 QUIC。
+- **本地 / 云备份**：配置与开关可备份恢复。
+- **签名覆盖安装**：用仓库 Secrets 中的 keystore 打正式包，可覆盖升级。
 
 ## 标识
 
@@ -16,55 +20,51 @@
 |------|-----|
 | 应用名 | ChainBox |
 | 包名 | `io.chainbox.app` |
-| 内核仓库 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) `chain-dev` |
-| 客户端仓库 | 本仓库 |
+| 客户端 | 本仓库 `dev` |
+| 内核 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) `chain-dev` |
 
-## 已有能力
+## 链式怎么走
 
-1. 带原生 `type: "chain"` 的 libbox 内核  
-2. **工具 → 链式代理**：快速建链（前置分组 + 落地节点/分组）  
-3. 一键写入当前配置，可选设为 `route.final`  
-4. GitHub Actions 一键出 APK（`Build ChainBox APK`）
-
-## 组链示例
-
-**分组 → 单节点（前置自动优选）**
-
-```json
-{
-  "type": "chain",
-  "tag": "my-chain",
-  "outbounds": ["urltest-front", "exit-node"]
-}
+```
+设备 → 前置机场节点 → 落地 VPS → 网站
 ```
 
-**分组 → 分组（类似订阅接力，两端均可优选）**
+网站看到的应是 **VPS 公网 IP**，不是前置机场 IP。
 
-```json
-{
-  "type": "chain",
-  "tag": "relay",
-  "outbounds": ["urltest-a", "urltest-b"]
-}
-```
+操作：
 
-更多内核说明：https://github.com/dukangalex/sing-box/blob/chain-dev/docs/CHAIN.md  
-维护与同步流程：[docs/MAINTENANCE.md](docs/MAINTENANCE.md)
+1. 仪表里选中「前置」订阅并启动一次，确认能上网。
+2. 再导入落地配置（你的 VPS）。
+3. **工具 → 链式代理生成器 → 选择落地 → 保存并固定**。
+4. 重载服务，查 IP。应为 VPS。
+
+取消链式后即恢复普通出口。详见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
 
 ## 下载
 
-1. 打开 [Actions → Build ChainBox APK](https://github.com/dukangalex/sing-box-for-android/actions)  
-2. 最新成功 run → Artifacts → `ChainBox-apk`  
-3. 后续将固定发布到 [Releases](https://github.com/dukangalex/sing-box-for-android/releases)
+到 [Releases](https://github.com/dukangalex/sing-box-for-android/releases) 下载最新 APK。  
+未出 Release 时可在 [Actions → Build ChainBox APK](https://github.com/dukangalex/sing-box-for-android/actions) 取构建产物。
+
+首次覆盖安装需要同一签名。自行构建请在仓库 Settings → Secrets 配置：
+
+- `KEYSTORE_BASE64`
+- `KEYSTORE_PASSWORD`
+- `KEY_ALIAS`
+- `KEY_PASSWORD`
 
 ## 构建
 
-```text
-workflow_dispatch: build-chainbox.yml
-  → 编译 chain-dev libbox.aar
-  → assemble otherDebug APK
-```
+仓库 Actions 工作流 `build-chainbox.yml`：
 
-## 许可
+1. 编译 `chain-dev` 的 `libbox.aar`
+2. 组装 APK
+3. 可选发布到 Releases（`publish_release` + `version_tag`）
 
-继承上游 GPL-3.0 等条款。衍生作品不得使用官方原名上架商店。
+维护说明：[docs/MAINTENANCE.md](docs/MAINTENANCE.md)
+
+## 许可与声明
+
+- 上游许可为 GPL-3.0，本仓库继承该许可。
+- 上游版权归属 nekohasekai / SagerNet。
+- ChainBox 是独立衍生客户端，不代表官方。
+- 仅供合法网络用途。使用者自行遵守当地法律。
