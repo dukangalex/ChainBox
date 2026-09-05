@@ -75,9 +75,6 @@ import io.nekohasekai.sfa.compose.screen.usbip.USBIPServerScreen
 import io.nekohasekai.sfa.compose.screen.usbip.USBIPStatusViewModel
 import io.nekohasekai.sfa.constant.Status
 
-// NOTE: Full route table restored; backup route registered below with other settings routes.
-// This file was recovered after accidental truncation; if build fails, check settings/backup composable.
-
 private val slideInFromRight: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
     slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300))
 }
@@ -206,7 +203,6 @@ fun NavHost(
         composable(route = "tools/stun_test", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             STUNTestScreen(navController = navController, serviceStatus = serviceStatus)
         }
-        // Settings
         composable(route = "settings", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             SettingsScreen(navController = navController)
         }
@@ -249,7 +245,7 @@ fun NavHost(
             PrivilegeSettingsScreen(navController = navController)
         }
         composable(route = "settings/privilege/manage", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
-            PrivilegeSettingsManageScreen(navController = navController)
+            PrivilegeSettingsManageScreen(onBack = { navController.navigateUp() })
         }
         composable(route = "settings/fdroid_mirror", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             FDroidMirrorScreen(navController = navController)

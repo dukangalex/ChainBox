@@ -142,7 +142,8 @@ jobs:
           set -o pipefail
           chmod +x gradlew
           ls -lah app/libs/
-          if [ -f app/release.keystore ]; then
+          # Prefer debug when secrets not configured
+          if [ -f app/release.keystore ] && grep -q '^KEYSTORE_PASS=.' local.properties 2>/dev/null; then
             TASK=":app:assembleOtherRelease"
           else
             TASK=":app:assembleOtherDebug"
