@@ -7,8 +7,8 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Re-apply persisted chain (landing detour) at service start/reload so subscription
- * updates do not drop the chain. Direction: 当前入口 → 落地 → 目标.
+ * Re-apply persisted chain at service start/reload.
+ * Path: entry (front) -> landing (VPS) -> target. Public IP is landing.
  */
 object ConfigChainReapply {
     suspend fun apply(content: String): String {
@@ -44,9 +44,7 @@ object ConfigChainReapply {
             val routeFinal = route.optString("final").trim()
             val main = resolveCurrentMainTag(outs, routeFinal) ?: return content
 
-            // 当前 → 落地 → 目标：入口叶子经 detour 走落地，final 保持入口组
             val mergedLanding = hop.mergedTag
-            // Merge must have produced the landing root outbound
             var hasLanding = false
             for (i in 0 until outs.length()) {
                 if (outs.optJSONObject(i)?.optString("tag") == mergedLanding) {
@@ -56,11 +54,9 @@ object ConfigChainReapply {
             }
             if (!hasLanding) return content
 
-            applyDetourToLeaves(outs, main, mergedLanding)
+            applyDetourToLeaves(outs, mergedLanding, main)
             root.put("outbounds", outs)
-            if (routeFinal.isEmpty() || routeFinal.startsWith("ext-")) {
-                route.put("final", main)
-            }
+            route.put("final", mergedLanding)
             root.toString()
         } catch (_: Exception) {
             content
