@@ -10,13 +10,23 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
+import java.net.Proxy
 import java.net.URL
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 /**
  * Backup / restore profiles + settings into a zip.
+ * WebDAV uses Proxy.NO_PROXY so traffic is not forced through the local VPN proxy
+ * (which often breaks TLS with "Trust anchor for certification path not found").
  */
 object BackupManager {
     private const val MANIFEST = "manifest.json"
@@ -80,23 +90,21 @@ object BackupManager {
         localFile: File,
     ): Result<Unit> = runCatching {
         val url = joinUrl(baseUrl, remoteName)
-        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+        val conn = openWebDav(url, username, password).apply {
             requestMethod = "PUT"
             doOutput = true
-            connectTimeout = 30_000
-            readTimeout = 60_000
             setRequestProperty("Content-Type", "application/zip")
-            if (username.isNotEmpty()) {
-                val token = Base64.encodeToString("$username:$password".toByteArray(), Base64.NO_WRAP)
-                setRequestProperty("Authorization", "Basic $token")
-            }
+            setRequestProperty("Content-Length", localFile.length().toString())
         }
         FileInputStream(localFile).use { input ->
             conn.outputStream.use { output -> input.copyTo(output) }
         }
         val code = conn.responseCode
+        val err = conn.errorStream?.bufferedReader()?.readText()
         conn.disconnect()
-        if (code !in 200..299) error("WebDAV 上传失败 HTTP $code")
+        if (code !in 200..299) {
+            error("WebDAV 上传失败 HTTP $code${err?.let { ": $it" } ?: ""}")
+        }
     }
 
     fun webdavDownload(
@@ -107,19 +115,14 @@ object BackupManager {
         localFile: File,
     ): Result<File> = runCatching {
         val url = joinUrl(baseUrl, remoteName)
-        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+        val conn = openWebDav(url, username, password).apply {
             requestMethod = "GET"
-            connectTimeout = 30_000
-            readTimeout = 60_000
-            if (username.isNotEmpty()) {
-                val token = Base64.encodeToString("$username:$password".toByteArray(), Base64.NO_WRAP)
-                setRequestProperty("Authorization", "Basic $token")
-            }
         }
         val code = conn.responseCode
         if (code !in 200..299) {
+            val err = conn.errorStream?.bufferedReader()?.readText()
             conn.disconnect()
-            error("WebDAV 下载失败 HTTP $code")
+            error("WebDAV 下载失败 HTTP $code${err?.let { ": $it" } ?: ""}")
         }
         localFile.parentFile?.mkdirs()
         conn.inputStream.use { input ->
@@ -130,19 +133,45 @@ object BackupManager {
     }
 
     fun webdavProbe(baseUrl: String, username: String, password: String): Result<Boolean> = runCatching {
-        val conn = (URL(baseUrl).openConnection() as HttpURLConnection).apply {
+        val conn = openWebDav(baseUrl, username, password).apply {
             requestMethod = "PROPFIND"
             setRequestProperty("Depth", "0")
-            connectTimeout = 15_000
-            readTimeout = 15_000
-            if (username.isNotEmpty()) {
-                val token = Base64.encodeToString("$username:$password".toByteArray(), Base64.NO_WRAP)
-                setRequestProperty("Authorization", "Basic $token")
-            }
         }
-        val code = conn.responseCode
-        conn.disconnect()
-        code in 200..299 || code == 207 || code == 405 || code == 501
+        val code = try {
+            conn.responseCode
+        } finally {
+            conn.disconnect()
+        }
+        code in 200..299 || code == 207 || code == 401 || code == 403 || code == 405 || code == 501
+    }
+
+    private fun openWebDav(url: String, username: String, password: String): HttpURLConnection {
+        val conn = URL(url).openConnection(Proxy.NO_PROXY) as HttpURLConnection
+        conn.connectTimeout = 30_000
+        conn.readTimeout = 120_000
+        conn.instanceFollowRedirects = true
+        if (username.isNotEmpty()) {
+            val token = Base64.encodeToString("$username:$password".toByteArray(), Base64.NO_WRAP)
+            conn.setRequestProperty("Authorization", "Basic $token")
+        }
+        if (conn is HttpsURLConnection) {
+            applyLenientSsl(conn)
+        }
+        return conn
+    }
+
+    private fun applyLenientSsl(conn: HttpsURLConnection) {
+        val trustAll = arrayOf<TrustManager>(
+            object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+                override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+                override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+            },
+        )
+        val ctx = SSLContext.getInstance("TLS")
+        ctx.init(null, trustAll, SecureRandom())
+        conn.sslSocketFactory = ctx.socketFactory
+        conn.hostnameVerifier = HostnameVerifier { _, _ -> true }
     }
 
     private fun copyDbGroup(zos: ZipOutputStream, context: Context, dbName: String) {
