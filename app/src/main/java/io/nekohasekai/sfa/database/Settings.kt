@@ -81,6 +81,10 @@ object Settings {
     var strictRoute by dataStore.boolean(SettingsKey.STRICT_ROUTE) { false }
     var dnsProtect by dataStore.boolean(SettingsKey.DNS_PROTECT) { false }
     var disableIpv6 by dataStore.boolean(SettingsKey.DISABLE_IPV6) { false }
+    var configNormalize by dataStore.boolean(SettingsKey.CONFIG_NORMALIZE) { false }
+    var chainEnabled by dataStore.boolean(SettingsKey.CHAIN_ENABLED) { false }
+    var chainLandingProfileId by dataStore.long(SettingsKey.CHAIN_LANDING_PROFILE_ID) { -1L }
+    var chainLandingTag by dataStore.string(SettingsKey.CHAIN_LANDING_TAG) { "" }
     var perAppProxyEnabled by dataStore.boolean(SettingsKey.PER_APP_PROXY_ENABLED) { false }
     var perAppProxyMode by dataStore.int(SettingsKey.PER_APP_PROXY_MODE) { PER_APP_PROXY_EXCLUDE }
     var perAppProxyList by dataStore.stringSet(SettingsKey.PER_APP_PROXY_LIST) { emptySet() }
