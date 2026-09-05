@@ -57,7 +57,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-// Marker only used to strip legacy type:chain configs from older builds
 private const val LEGACY_CHAIN_TAG = "my-chain"
 
 private data class HopRef(
@@ -66,7 +65,6 @@ private data class HopRef(
     val tag: String,
     val type: String,
 ) {
-    val isGroup: Boolean get() = type == "selector" || type == "urltest"
     val typeLabel: String
         get() = when (type) {
             "urltest" -> "自动优选分组"
@@ -110,9 +108,7 @@ fun ChainBuilderScreen(navController: NavController) {
                 val profiles = ProfileManager.list()
                 val current = profiles.find { it.id == selectedId }
                 if (current == null) {
-                    withContext(Dispatchers.Main) {
-                        loadError = "未选择配置"
-                    }
+                    withContext(Dispatchers.Main) { loadError = "未选择配置" }
                     return@launch
                 }
                 val path = current.typed.path
@@ -137,9 +133,7 @@ fun ChainBuilderScreen(navController: NavController) {
                     }
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    loadError = e.message
-                }
+                withContext(Dispatchers.Main) { loadError = e.message }
             }
         }
     }
@@ -184,12 +178,9 @@ fun ChainBuilderScreen(navController: NavController) {
                     val p = ProfileManager.get(landing.profileId)
                         ?: return@withContext Result.failure(IllegalStateException("找不到落地配置"))
                     outs = mergeHopTree(outs, landing, p.typed.path)
-
                     applyDetourToLeaves(outs, landing.mergedTag, main)
-
                     root.put("outbounds", outs)
                     route.put("final", landing.mergedTag)
-
                     file.writeText(root.toString(2))
                     Result.success(Unit)
                 } catch (ex: Exception) {
@@ -262,7 +253,6 @@ fun ChainBuilderScreen(navController: NavController) {
         }
     }
 
-    // UI truncated helpers referenced below — full implementations follow file
     Scaffold(
         topBar = {
             TopAppBar(
@@ -343,10 +333,14 @@ fun ChainBuilderScreen(navController: NavController) {
                                         pickerOpen = false
                                     }
                                     .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Column(Modifier = Modifier.weight(1f)) {
-                                    Text(hop.tag)
-                                    Text(hop.displayLine, style = MaterialTheme.typography.bodySmall)
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(text = hop.tag)
+                                    Text(
+                                        text = hop.displayLine,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
                                 }
                             }
                             HorizontalDivider()
