@@ -1,5 +1,6 @@
 package io.nekohasekai.sfa.compose.screen.settings
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,14 +39,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import io.nekohasekai.sfa.bg.BoxService
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.utils.BackupManager
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private fun softRelaunchApp(context: android.content.Context) {
+    try {
+        BoxService.stop()
+    } catch (_: Exception) {
+    }
+    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+    if (intent != null) {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        context.startActivity(intent)
+    }
+    android.os.Process.killProcess(android.os.Process.myPid())
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,10 +115,13 @@ fun BackupRestoreScreen(navController: NavController) {
                 }
             }
             busy = false
-            snackbar.showSnackbar(
-                if (result.isSuccess) "恢复完成，请强行停止并重新打开应用"
-                else "恢复失败: ${result.exceptionOrNull()?.message}",
-            )
+            if (result.isSuccess) {
+                snackbar.showSnackbar("恢复完成，正在重新加载…")
+                delay(400)
+                softRelaunchApp(context)
+            } else {
+                snackbar.showSnackbar("恢复失败: ${result.exceptionOrNull()?.message}")
+            }
         }
     }
 
@@ -114,7 +133,7 @@ fun BackupRestoreScreen(navController: NavController) {
                 Text(
                     "备份内容包括：设置、配置列表、各订阅/配置 JSON。\n\n" +
                         "恢复策略为覆盖：会写回数据库与 configs 目录。\n\n" +
-                        "恢复后请完全退出应用再打开，使数据库重新加载。\n\n" +
+                        "恢复后会自动重新加载应用，无需手动强行停止。\n\n" +
                         "WebDAV 需填写可访问的目录 URL，以及账号密码（若需要）。\n" +
                         "「测试连通性」仅作参考；备份/恢复成功即表示云端可用。",
                 )
@@ -273,10 +292,13 @@ fun BackupRestoreScreen(navController: NavController) {
                                 }
                             }
                             busy = false
-                            snackbar.showSnackbar(
-                                if (result.isSuccess) "恢复完成，请强行停止并重新打开应用"
-                                else "WebDAV 恢复失败: ${result.exceptionOrNull()?.message}",
-                            )
+                            if (result.isSuccess) {
+                                snackbar.showSnackbar("恢复完成，正在重新加载…")
+                                delay(400)
+                                softRelaunchApp(context)
+                            } else {
+                                snackbar.showSnackbar("WebDAV 恢复失败: ${result.exceptionOrNull()?.message}")
+                            }
                         }
                     },
                 )
