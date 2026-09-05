@@ -22,6 +22,10 @@ object SettingsKey {
     const val STRICT_ROUTE = "strict_route"
     const val DNS_PROTECT = "dns_protect"
     const val DISABLE_IPV6 = "disable_ipv6"
+    const val CONFIG_NORMALIZE = "config_normalize"
+    const val CHAIN_ENABLED = "chain_enabled"
+    const val CHAIN_LANDING_PROFILE_ID = "chain_landing_profile_id"
+    const val CHAIN_LANDING_TAG = "chain_landing_tag"
     const val PER_APP_PROXY_ENABLED = "per_app_proxy_enabled"
     const val PER_APP_PROXY_MODE = "per_app_proxy_mode"
     const val PER_APP_PROXY_LIST = "per_app_proxy_list"
@@ -37,22 +41,17 @@ object SettingsKey {
     const val PRIVILEGE_SETTINGS_INTERFACE_RENAME_ENABLED = "hide_settings_interface_rename_enabled"
     const val PRIVILEGE_SETTINGS_INTERFACE_PREFIX = "hide_settings_interface_prefix"
 
-    // OOM killer
     const val OOM_KILLER_ENABLED = "oom_killer_enabled"
     const val OOM_KILLER_DISABLED = "oom_killer_disabled"
     const val OOM_MEMORY_LIMIT_MB = "oom_memory_limit_mb"
 
-    // Power report
     const val POWER_REPORT_ENABLED = "power_report_enabled"
 
-    // dashboard
     const val DASHBOARD_ITEM_ORDER = "dashboard_item_order"
     const val DASHBOARD_DISABLED_ITEMS = "dashboard_disabled_items"
 
-    // Remote Control
     const val ACTIVE_REMOTE_SERVER_ID = "active_remote_server_id"
 
-    // Tailscale SSH
     const val TAILSCALE_SSH_REMEMBERED_USERNAMES = "tailscale_ssh_remembered_usernames"
     const val TAILSCALE_SSH_REMEMBERED_TERMINAL_TYPES = "tailscale_ssh_remembered_terminal_types"
     const val TAILSCALE_SSH_QUICK_CONNECT_PEERS = "tailscale_ssh_quick_connect_peers"
@@ -65,7 +64,6 @@ object SettingsKey {
     const val TAILSCALE_SSH_DARK_CONFIG = "tailscale_ssh_dark_config"
     const val TAILSCALE_SSH_FONT_FOLLOW_THEME = "tailscale_ssh_font_follow_theme"
 
-    // cache
     const val STARTED_BY_USER = "started_by_user"
     const val CACHED_UPDATE_INFO = "cached_update_info"
     const val CACHED_APK_PATH = "cached_apk_path"

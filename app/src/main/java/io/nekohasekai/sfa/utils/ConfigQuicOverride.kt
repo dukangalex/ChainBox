@@ -5,27 +5,32 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Runtime config overrides driven by Profile Override switches.
- * Does not modify the profile file on disk — only the JSON passed to the core.
- *
- * Important: never inject fields unknown to sing-box (strict JSON decoding).
+ * Runtime config overrides: normalize → chain reapply → network switches.
+ * Does not modify profile files on disk.
  */
 object ConfigQuicOverride {
 
-    fun apply(content: String): String {
-        if (!Settings.disableQuic && !Settings.strictRoute && !Settings.dnsProtect && !Settings.disableIpv6) {
+    suspend fun apply(content: String): String {
+        var out = content
+        try {
+            if (Settings.configNormalize) {
+                out = ConfigNormalize.apply(out)
+            }
+            if (Settings.chainEnabled) {
+                out = ConfigChainReapply.apply(out)
+            }
+            if (Settings.disableQuic || Settings.strictRoute || Settings.dnsProtect || Settings.disableIpv6) {
+                val root = JSONObject(out)
+                if (Settings.disableQuic) applyQuic(root)
+                if (Settings.strictRoute) applyStrictRoute(root)
+                if (Settings.dnsProtect) applyDnsProtect(root)
+                if (Settings.disableIpv6) applyDisableIpv6(root)
+                out = root.toString()
+            }
+        } catch (_: Exception) {
             return content
         }
-        return try {
-            val root = JSONObject(content)
-            if (Settings.disableQuic) applyQuic(root)
-            if (Settings.strictRoute) applyStrictRoute(root)
-            if (Settings.dnsProtect) applyDnsProtect(root)
-            if (Settings.disableIpv6) applyDisableIpv6(root)
-            root.toString()
-        } catch (_: Exception) {
-            content
-        }
+        return out
     }
 
     private fun applyQuic(root: JSONObject) {
@@ -34,7 +39,6 @@ object ConfigQuicOverride {
         val oldRules = route.optJSONArray("rules") ?: JSONArray()
         val injected = JSONArray()
         if (Settings.excludeCnQuic) {
-            // Allow CN UDP/443 first, then block other QUIC
             injected.put(
                 JSONObject()
                     .put("network", "udp")
@@ -55,7 +59,6 @@ object ConfigQuicOverride {
         route.put("rules", merged)
     }
 
-    /** strict_route is a TUN inbound field, not under route. */
     private fun applyStrictRoute(root: JSONObject) {
         val inbounds = root.optJSONArray("inbounds") ?: return
         for (i in 0 until inbounds.length()) {
