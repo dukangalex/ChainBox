@@ -125,12 +125,12 @@ fun ProfileOverrideScreen(
             ) {
                 OverrideSwitch(
                     title = "配置规范化",
-                    subtitle = "启动时自动修补常见格式/规则集问题，降低报错",
+                    subtitle = "修补格式/规则集，并拦截 STUN 防 WebRTC 真实 IP 泄漏",
                     checked = configNormalize,
                     onHelp = {
                         help = SwitchHelp(
                             "配置规范化",
-                            "作用：在不改动磁盘订阅文件的前提下，启动/重载时自动做保守修复：\n· 补齐缺失的 direct / block 出站\n· 清理无效 rule_set（缺 type/path/url）\n· 为 remote 规则集补默认更新间隔\n· 若 route.final 指向不存在的出站则清除，避免硬失败\n\n适合：机场配置格式不规范、规则集报错、缺出站标签时。\n\n注意：不会重写整份分流逻辑，也不会下载缺失的规则集文件。\n\n生效：切换后自动重载服务。",
+                            "作用：不改磁盘订阅，启动/重载时自动：\n· 补齐 direct / block 出站\n· 清理无效 rule_set、废弃 geoip/geosite 字段\n· 修正无效 route.final\n· 【防 WebRTC 泄漏】优先拦截 UDP 3478/19302/5349（STUN/TURN），避免国内 STUN（B站/小米等）因「国内直连」暴露真实宽带 IP\n\n说明：国外 STUN 无泄漏、国内 STUN 显示真实 IP，是典型分流直连现象；规范化会拦截 STUN 探测。\n\n生效：切换后自动重载。",
                         )
                     },
                     onCheckedChange = {
@@ -215,7 +215,7 @@ fun ProfileOverrideScreen(
                     onHelp = {
                         help = SwitchHelp(
                             "禁用 QUIC",
-                            "作用：拦截 UDP 443。\n\n生效：切换后自动重载。",
+                            "作用：拦截 UDP 443（HTTP/3/QUIC），并附带拦截 STUN 端口以降低 WebRTC 探测。\n\n注意：不能单独解决「国内 STUN 显示真实 IP」——那是 UDP 3478 直连，请开「配置规范化」。\n\n生效：切换后自动重载。",
                         )
                     },
                     onCheckedChange = {
@@ -236,7 +236,7 @@ fun ProfileOverrideScreen(
                     onHelp = {
                         help = SwitchHelp(
                             "排除国内 QUIC",
-                            "作用：禁用 QUIC 时对中国大陆 UDP 443 放行。需 geoip:cn。",
+                            "作用：在「禁用 QUIC」时，对中国大陆 IP 的 UDP 443 放行（便于国内视频等），境外仍拦截。\n\n与 WebRTC 无关：国内 STUN 泄漏请依赖「配置规范化」拦截 3478 端口，而不是本开关。",
                         )
                     },
                     onCheckedChange = {
