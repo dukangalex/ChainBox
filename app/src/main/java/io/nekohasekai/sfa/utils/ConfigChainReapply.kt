@@ -46,6 +46,16 @@ object ConfigChainReapply {
 
             // 当前 → 落地 → 目标：入口叶子经 detour 走落地，final 保持入口组
             val mergedLanding = hop.mergedTag
+            // Merge must have produced the landing root outbound
+            var hasLanding = false
+            for (i in 0 until outs.length()) {
+                if (outs.optJSONObject(i)?.optString("tag") == mergedLanding) {
+                    hasLanding = true
+                    break
+                }
+            }
+            if (!hasLanding) return content
+
             applyDetourToLeaves(outs, main, mergedLanding)
             root.put("outbounds", outs)
             if (routeFinal.isEmpty() || routeFinal.startsWith("ext-")) {
