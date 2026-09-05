@@ -85,6 +85,10 @@ object Settings {
     var chainEnabled by dataStore.boolean(SettingsKey.CHAIN_ENABLED) { false }
     var chainLandingProfileId by dataStore.long(SettingsKey.CHAIN_LANDING_PROFILE_ID) { -1L }
     var chainLandingTag by dataStore.string(SettingsKey.CHAIN_LANDING_TAG) { "" }
+    var webdavUrl by dataStore.string(SettingsKey.WEBDAV_URL) { "" }
+    var webdavUser by dataStore.string(SettingsKey.WEBDAV_USER) { "" }
+    var webdavPassword by dataStore.string(SettingsKey.WEBDAV_PASSWORD) { "" }
+    var webdavRemoteFile by dataStore.string(SettingsKey.WEBDAV_REMOTE_FILE) { "backup.zip" }
     var perAppProxyEnabled by dataStore.boolean(SettingsKey.PER_APP_PROXY_ENABLED) { false }
     var perAppProxyMode by dataStore.int(SettingsKey.PER_APP_PROXY_MODE) { PER_APP_PROXY_EXCLUDE }
     var perAppProxyList by dataStore.stringSet(SettingsKey.PER_APP_PROXY_LIST) { emptySet() }
