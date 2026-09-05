@@ -114,29 +114,61 @@ fun NavHost(
         modifier = modifier,
     ) {
         composable(Screen.Dashboard.route) {
-            DashboardScreen(
-                serviceStatus = serviceStatus,
-                showStartFab = showStartFab,
-                showStatusBar = showStatusBar,
-                onOpenNewProfile = onOpenNewProfile,
-            )
+            if (dashboardViewModel != null) {
+                DashboardScreen(
+                    serviceStatus = serviceStatus,
+                    showStartFab = showStartFab,
+                    showStatusBar = showStatusBar,
+                    onOpenNewProfile = onOpenNewProfile,
+                    viewModel = dashboardViewModel,
+                )
+            } else {
+                DashboardScreen(
+                    serviceStatus = serviceStatus,
+                    showStartFab = showStartFab,
+                    showStatusBar = showStatusBar,
+                    onOpenNewProfile = onOpenNewProfile,
+                )
+            }
         }
         composable(Screen.Log.route) {
             LogScreen(serviceStatus = serviceStatus, showStartFab = showStartFab, showStatusBar = showStatusBar)
         }
         composable(Screen.Groups.route) {
-            GroupsCard(serviceStatus = serviceStatus, showTopBar = true, modifier = Modifier.fillMaxSize())
+            if (groupsViewModel != null) {
+                GroupsCard(
+                    serviceStatus = serviceStatus,
+                    viewModel = groupsViewModel,
+                    showTopBar = true,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                GroupsCard(serviceStatus = serviceStatus, showTopBar = true, modifier = Modifier.fillMaxSize())
+            }
         }
         composable(Screen.Connections.route) {
-            ConnectionsPage(
-                serviceStatus = serviceStatus,
-                showTitle = false,
-                showTopBar = true,
-                onConnectionClick = { connectionId ->
-                    navController.navigate("connections/detail/${Uri.encode(connectionId)}")
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+            if (connectionsViewModel != null) {
+                ConnectionsPage(
+                    serviceStatus = serviceStatus,
+                    viewModel = connectionsViewModel,
+                    showTitle = false,
+                    showTopBar = true,
+                    onConnectionClick = { connectionId ->
+                        navController.navigate("connections/detail/${Uri.encode(connectionId)}")
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                ConnectionsPage(
+                    serviceStatus = serviceStatus,
+                    showTitle = false,
+                    showTopBar = true,
+                    onConnectionClick = { connectionId ->
+                        navController.navigate("connections/detail/${Uri.encode(connectionId)}")
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
         composable(ProfileRoutes.NewProfile) {
             DisposableEffect(Unit) { onDispose { onClearNewProfileArgs() } }
@@ -170,12 +202,22 @@ fun NavHost(
         composable("connections/detail/{connectionId}") { backStackEntry ->
             val connectionId = backStackEntry.arguments?.getString("connectionId")
             if (connectionId != null) {
-                ConnectionDetailsRoute(
-                    connectionId = connectionId,
-                    serviceStatus = serviceStatus,
-                    onBack = { navController.navigateUp() },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                if (connectionsViewModel != null) {
+                    ConnectionDetailsRoute(
+                        connectionId = connectionId,
+                        serviceStatus = serviceStatus,
+                        viewModel = connectionsViewModel,
+                        onBack = { navController.navigateUp() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    ConnectionDetailsRoute(
+                        connectionId = connectionId,
+                        serviceStatus = serviceStatus,
+                        onBack = { navController.navigateUp() },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
         composable(Screen.Tools.route) {
