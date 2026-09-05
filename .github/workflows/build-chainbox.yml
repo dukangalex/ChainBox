@@ -4,91 +4,58 @@ on:
   workflow_dispatch:
     inputs:
       publish_release:
-        description: 'Publish APK to GitHub Releases'
+        description: "Publish GitHub release"
         required: false
-        default: 'false'
-        type: boolean
+        default: "false"
+        type: string
       version_tag:
-        description: 'Release tag when publishing (e.g. v0.1.0)'
+        description: "Release tag (e.g. v0.1.18)"
         required: false
-        default: 'v0.1.0'
-  push:
-    branches: [dev]
-    paths:
-      - '.github/workflows/build-chainbox.yml'
-
-permissions:
-  contents: write
+        default: "v0.0.0-test"
+        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
     steps:
-      - name: Checkout ChainBox app
+      - name: Checkout app
         uses: actions/checkout@v4
         with:
           path: sing-box-for-android
 
-      - name: Checkout Chain sing-box kernel
+      - name: Checkout chain kernel
         uses: actions/checkout@v4
         with:
           repository: dukangalex/sing-box
           ref: chain-dev
           path: sing-box
-          fetch-depth: 0
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.5'
+          go-version: "1.22.x"
+          cache: true
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept licenses and install NDK 28
-        run: |
-          set -e
-          yes | sdkmanager --licenses >/tmp/sdk-licenses.txt || true
-          sdkmanager --install "ndk;28.0.13004108" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-          echo "ANDROID_HOME=${ANDROID_HOME}" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=${ANDROID_HOME}" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/28.0.13004108" >> $GITHUB_ENV
-
-      - name: Install gomobile
-        working-directory: sing-box
-        run: |
-          set -e
-          export PATH="$(go env GOPATH)/bin:$PATH"
-          go install github.com/sagernet/gomobile/cmd/gomobile@latest 2>/dev/null || go install golang.org/x/mobile/cmd/gomobile@latest
-          go install github.com/sagernet/gomobile/cmd/gobind@latest 2>/dev/null || go install golang.org/x/mobile/cmd/gobind@latest
-          gomobile init || true
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-
       - name: Build libbox.aar
         working-directory: sing-box
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
         run: |
           set -e
-          export PATH="$(go env GOPATH)/bin:$PATH"
-          export ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
           go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
-          ls -lh libbox*.aar
           mkdir -p ../sing-box-for-android/app/libs
-          cp -f libbox.aar ../sing-box-for-android/app/libs/
-          if [ -f libbox-legacy.aar ]; then
-            cp -f libbox-legacy.aar ../sing-box-for-android/app/libs/
+          if [ -f libbox.aar ]; then
+            cp -f libbox.aar ../sing-box-for-android/app/libs/libbox.aar
           else
-            cp -f libbox.aar ../sing-box-for-android/app/libs/libbox-legacy.aar
+            cp -f libbox.aar ../sing-box-for-android/app/libs/libbox-legacy.aar || true
+            find . -name "libbox*.aar" -exec cp -f {} ../sing-box-for-android/app/libs/ \;
           fi
           ls -lh ../sing-box-for-android/app/libs/
 
@@ -97,6 +64,24 @@ jobs:
         with:
           name: libbox-aar
           path: sing-box-for-android/app/libs/*.aar
+
+      - name: Setup release keystore (optional, enables in-place updates)
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        working-directory: sing-box-for-android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          ALIAS_NAME: ${{ secrets.ALIAS_NAME }}
+          ALIAS_PASS: ${{ secrets.ALIAS_PASS }}
+        run: |
+          set -e
+          echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
+          {
+            echo "KEYSTORE_PASS=$KEYSTORE_PASS"
+            echo "ALIAS_NAME=$ALIAS_NAME"
+            echo "ALIAS_PASS=$ALIAS_PASS"
+          } >> local.properties
+          ls -lah app/release.keystore
 
       - name: Assemble APKs
         id: assemble
@@ -108,9 +93,16 @@ jobs:
           set -o pipefail
           chmod +x gradlew
           ls -lah app/libs/
-          ./gradlew :app:assembleOtherDebug \
+          if [ -f app/release.keystore ]; then
+            TASK=":app:assembleOtherRelease"
+          else
+            TASK=":app:assembleOtherDebug"
+          fi
+          echo "Building $TASK"
+          ./gradlew $TASK \
             -x lint \
             -x lintDebug \
+            -x lintRelease \
             -x detekt \
             -x spotlessCheck \
             -x spotlessKotlin \
@@ -132,10 +124,8 @@ jobs:
           set -e
           mkdir -p dist
           find sing-box-for-android -type f -name "*.apk" -exec cp -v {} dist/ \;
-          # Stable name for releases
           for f in dist/*.apk; do
             [ -f "$f" ] || continue
-            base=$(basename "$f")
             cp -f "$f" "dist/ChainBox-android.apk"
             break
           done
@@ -157,13 +147,11 @@ jobs:
           tag_name: ${{ inputs.version_tag }}
           name: ChainBox ${{ inputs.version_tag }}
           body: |
-            ChainBox independent Android client with syncable Chain kernel.
+            ChainBox independent Android client.
 
             - Package: `io.chainbox.app`
-            - Kernel: dukangalex/sing-box `chain-dev`
-            - Features: chain outbound, group→node / group→group builder
-
-            Install the APK, open **工具 → 链式代理**, then rebuild service after writing chain.
+            - Backup/restore (local + WebDAV)
+            - Profile override switches, chain persistence
           files: |
             dist/ChainBox-android.apk
           draft: false
