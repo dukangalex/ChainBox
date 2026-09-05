@@ -12,23 +12,28 @@ object ConfigQuicOverride {
 
     suspend fun apply(content: String): String {
         var out = content
-        try {
-            if (Settings.configNormalize) {
+        if (Settings.configNormalize) {
+            try {
                 out = ConfigNormalize.apply(out)
+            } catch (_: Exception) {
             }
-            if (Settings.chainEnabled) {
+        }
+        if (Settings.chainEnabled) {
+            try {
                 out = ConfigChainReapply.apply(out)
+            } catch (_: Exception) {
             }
-            if (Settings.disableQuic || Settings.strictRoute || Settings.dnsProtect || Settings.disableIpv6) {
+        }
+        if (Settings.disableQuic || Settings.strictRoute || Settings.dnsProtect || Settings.disableIpv6) {
+            try {
                 val root = JSONObject(out)
                 if (Settings.disableQuic) applyQuic(root)
                 if (Settings.strictRoute) applyStrictRoute(root)
                 if (Settings.dnsProtect) applyDnsProtect(root)
                 if (Settings.disableIpv6) applyDisableIpv6(root)
                 out = root.toString()
+            } catch (_: Exception) {
             }
-        } catch (_: Exception) {
-            return content
         }
         return out
     }
@@ -56,13 +61,15 @@ object ConfigQuicOverride {
                 .put("port", 443)
                 .put("outbound", "block"),
         )
-        // WebRTC/STUN often goes "direct" via CN rules; block discovery ports too
-        injected.put(
-            JSONObject()
-                .put("network", "udp")
-                .put("port", JSONArray().put(3478).put(19302).put(5349))
-                .put("outbound", "block"),
-        )
+        // WebRTC/STUN (per-port for compatibility)
+        for (p in intArrayOf(3478, 19302, 5349)) {
+            injected.put(
+                JSONObject()
+                    .put("network", "udp")
+                    .put("port", p)
+                    .put("outbound", "block"),
+            )
+        }
         val merged = JSONArray()
         for (i in 0 until injected.length()) merged.put(injected.get(i))
         for (i in 0 until oldRules.length()) merged.put(oldRules.get(i))
