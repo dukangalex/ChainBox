@@ -12,6 +12,7 @@ object ConfigNormalize {
         return try {
             val root = JSONObject(content)
             ensureBasicOutbounds(root)
+            stripDeprecatedGeoDatabases(root)
             sanitizeRuleSets(root)
             sanitizeRouteFinal(root)
             root.toString()
@@ -34,6 +35,36 @@ object ConfigNormalize {
         }
         if (!hasTypeOrTag("block", "block")) {
             outs.put(JSONObject().put("type", "block").put("tag", "block"))
+        }
+    }
+
+    /**
+     * sing-box removed legacy geoip/geosite databases in 1.12.
+     * Strip deprecated fields from route/dns rules so the config can start.
+     * Matching may become less precise until the subscription uses rule_set.
+     */
+    private fun stripDeprecatedGeoDatabases(root: JSONObject) {
+        val route = root.optJSONObject("route")
+        if (route != null) {
+            route.remove("geoip")
+            route.remove("geosite")
+            sanitizeRulesArray(route.optJSONArray("rules"))
+        }
+        val dns = root.optJSONObject("dns")
+        if (dns != null) {
+            sanitizeRulesArray(dns.optJSONArray("rules"))
+        }
+    }
+
+    private fun sanitizeRulesArray(rules: JSONArray?) {
+        if (rules == null) return
+        for (i in 0 until rules.length()) {
+            val r = rules.optJSONObject(i) ?: continue
+            r.remove("geoip")
+            r.remove("geosite")
+            // legacy keys sometimes appear nested
+            r.remove("geo_ip")
+            r.remove("geo_site")
         }
     }
 

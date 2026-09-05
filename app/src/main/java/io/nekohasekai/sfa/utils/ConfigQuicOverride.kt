@@ -39,13 +39,18 @@ object ConfigQuicOverride {
         val oldRules = route.optJSONArray("rules") ?: JSONArray()
         val injected = JSONArray()
         if (Settings.excludeCnQuic) {
-            injected.put(
-                JSONObject()
-                    .put("network", "udp")
-                    .put("port", 443)
-                    .put("geoip", JSONArray().put("cn"))
-                    .put("outbound", "direct"),
-            )
+            // Never use deprecated "geoip" field (removed in sing-box 1.12).
+            // Prefer existing rule_set tags; otherwise ensure a geoip-cn rule_set.
+            val cnTag = ensureGeoipCnRuleSet(route)
+            if (cnTag != null) {
+                injected.put(
+                    JSONObject()
+                        .put("network", "udp")
+                        .put("port", 443)
+                        .put("rule_set", JSONArray().put(cnTag))
+                        .put("outbound", "direct"),
+                )
+            }
         }
         injected.put(
             JSONObject()
@@ -57,6 +62,40 @@ object ConfigQuicOverride {
         for (i in 0 until injected.length()) merged.put(injected.get(i))
         for (i in 0 until oldRules.length()) merged.put(oldRules.get(i))
         route.put("rules", merged)
+    }
+
+    /**
+     * Find or create a rule_set tag usable for China IP matching.
+     * Returns null only if we cannot attach any CN matcher (should be rare).
+     */
+    private fun ensureGeoipCnRuleSet(route: JSONObject): String? {
+        val sets = route.optJSONArray("rule_set") ?: JSONArray().also { route.put("rule_set", it) }
+        // Prefer an existing tag that looks like geoip-cn
+        for (i in 0 until sets.length()) {
+            val s = sets.optJSONObject(i) ?: continue
+            val tag = s.optString("tag").trim()
+            val t = tag.lowercase()
+            if (t == "geoip-cn" || t == "geoip:cn" || t.contains("geoip-cn") ||
+                (t.contains("geoip") && t.endsWith("cn"))
+            ) {
+                return tag
+            }
+        }
+        // Create a standard remote rule_set (binary) used by most modern configs
+        val tag = "geoip-cn"
+        sets.put(
+            JSONObject()
+                .put("type", "remote")
+                .put("tag", tag)
+                .put("format", "binary")
+                .put(
+                    "url",
+                    "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+                )
+                .put("download_detour", "direct")
+                .put("update_interval", "1d"),
+        )
+        return tag
     }
 
     private fun applyStrictRoute(root: JSONObject) {
