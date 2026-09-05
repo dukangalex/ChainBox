@@ -8,7 +8,7 @@ import java.io.File
 
 /**
  * Re-apply persisted chain (landing detour) at service start/reload so subscription
- * updates do not require the user to reconfigure chain every time.
+ * updates do not drop the chain. Direction: 当前入口 → 落地 → 目标.
  */
 object ConfigChainReapply {
     suspend fun apply(content: String): String {
@@ -44,10 +44,13 @@ object ConfigChainReapply {
             val routeFinal = route.optString("final").trim()
             val main = resolveCurrentMainTag(outs, routeFinal) ?: return content
 
+            // 当前 → 落地 → 目标：入口叶子经 detour 走落地，final 保持入口组
             val mergedLanding = hop.mergedTag
-            applyDetourToLeaves(outs, mergedLanding, main)
+            applyDetourToLeaves(outs, main, mergedLanding)
             root.put("outbounds", outs)
-            route.put("final", mergedLanding)
+            if (routeFinal.isEmpty() || routeFinal.startsWith("ext-")) {
+                route.put("final", main)
+            }
             root.toString()
         } catch (_: Exception) {
             content
@@ -60,7 +63,7 @@ object ConfigChainReapply {
 
     private fun resolveCurrentMainTag(outs: JSONArray, routeFinal: String): String? {
         fun scoreTag(tag: String, type: String): Int {
-            var s = 50
+            var s = 0
             if (type == "urltest") s += 20
             if (type == "selector") s += 15
             val t = tag.lowercase()
