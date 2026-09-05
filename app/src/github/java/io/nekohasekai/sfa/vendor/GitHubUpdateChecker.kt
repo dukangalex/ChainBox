@@ -15,7 +15,7 @@ import java.io.Closeable
 class GitHubUpdateChecker : Closeable {
     companion object {
         private const val RELEASES_URL =
-            "https://api.github.com/repos/dukangalex/sing-box-for-android/releases"
+            "https://api.github.com/repos/dukangalex/ChainBox/releases"
     }
 
     private val client = Libbox.newHTTPClient().apply {
