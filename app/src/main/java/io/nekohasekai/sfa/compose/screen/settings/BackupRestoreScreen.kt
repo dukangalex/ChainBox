@@ -115,7 +115,8 @@ fun BackupRestoreScreen(navController: NavController) {
                     "备份内容包括：设置、配置列表、各订阅/配置 JSON。\n\n" +
                         "恢复策略为覆盖：会写回数据库与 configs 目录。\n\n" +
                         "恢复后请完全退出应用再打开，使数据库重新加载。\n\n" +
-                        "WebDAV 需填写可访问的目录 URL，以及账号密码（若需要）。",
+                        "WebDAV 需填写可访问的目录 URL，以及账号密码（若需要）。\n" +
+                        "「测试连通性」仅作参考；备份/恢复成功即表示云端可用。",
                 )
             },
             confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },
@@ -281,15 +282,24 @@ fun BackupRestoreScreen(navController: NavController) {
                 )
                 ListItem(
                     headlineContent = { Text("测试连通性") },
+                    supportingContent = { Text("仅作参考，以备份/恢复是否成功为准") },
                     modifier = Modifier.clickable(enabled = !busy) {
                         scope.launch {
                             busy = true
-                            val ok = withContext(Dispatchers.IO) {
-                                BackupManager.webdavProbe(webdavUrl, webdavUser, webdavPass).getOrDefault(false)
+                            val result = withContext(Dispatchers.IO) {
+                                BackupManager.webdavProbe(webdavUrl, webdavUser, webdavPass)
                             }
+                            val ok = result.getOrDefault(false)
                             connectivity = ok
                             busy = false
-                            snackbar.showSnackbar(if (ok) "WebDAV 可访问" else "WebDAV 不可用")
+                            snackbar.showSnackbar(
+                                when {
+                                    ok -> "WebDAV 可访问"
+                                    result.exceptionOrNull() != null ->
+                                        "连通失败: ${result.exceptionOrNull()?.message ?: "未知错误"}"
+                                    else -> "WebDAV 不可用"
+                                },
+                            )
                         }
                     },
                 )
