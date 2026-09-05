@@ -3,7 +3,16 @@ package io.nekohasekai.sfa.utils
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * Runtime-only config hygiene for typical China subscription JSON.
+ * - strip deprecated geoip/geosite fields
+ * - drop broken rule_set entries
+ * - ensure direct/block outbounds exist
+ * - inject high-priority anti-leak rules (WebRTC/STUN/TURN)
+ * Does NOT rewrite profile files on disk.
+ */
 object ConfigNormalize {
+
     fun apply(content: String): String {
         return try {
             val root = JSONObject(content)
@@ -11,6 +20,8 @@ object ConfigNormalize {
             stripDeprecatedGeoDatabases(root)
             sanitizeRuleSets(root)
             sanitizeRouteFinal(root)
+            injectChinaAntiLeakRules(root)
+            hardenDns(root)
             root.toString()
         } catch (_: Exception) {
             content
@@ -37,9 +48,9 @@ object ConfigNormalize {
     private fun stripDeprecatedGeoDatabases(root: JSONObject) {
         val route = root.optJSONObject("route")
         if (route != null) {
+            sanitizeRulesArray(route.optJSONArray("rules"))
             route.remove("geoip")
             route.remove("geosite")
-            sanitizeRulesArray(route.optJSONArray("rules"))
         }
         val dns = root.optJSONObject("dns")
         if (dns != null) {
@@ -100,5 +111,46 @@ object ConfigNormalize {
             if (outs.optJSONObject(i)?.optString("tag") == fin) return
         }
         route.remove("final")
+    }
+
+    /**
+     * China-network oriented anti-leak rules (prepended, highest priority):
+     * Block classic STUN/TURN ports so WebRTC cannot learn the real ISP IP via
+     * domestic STUN (Bilibili / Xiaomi / Mango etc. are often matched as
+     * "CN direct" by subscription rules).
+     */
+    private fun injectChinaAntiLeakRules(root: JSONObject) {
+        val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
+        val old = route.optJSONArray("rules") ?: JSONArray()
+        for (i in 0 until old.length()) {
+            val r = old.optJSONObject(i) ?: continue
+            if (r.optString("outbound") != "block") continue
+            if (r.optString("network") != "udp") continue
+            val port = r.opt("port") ?: continue
+            val hits = when (port) {
+                is Int -> port == 3478
+                is JSONArray -> (0 until port.length()).any { port.optInt(it) == 3478 }
+                else -> false
+            }
+            if (hits) return
+        }
+        val injected = JSONArray()
+        injected.put(
+            JSONObject()
+                .put("network", "udp")
+                .put("port", JSONArray().put(3478).put(19302).put(5349))
+                .put("outbound", "block"),
+        )
+        val merged = JSONArray()
+        for (i in 0 until injected.length()) merged.put(injected.get(i))
+        for (i in 0 until old.length()) merged.put(old.get(i))
+        route.put("rules", merged)
+    }
+
+    private fun hardenDns(root: JSONObject) {
+        val dns = root.optJSONObject("dns") ?: return
+        if (!dns.has("independent_cache")) {
+            dns.put("independent_cache", true)
+        }
     }
 }
