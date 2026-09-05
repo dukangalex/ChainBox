@@ -14,8 +14,8 @@ import java.io.Closeable
 
 class GitHubUpdateChecker : Closeable {
     companion object {
-        private const val RELEASES_URL = "https://api.github.com/repos/SagerNet/sing-box/releases"
-        private const val METADATA_FILENAME = "SFA-version-metadata.json"
+        private const val RELEASES_URL =
+            "https://api.github.com/repos/dukangalex/sing-box-for-android/releases"
     }
 
     private val client = Libbox.newHTTPClient().apply {
@@ -30,13 +30,14 @@ class GitHubUpdateChecker : Closeable {
         var selected: ReleaseCandidate? = null
 
         for (release in releases) {
-            if (!isReleaseInTrack(release, track)) {
-                continue
-            }
-            val metadata = runCatching { downloadMetadata(release) }.getOrNull() ?: continue
-            if (!isNewerThanCurrent(metadata.versionName)) {
-                continue
-            }
+            if (!isReleaseInTrack(release, track)) continue
+            val versionName = normalizeVersion(release.tagName.ifBlank { release.name })
+            if (versionName.isEmpty()) continue
+            if (!isNewerThanCurrent(versionName)) continue
+            val metadata = VersionMetadata(
+                versionCode = versionCodeFromName(versionName),
+                versionName = versionName,
+            )
             val currentBest = selected
             if (currentBest == null || isBetterVersion(metadata, currentBest.metadata)) {
                 selected = ReleaseCandidate(release, metadata)
@@ -76,44 +77,35 @@ class GitHubUpdateChecker : Closeable {
 
         val response = request.execute()
         val content = response.content.unwrap
-
         return json.decodeFromString(content)
     }
 
     private fun isReleaseInTrack(release: GitHubRelease, track: UpdateTrack): Boolean {
-        if (release.draft) {
-            return false
-        }
+        if (release.draft) return false
         return when (track) {
             UpdateTrack.STABLE -> !release.prerelease
             UpdateTrack.BETA -> true
         }
     }
 
-    private fun isNewerThanCurrent(versionName: String): Boolean = Libbox.compareSemver(versionName, BuildConfig.VERSION_NAME)
+    private fun normalizeVersion(raw: String): String =
+        raw.trim().removePrefix("v").removePrefix("V").substringBefore(" ")
 
-    private fun isBetterVersion(version: VersionMetadata, other: VersionMetadata): Boolean {
-        if (Libbox.compareSemver(version.versionName, other.versionName)) {
-            return true
-        }
-        if (Libbox.compareSemver(other.versionName, version.versionName)) {
-            return false
-        }
-        return version.versionCode > other.versionCode
+    private fun versionCodeFromName(name: String): Int {
+        val parts = name.split(".", "-")
+        val major = parts.getOrNull(0)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+        val minor = parts.getOrNull(1)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+        val patch = parts.getOrNull(2)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+        return major * 10000 + minor * 100 + patch
     }
 
-    private fun downloadMetadata(release: GitHubRelease): VersionMetadata? {
-        val metadataAsset = release.assets.find { it.name == METADATA_FILENAME }
-            ?: return null
+    private fun isNewerThanCurrent(versionName: String): Boolean =
+        Libbox.compareSemver(versionName, BuildConfig.VERSION_NAME)
 
-        val request = client.newRequest()
-        request.setURL(metadataAsset.browserDownloadUrl)
-        request.setUserAgent(HTTPClient.userAgent)
-
-        val response = request.execute()
-        val content = response.content.unwrap
-
-        return json.decodeFromString<VersionMetadata>(content)
+    private fun isBetterVersion(version: VersionMetadata, other: VersionMetadata): Boolean {
+        if (Libbox.compareSemver(version.versionName, other.versionName)) return true
+        if (Libbox.compareSemver(other.versionName, version.versionName)) return false
+        return version.versionCode > other.versionCode
     }
 
     override fun close() {
