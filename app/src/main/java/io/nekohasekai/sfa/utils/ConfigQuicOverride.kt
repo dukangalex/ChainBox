@@ -4,26 +4,43 @@ import io.nekohasekai.sfa.database.Settings
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Runtime config overrides: normalize → chain reapply → network switches.
- * Does not modify profile files on disk.
- */
+class ChainApplyException(message: String) : IllegalStateException(message)
+
 object ConfigQuicOverride {
 
     suspend fun apply(content: String): String {
+        OverrideStatus.clear()
+        val warnings = mutableListOf<OverrideNotice>()
         var out = content
+
         if (Settings.configNormalize) {
             try {
                 out = ConfigNormalize.apply(out)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                warnings += OverrideNotice(
+                    title = "配置规范化未生效",
+                    reason = e.message ?: "JSON 无法解析",
+                    hint = "请打开「设置 → 配置覆盖」关闭后重试，或检查订阅是否为合法 sing-box JSON。",
+                )
             }
         }
-        if (Settings.chainEnabled) {
+
+        val chainNeeded = Settings.chainEnabled &&
+            (Settings.chainBoundProfileId < 0L || Settings.chainBoundProfileId == Settings.selectedProfile)
+        if (chainNeeded) {
             try {
                 out = ConfigChainReapply.apply(out)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                val notice = OverrideNotice(
+                    title = "链式代理未生效，已停止启动",
+                    reason = e.message ?: "无法串联出站",
+                    hint = "请到「工具 → 链式代理」重新选择出口并保存，或取消链式后再启动。不会自动改走 DIRECT。",
+                )
+                OverrideStatus.set(warnings + notice)
+                throw ChainApplyException(notice.reason)
             }
         }
+
         if (Settings.disableQuic || Settings.strictRoute || Settings.dnsProtect || Settings.disableIpv6) {
             try {
                 val root = JSONObject(out)
@@ -32,9 +49,16 @@ object ConfigQuicOverride {
                 if (Settings.dnsProtect) applyDnsProtect(root)
                 if (Settings.disableIpv6) applyDisableIpv6(root)
                 out = root.toString()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                warnings += OverrideNotice(
+                    title = "网络增强开关部分未生效",
+                    reason = e.message ?: "覆盖失败",
+                    hint = "请检查配置是否含 TUN/路由段，或临时关闭对应开关。",
+                )
             }
         }
+
+        OverrideStatus.set(warnings)
         return out
     }
 
@@ -56,19 +80,10 @@ object ConfigQuicOverride {
             }
         }
         injected.put(
-            JSONObject()
-                .put("network", "udp")
-                .put("port", 443)
-                .put("outbound", "block"),
+            JSONObject().put("network", "udp").put("port", 443).put("outbound", "block"),
         )
-        // WebRTC/STUN (per-port for compatibility)
         for (p in intArrayOf(3478, 19302, 5349)) {
-            injected.put(
-                JSONObject()
-                    .put("network", "udp")
-                    .put("port", p)
-                    .put("outbound", "block"),
-            )
+            injected.put(JSONObject().put("network", "udp").put("port", p).put("outbound", "block"))
         }
         val merged = JSONArray()
         for (i in 0 until injected.length()) merged.put(injected.get(i))
@@ -101,22 +116,23 @@ object ConfigQuicOverride {
 
     private fun applyStrictRoute(root: JSONObject) {
         val inbounds = root.optJSONArray("inbounds") ?: return
+        var touched = false
         for (i in 0 until inbounds.length()) {
             val ib = inbounds.optJSONObject(i) ?: continue
             if (ib.optString("type") != "tun") continue
             ib.put("strict_route", true)
+            touched = true
+        }
+        if (!touched) {
+            throw IllegalStateException("当前配置没有 TUN 入站，严格路由无法生效")
         }
     }
 
     private fun applyDnsProtect(root: JSONObject) {
         val dns = root.optJSONObject("dns") ?: JSONObject().also { root.put("dns", it) }
-        if (!dns.has("independent_cache")) {
-            dns.put("independent_cache", true)
-        }
+        if (!dns.has("independent_cache")) dns.put("independent_cache", true)
         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
-        if (!route.has("auto_detect_interface")) {
-            route.put("auto_detect_interface", true)
-        }
+        if (!route.has("auto_detect_interface")) route.put("auto_detect_interface", true)
     }
 
     private fun applyDisableIpv6(root: JSONObject) {
@@ -125,10 +141,7 @@ object ConfigQuicOverride {
         ensureBlockOutbound(root)
         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
         val old = route.optJSONArray("rules") ?: JSONArray()
-        val injected = JSONObject()
-            .put("ip_version", 6)
-            .put("outbound", "block")
-        val merged = JSONArray().put(injected)
+        val merged = JSONArray().put(JSONObject().put("ip_version", 6).put("outbound", "block"))
         for (i in 0 until old.length()) merged.put(old.get(i))
         route.put("rules", merged)
     }
