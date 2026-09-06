@@ -53,10 +53,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private data class SwitchHelp(
-    val title: String,
-    val body: String,
-)
+private data class SwitchHelp(val title: String, val body: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -190,7 +187,7 @@ fun ProfileOverrideScreen(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             Text(
-                text = "以下为 ChainBox 运行时覆盖，不修改订阅文件。",
+                text = "以下为 ChainBox 运行时覆盖，不修改订阅文件。点 ⓘ 查看说明。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 12.dp),
@@ -201,9 +198,14 @@ fun ProfileOverrideScreen(
             ) {
                 OverrideSwitch(
                     title = "配置规范化",
-                    subtitle = "修补格式/规则集，拦截 STUN 防 WebRTC 泄漏",
+                    subtitle = "覆写脚本：保留节点，其余换成 sing-box 标准模板",
                     checked = configNormalize,
-                    onHelp = { help = SwitchHelp("配置规范化", "启动时修补常见格式问题并拦截 STUN。") },
+                    onHelp = {
+                        help = SwitchHelp(
+                            "配置规范化",
+                            "这是运行时覆写脚本，不改磁盘上的订阅文件。\n\n保留：你的节点（vmess/vless/ss/等）和 selector/urltest 分组。\n覆写：DNS、路由规则、规则集、缺少的 TUN、direct/block。\n\n模板会：\n· 国内域名/国内 IP 走 direct\n· 私网走 direct\n· 拦截 STUN（3478/19302/5349）防 WebRTC 泄露真实 IP\n· DNS 境外走代理、国内走直连\n· 其余走你的主选择组\n\n失败时仪表盘会红色提示，不会暗中改走 DIRECT。关闭开关即恢复原配置逻辑。",
+                        )
+                    },
                     onCheckedChange = {
                         configNormalize = it
                         scope.launch(Dispatchers.IO) {
