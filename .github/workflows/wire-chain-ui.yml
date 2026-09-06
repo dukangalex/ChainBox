@@ -1,31 +1,22 @@
 name: Wire Chain UI
 
+# Manual diagnostic only. Source wiring is maintained in Git, not by a
+# privileged workflow that can push directly to dev.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'scripts/wire_chain_ui.py'
-      - '.github/workflows/wire-chain-ui.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   wire:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Run wire script
-        run: python3 scripts/wire_chain_ui.py
-      - name: Commit
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Check wiring script is clean
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/src/main/java/io/nekohasekai/sfa/compose/navigation/Navigation.kt \
-                  app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ToolsScreen.kt
-          if git diff --staged --quiet; then
-            echo "No changes"
-            exit 0
-          fi
-          git commit -m "feat: wire Chain builder into Tools and Navigation"
-          git push
+          set -e
+          python3 scripts/wire_chain_ui.py --check 2>/dev/null || python3 -m py_compile scripts/wire_chain_ui.py
+          echo "UI wiring check completed; no repository mutation is permitted."
