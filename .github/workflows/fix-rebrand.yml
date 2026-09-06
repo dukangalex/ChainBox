@@ -1,45 +1,23 @@
 name: Fix ChainBox rebrand files
 
+# Kept as a manual diagnostic workflow only. It deliberately has no write
+# permission and never commits/pushes to dev. Rebranding belongs in source.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/fix-rebrand.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  restore:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Apply neutral ChainBox branding
+      - name: Verify ChainBox branding
         run: |
           set -e
-          git show fc87019086e60a7bceac5e65d45438a928199553:app/build.gradle.kts > app/build.gradle.kts
-          git show fc87019086e60a7bceac5e65d45438a928199553:app/src/main/res/values/strings.xml > app/src/main/res/values/strings.xml
-
-          sed -i 's/applicationId = "io.nekohasekai.sfa"/applicationId = "io.chainbox.app"/' app/build.gradle.kts
-          sed -i 's/SFA-/ChainBox-/g' app/build.gradle.kts
-          sed -i 's/<string name="app_name" translatable="false">sing-box<\/string>/<string name="app_name" translatable="false">ChainBox<\/string>/' app/src/main/res/values/strings.xml
-
-          grep -n applicationId app/build.gradle.kts | head -3
-          grep -n app_name app/src/main/res/values/strings.xml | head -3
-          wc -l app/build.gradle.kts app/src/main/res/values/strings.xml
-
-      - name: Commit and push
-        run: |
-          set -e
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/build.gradle.kts app/src/main/res/values/strings.xml
-          if git diff --staged --quiet; then
-            echo "No changes"
-            exit 0
-          fi
-          git commit -m "rebrand: applicationId io.chainbox.app, app name ChainBox"
-          git push origin HEAD:dev
+          grep -q 'applicationId = "io.chainbox.app"' app/build.gradle.kts
+          grep -q '<string name="app_name" translatable="false">ChainBox</string>' app/src/main/res/values/strings.xml
+          echo "ChainBox branding is present"
