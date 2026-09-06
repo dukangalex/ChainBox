@@ -36,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.nekohasekai.sfa.R
+import io.nekohasekai.sfa.compose.component.OverrideBanner
 import io.nekohasekai.sfa.compose.component.RemoteControlMenuItems
 import io.nekohasekai.sfa.compose.component.rememberRemoteServers
 import io.nekohasekai.sfa.compose.navigation.NewProfileArgs
@@ -69,33 +70,20 @@ fun DashboardScreen(
             actions = {
                 Box {
                     IconButton(onClick = { showOthersMenu = true }) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = stringResource(R.string.title_others),
-                        )
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.title_others))
                     }
-                    DropdownMenu(
-                        expanded = showOthersMenu,
-                        onDismissRequest = { showOthersMenu = false },
-                    ) {
+                    DropdownMenu(expanded = showOthersMenu, onDismissRequest = { showOthersMenu = false }) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.dashboard_items)) },
                             leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.GridView,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
+                                Icon(Icons.Default.GridView, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                             },
                             onClick = {
                                 showOthersMenu = false
                                 viewModel.toggleCardSettingsDialog()
                             },
                         )
-                        RemoteControlMenuItems(
-                            servers = remoteServers,
-                            onAction = { showOthersMenu = false },
-                        )
+                        RemoteControlMenuItems(servers = remoteServers, onAction = { showOthersMenu = false })
                     }
                 }
             },
@@ -106,7 +94,6 @@ fun DashboardScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Show dashboard settings bottom sheet
     if (uiState.showCardSettingsDialog) {
         DashboardSettingsBottomSheet(
             sheetState = sheetState,
@@ -125,81 +112,42 @@ fun DashboardScreen(
     }
 
     if (isRemote && !remoteConnected) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator()
-        }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
 
     val scaffoldPadding = LocalScaffoldPadding.current
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-    ) {
+    Box(Modifier.fillMaxSize()) {
         val bottomPadding = when {
             showStartFab -> 88.dp
             showStatusBar -> 74.dp
             else -> 0.dp
         }
         LazyColumn(
-            modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(scaffoldPadding)
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(scaffoldPadding).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = bottomPadding),
         ) {
-            // Dynamic dashboard cards
-            // Show cards when service is running OR if it's the Profiles card (always available)
+            item { OverrideBanner() }
             val serviceRunning = uiState.isStatusVisible
-
-            // Filter cards based on availability
-            val actuallyVisibleCards =
-                uiState.visibleCards.filter { cardGroup ->
-                    when {
-                        // The remote dashboard only renders cards backed by the
-                        // command protocol: profiles and system proxy are
-                        // operations on the local device.
-                        isRemote ->
-                            cardGroup != CardGroup.Profiles &&
-                                cardGroup != CardGroup.SystemProxy &&
-                                serviceRunning &&
-                                isCardAvailableWhenServiceRunning(cardGroup, uiState)
-
-                        cardGroup == CardGroup.Profiles -> true // Profiles card is always available
-                        else -> serviceRunning && isCardAvailableWhenServiceRunning(cardGroup, uiState)
-                    }
-                }.toSet()
-
-            // Process cards to group half-width cards together
-            val cardRenderItems =
-                processCardsForRendering(
-                    cardOrder = uiState.cardOrder,
-                    visibleCards = actuallyVisibleCards,
-                    cardWidths = uiState.cardWidths,
-                )
-
+            val actuallyVisibleCards = uiState.visibleCards.filter { cardGroup ->
+                when {
+                    isRemote -> cardGroup != CardGroup.Profiles && cardGroup != CardGroup.SystemProxy && serviceRunning && isCardAvailableWhenServiceRunning(cardGroup, uiState)
+                    cardGroup == CardGroup.Profiles -> true
+                    else -> serviceRunning && isCardAvailableWhenServiceRunning(cardGroup, uiState)
+                }
+            }.toSet()
+            val cardRenderItems = processCardsForRendering(uiState.cardOrder, actuallyVisibleCards, uiState.cardWidths)
             items(cardRenderItems) { renderItem ->
                 if (renderItem.isRow && renderItem.cards.size >= 2) {
-                    // Render two half-width cards in a row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         renderItem.cards.forEach { cardGroup ->
                             DashboardCardRenderer(
                                 cardGroup = cardGroup,
-                                cardWidth =
-                                uiState.cardWidths[cardGroup]
-                                    ?: CardWidth.Full,
+                                cardWidth = uiState.cardWidths[cardGroup] ?: CardWidth.Full,
                                 uiState = uiState,
                                 onClashModeSelected = viewModel::selectClashMode,
                                 onSystemProxyToggle = viewModel::toggleSystemProxy,
-                                // Profile card specific props
                                 profiles = uiState.profiles,
                                 selectedProfileId = uiState.selectedProfileId,
                                 isLoading = uiState.isLoading,
@@ -220,26 +168,19 @@ fun DashboardScreen(
                                 onHideProfilePickerSheet = viewModel::hideProfilePickerSheet,
                                 onOpenNewProfile = onOpenNewProfile,
                                 commandClient = viewModel.commandClient,
-                                modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth(),
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
                             )
                         }
                     }
                 } else {
-                    // Render single card (full-width or single half-width)
                     renderItem.cards.forEach { cardGroup ->
                         DashboardCardRenderer(
                             cardGroup = cardGroup,
-                            cardWidth =
-                            uiState.cardWidths[cardGroup]
-                                ?: CardWidth.Full,
+                            cardWidth = uiState.cardWidths[cardGroup] ?: CardWidth.Full,
                             uiState = uiState,
                             serviceStatus = serviceStatus,
                             onClashModeSelected = viewModel::selectClashMode,
                             onSystemProxyToggle = viewModel::toggleSystemProxy,
-                            // Profile card specific props
                             profiles = uiState.profiles,
                             selectedProfileId = uiState.selectedProfileId,
                             isLoading = uiState.isLoading,
@@ -268,9 +209,6 @@ fun DashboardScreen(
     }
 }
 
-/**
- * Process cards for rendering, grouping consecutive half-width cards into rows
- */
 fun processCardsForRendering(
     cardOrder: List<CardGroup>,
     visibleCards: Set<CardGroup>,
@@ -278,63 +216,30 @@ fun processCardsForRendering(
 ): List<CardRenderItem> {
     val renderItems = mutableListOf<CardRenderItem>()
     val visibleOrderedCards = cardOrder.filter { visibleCards.contains(it) }
-
     var i = 0
     while (i < visibleOrderedCards.size) {
         val currentCard = visibleOrderedCards[i]
         val currentWidth = cardWidths[currentCard] ?: CardWidth.Full
-
-        if (currentWidth == CardWidth.Half) {
-            // Check if next card is also half-width
-            if (i + 1 < visibleOrderedCards.size) {
-                val nextCard = visibleOrderedCards[i + 1]
-                val nextWidth = cardWidths[nextCard] ?: CardWidth.Full
-
-                if (nextWidth == CardWidth.Half) {
-                    // Group two half-width cards together
-                    renderItems.add(
-                        CardRenderItem(
-                            cards = listOf(currentCard, nextCard),
-                            isRow = true,
-                        ),
-                    )
-                    i += 2
-                    continue
-                }
+        if (currentWidth == CardWidth.Half && i + 1 < visibleOrderedCards.size) {
+            val nextCard = visibleOrderedCards[i + 1]
+            if ((cardWidths[nextCard] ?: CardWidth.Full) == CardWidth.Half) {
+                renderItems.add(CardRenderItem(listOf(currentCard, nextCard), true))
+                i += 2
+                continue
             }
-            // Single half-width card
-            renderItems.add(
-                CardRenderItem(
-                    cards = listOf(currentCard),
-                    isRow = false,
-                ),
-            )
-        } else {
-            // Full-width card
-            renderItems.add(
-                CardRenderItem(
-                    cards = listOf(currentCard),
-                    isRow = false,
-                ),
-            )
         }
+        renderItems.add(CardRenderItem(listOf(currentCard), false))
         i++
     }
-
     return renderItems
 }
 
-/**
- * Determine if a service-dependent card has data available to display.
- * This function is only relevant when the service is running.
- * Note: Profiles card is always available and should not use this function.
- */
 fun isCardAvailableWhenServiceRunning(cardGroup: CardGroup, uiState: DashboardUiState): Boolean = when (cardGroup) {
     CardGroup.ClashMode -> uiState.clashModeVisible
     CardGroup.UploadTraffic -> uiState.trafficVisible
     CardGroup.DownloadTraffic -> uiState.trafficVisible
-    CardGroup.Debug -> true // Debug info is always available when service is running
+    CardGroup.Debug -> true
     CardGroup.Connections -> uiState.trafficVisible
     CardGroup.SystemProxy -> uiState.systemProxyVisible
-    CardGroup.Profiles -> true // This shouldn't be called for Profiles, but return true for safety
+    CardGroup.Profiles -> true
 }
