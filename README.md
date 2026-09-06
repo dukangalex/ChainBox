@@ -1,70 +1,70 @@
 # ChainBox
 
-独立的 Android 代理客户端。基于 [sing-box](https://github.com/SagerNet/sing-box) 内核，面向「前置机场 + 落地 VPS」场景，把链式代理做成可点选、可固定、订阅更新后仍能保持的功能。
+ChainBox 是独立的 Android 代理客户端。内核基于 [sing-box](https://github.com/SagerNet/sing-box)，在其上提供可配置的多级出站（链式代理）以及相关的运行时覆盖选项。
 
-**与 SagerNet / 官方 sing-box 无隶属关系。不得使用官方名称上架应用商店。**
+本项目与 SagerNet 及官方 sing-box 无从属或授权关系，不得使用官方名称及标志进行商业发布或应用商店上架。
 
-[Releases](https://github.com/dukangalex/ChainBox/releases) · [Actions](https://github.com/dukangalex/ChainBox/actions) · [使用说明](docs/USER_GUIDE.md)
+- 发行版：[Releases](https://github.com/dukangalex/ChainBox/releases)
+- 构建：[Actions](https://github.com/dukangalex/ChainBox/actions)
+- 使用说明：[docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+- 维护说明：[docs/MAINTENANCE.md](docs/MAINTENANCE.md)
 
-## 特点
-
-- **傻瓜式链式代理**：当前配置为入口，另选落地（通常是你的 VPS）。出网 IP 为落地。
-- **订阅更新不丢链**：落地选择写在本地设置里，更新机场订阅后启动仍会自动套回。
-- **显式配置覆盖**：规范化、严格路由、DNS 防泄漏、禁用 IPv6、禁用 QUIC、排除国内 QUIC。
-- **本地 / 云备份**：配置与开关可备份恢复。
-- **签名覆盖安装**：用仓库 Secrets 中的 keystore 打正式包，可覆盖升级。
-
-## 标识
+## 项目标识
 
 | 项目 | 值 |
 |------|-----|
-| 应用名 | ChainBox |
-| 包名 | `io.chainbox.app` |
-| 客户端仓库 | [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox) `dev` |
-| 内核 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) `chain-dev` |
+| 应用名称 | ChainBox |
+| 应用包名 | `io.chainbox.app` |
+| 客户端仓库 | [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox) （分支 `dev`） |
+| 内核仓库 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) （分支 `chain-dev`） |
+| 更新检查 | 仅本仓库 GitHub Releases |
 
-## 链式怎么走
+## 功能范围
+
+- 多级出站：以当前配置为入口，另指定出口节点或分组；外部访问的源地址应为出口节点地址。
+- 链路保持：出口选择保存于本地；远程订阅更新后仍按已保存的出口复用。
+- 运行时覆盖：可选项包括配置规范化、严格路由、DNS 相关设置、IPv6 与 QUIC 处理，不修改订阅原文。
+- 备份与恢复：支持本地文件及远程备份。
+
+具体操作见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
+
+## 多级出站
 
 ```
-设备 → 前置机场节点 → 落地 VPS → 网站
+设备 → 入口节点 → 出口节点 → 目的站
 ```
 
-网站看到的应是 **VPS 公网 IP**，不是前置机场 IP。
+1. 导入并启用入口配置，确认基础连通。
+2. 导入出口配置。
+3. 在「工具 → 链式代理生成器」中指定出口并保存。
+4. 重载服务后验证出站公网地址。
 
-操作：
-
-1. 仪表里选中「前置」订阅并启动一次，确认能上网。
-2. 再导入落地配置（你的 VPS）。
-3. **工具 → 链式代理生成器 → 选择落地 → 保存并固定**。
-4. 重载服务，查 IP。应为 VPS。
-
-取消链式后即恢复普通出口。详见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
+取消链式后，出站恢复为当前配置的默认出口。
 
 ## 下载
 
-到 [Releases](https://github.com/dukangalex/ChainBox/releases) 下载最新 APK。  
-未出 Release 时可在 [Actions → Build ChainBox APK](https://github.com/dukangalex/ChainBox/actions) 取构建产物。
+请从 [Releases](https://github.com/dukangalex/ChainBox/releases) 下载 `ChainBox-android.apk`。
 
-首次覆盖安装需要同一签名。自行构建请在仓库 Settings → Secrets 配置：
+覆盖安装要求使用相同签名证书，且新版本的 `versionCode` 须大于已安装版本。自行构建时须在仓库 Secrets 中配置：
 
 - `KEYSTORE_BASE64`
-- `KEYSTORE_PASSWORD`
-- `KEY_ALIAS`
-- `KEY_PASSWORD`
+- `KEYSTORE_PASSWORD` 或 `KEYSTORE_PASS`
+- `KEY_ALIAS` 或 `ALIAS_NAME`
+- `KEY_PASSWORD` 或 `ALIAS_PASS`
 
 ## 构建
 
-仓库 Actions 工作流 `build-chainbox.yml`：
+使用工作流 `.github/workflows/build-chainbox.yml`：
 
-1. 编译 `chain-dev` 的 `libbox.aar`
-2. 组装 APK
-3. 可选发布到 Releases（`publish_release` + `version_tag`）
+1. 从 `chain-dev` 编译 `libbox.aar`
+2. 组装 Android APK
+3. 若 `publish_release=true` 并指定 `version_tag`，则发布至 GitHub Releases
 
-维护说明：[docs/MAINTENANCE.md](docs/MAINTENANCE.md)
+客户端版本号以 `version.properties` 为准。
 
-## 许可与声明
+上游内核的跟进与发布节奏见 [docs/MAINTENANCE.md](docs/MAINTENANCE.md)。
 
-- 上游许可为 GPL-3.0，本仓库继承该许可。
-- 上游版权归属 nekohasekai / SagerNet。
-- ChainBox 是独立衍生客户端，不代表官方。
-- 仅供合法网络用途。使用者自行遵守当地法律。
+## 许可
+
+本仓库继承上游 [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.html)。
+上游代码版权归属原作者。ChainBox 为独立衍生工作，不代表上游项目。
