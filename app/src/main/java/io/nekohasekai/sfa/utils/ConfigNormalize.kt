@@ -3,10 +3,6 @@ package io.nekohasekai.sfa.utils
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Runtime overlay script: keep user nodes / selector groups, replace the rest
- * with a sing-box-compatible China template. Does not write the profile file.
- */
 object ConfigNormalize {
 
     private val dropOutboundTypes = setOf("direct", "block", "dns", "chain")
@@ -43,37 +39,30 @@ object ConfigNormalize {
         if (nodeTags.isEmpty() && groupTags.isEmpty()) {
             error("规范化失败：配置里没有可保留的节点")
         }
-
         val proxyTag = pickProxyTag(src, groupTags, nodeTags)
         if (groupTags.isEmpty()) {
             val members = JSONArray()
             nodeTags.forEach { members.put(it) }
-            keptOuts.put(
-                JSONObject()
-                    .put("type", "selector")
-                    .put("tag", proxyTag)
-                    .put("outbounds", members),
-            )
+            keptOuts.put(JSONObject().put("type", "selector").put("tag", proxyTag).put("outbounds", members))
         }
         keptOuts.put(JSONObject().put("type", "direct").put("tag", "direct"))
         keptOuts.put(JSONObject().put("type", "block").put("tag", "block"))
 
         val out = JSONObject()
-        out.put("log", JSONObject().put("level", src.optJSONObject("log")?.optString("level").orEmpty().ifBlank { "info" }).put("timestamp", true))
+        val logLevel = src.optJSONObject("log")?.optString("level").orEmpty().ifBlank { "info" }
+        out.put("log", JSONObject().put("level", logLevel).put("timestamp", true))
         out.put("dns", buildDns(proxyTag))
         out.put("inbounds", buildInbounds(src.optJSONArray("inbounds")))
         out.put("outbounds", keptOuts)
         if (src.has("endpoints")) out.put("endpoints", src.get("endpoints"))
         out.put("route", buildRoute(proxyTag))
         if (src.has("experimental")) out.put("experimental", src.get("experimental"))
+        if (src.has("clash_api")) out.put("clash_api", src.get("clash_api"))
         return out.toString()
     }
 
-    private fun isLikelyNode(o: JSONObject): Boolean {
-        if (o.optString("server").isNotBlank()) return true
-        if (o.optString("server_port").isNotBlank() || o.optInt("server_port") > 0) return true
-        return false
-    }
+    private fun isLikelyNode(o: JSONObject): Boolean =
+        o.optString("server").isNotBlank() || o.optInt("server_port") > 0
 
     private fun pickProxyTag(src: JSONObject, groups: List<String>, nodes: List<String>): String {
         val fin = src.optJSONObject("route")?.optString("final").orEmpty().trim()
@@ -81,8 +70,8 @@ object ConfigNormalize {
         fun score(tag: String): Int {
             val t = tag.lowercase()
             var s = 0
-            if (t.contains("proxy") || t.contains("select") || t.contains("节点") || t.contains("自动")) s += 20
-            if (t.contains("final") || t.contains("漏网")) s -= 50
+            if (t.contains("proxy") || t.contains("select")) s += 20
+            if (t.contains("final")) s -= 50
             return s
         }
         return groups.maxByOrNull { score(it) } ?: "proxy"
@@ -90,21 +79,9 @@ object ConfigNormalize {
 
     private fun buildDns(proxyTag: String): JSONObject {
         val servers = JSONArray()
-            .put(
-                JSONObject()
-                    .put("tag", "dns-remote")
-                    .put("address", "https://1.1.1.1/dns-query")
-                    .put("detour", proxyTag),
-            )
-            .put(
-                JSONObject()
-                    .put("tag", "dns-local")
-                    .put("address", "https://223.5.5.5/dns-query")
-                    .put("detour", "direct"),
-            )
-        val rules = JSONArray()
-            .put(JSONObject().put("rule_set", "geosite-cn").put("server", "dns-local"))
-            .put(JSONObject().put("outbound", "any").put("server", "dns-local"))
+            .put(JSONObject().put("tag", "dns-remote").put("address", "https://1.1.1.1/dns-query").put("detour", proxyTag))
+            .put(JSONObject().put("tag", "dns-local").put("address", "https://223.5.5.5/dns-query").put("detour", "direct"))
+        val rules = JSONArray().put(JSONObject().put("rule_set", "geosite-cn").put("server", "dns-local"))
         return JSONObject()
             .put("servers", servers)
             .put("rules", rules)
@@ -123,10 +100,8 @@ object ConfigNormalize {
                     hasTun = true
                     if (!ib.has("sniff")) ib.put("sniff", true)
                     if (!ib.has("auto_route")) ib.put("auto_route", true)
-                    result.put(ib)
-                } else {
-                    result.put(ib)
                 }
+                result.put(ib)
             }
         }
         if (!hasTun) {
@@ -135,6 +110,7 @@ object ConfigNormalize {
                     .put("type", "tun")
                     .put("tag", "tun-in")
                     .put("address", JSONArray().put("172.19.0.1/30"))
+                    .put("mtu", 9000)
                     .put("auto_route", true)
                     .put("strict_route", false)
                     .put("sniff", true),
