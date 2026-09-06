@@ -44,7 +44,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.5"
+          go-version: "1.26.7"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -58,15 +58,11 @@ jobs:
           echo "ANDROID_SDK_ROOT=${ANDROID_HOME}" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/28.0.13004108" >> $GITHUB_ENV
 
-      - name: Install gomobile (SagerNet preferred)
+      - name: Test Chain sing-box kernel
         working-directory: sing-box
         run: |
           set -e
-          export PATH="$(go env GOPATH)/bin:$PATH"
-          go install github.com/sagernet/gomobile/cmd/gomobile@latest 2>/dev/null || go install golang.org/x/mobile/cmd/gomobile@latest
-          go install github.com/sagernet/gomobile/cmd/gobind@latest 2>/dev/null || go install golang.org/x/mobile/cmd/gobind@latest
-          gomobile init || true
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          go test ./...
 
       - name: Build libbox.aar
         working-directory: sing-box
@@ -78,16 +74,7 @@ jobs:
           set -e
           export PATH="$(go env GOPATH)/bin:$PATH"
           export ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
-          if go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug; then
-            echo "build_libbox succeeded"
-          else
-            echo "build_libbox failed, fallback gomobile bind"
-            TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_low_memory,badlinkname,tfogo_checklinkname0"
-            gomobile bind -v -o libbox.aar -target android/arm64 -androidapi 24 \
-              -javapkg=io.nekohasekai -libname=box \
-              -trimpath -tags "$TAGS" \
-              ./experimental/libbox
-          fi
+          go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
           mkdir -p ../sing-box-for-android/app/libs
           cp -f libbox.aar ../sing-box-for-android/app/libs/
           if [ -f libbox-legacy.aar ]; then
@@ -115,24 +102,20 @@ jobs:
         run: |
           set -e
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "No KEYSTORE_BASE64 secret; will build debug-signed APK"
+            echo "No KEYSTORE_BASE64 secret; build debug APK"
             exit 0
           fi
           STORE_PASS="${KEYSTORE_PASS:-$KEYSTORE_PASSWORD}"
           ALIAS="${ALIAS_NAME:-$KEY_ALIAS}"
           KEY_PASS="${ALIAS_PASS:-$KEY_PASSWORD}"
-          if [ -z "$STORE_PASS" ] || [ -z "$ALIAS" ] || [ -z "$KEY_PASS" ]; then
-            echo "Keystore file present but password/alias secrets missing; debug APK"
-            exit 0
-          fi
+          test -n "$STORE_PASS" && test -n "$ALIAS" && test -n "$KEY_PASS"
           echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
           {
             echo "KEYSTORE_PASS=$STORE_PASS"
             echo "ALIAS_NAME=$ALIAS"
             echo "ALIAS_PASS=$KEY_PASS"
           } >> local.properties
-          echo "Release keystore configured (alias=$ALIAS)"
-          ls -lah app/release.keystore
+          echo "Release keystore configured"
 
       - name: Assemble APKs
         id: assemble
@@ -168,14 +151,9 @@ jobs:
           mkdir -p dist
           find sing-box-for-android -type f -name "*.apk" -exec cp -v {} dist/ \;
           PREFERRED=$(ls dist/*arm64-v8a*.apk 2>/dev/null | grep -v debug | head -n1 || true)
-          if [ -z "$PREFERRED" ]; then
-            PREFERRED=$(ls dist/*arm64-v8a*.apk 2>/dev/null | head -n1 || true)
-          fi
-          if [ -z "$PREFERRED" ]; then
-            PREFERRED=$(ls dist/*.apk | head -n1)
-          fi
+          if [ -z "$PREFERRED" ]; then PREFERRED=$(ls dist/*arm64-v8a*.apk 2>/dev/null | head -n1 || true); fi
+          if [ -z "$PREFERRED" ]; then PREFERRED=$(ls dist/*.apk | head -n1); fi
           cp -f "$PREFERRED" dist/ChainBox-android.apk
-          echo "Official APK: $PREFERRED"
           ls -lah dist
 
       - name: Upload APKs
@@ -198,7 +176,7 @@ jobs:
             Install `ChainBox-android.apk` (arm64).
 
             - Package: `io.chainbox.app`
-            - Signed with the repository release keystore
+            - Signing identity is supplied only through GitHub Actions secrets.
           files: |
             dist/ChainBox-android.apk
           draft: false

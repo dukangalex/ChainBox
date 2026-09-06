@@ -10,6 +10,7 @@ build/
 .cxx
 local.properties
 /app/libs/
+/app/release.keystore
 /service-account-credentials.json
 /CLAUDE.md
 /.claude/
