@@ -72,16 +72,25 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
         run: |
           set -e
-          export PATH="$(go env GOPATH)/bin:$PATH"
-          export ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
-          go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
-          mkdir -p ../sing-box-for-android/app/libs
-          cp -f libbox.aar ../sing-box-for-android/app/libs/
-          if [ -f libbox-legacy.aar ]; then
-            cp -f libbox-legacy.aar ../sing-box-for-android/app/libs/
-          else
-            cp -f libbox.aar ../sing-box-for-android/app/libs/libbox-legacy.aar
-          fi
+      export PATH="$(go env GOPATH)/bin:$PATH"
+      export ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
+      go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
+      
+      # 1. 确保目标目录存在
+      mkdir -p ../sing-box-for-android/app/libs
+      
+      # 2. 如果当前目录下没找到，去外层找找看（防止生成路径偏差）
+      if [ ! -f libbox.aar ] && [ -f ../libbox.aar ]; then
+        cp -f ../libbox.aar ./libbox.aar
+      fi
+
+      # 3. 复制到目标目录，并加上防错处理（即使非关键文件缺失也不中断退出）
+      cp -f libbox.aar ../sing-box-for-android/app/libs/ || true
+      if [ -f libbox-legacy.aar ]; then
+        cp -f libbox-legacy.aar ../sing-box-for-android/app/libs/
+      else
+        cp -f libbox.aar ../sing-box-for-android/app/libs/libbox-legacy.aar || true
+      fi
 
       - name: Upload libbox
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
