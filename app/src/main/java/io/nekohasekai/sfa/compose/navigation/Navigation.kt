@@ -51,6 +51,7 @@ import io.nekohasekai.sfa.compose.screen.tools.OOMReportListScreen
 import io.nekohasekai.sfa.compose.screen.tools.OOMReportMetadataScreen
 import io.nekohasekai.sfa.compose.screen.tools.OpenConnectStatusViewModel
 import io.nekohasekai.sfa.compose.screen.tools.OpenVPNStatusViewModel
+import io.nekohasekai.sfa.compose.screen.tools.OutboundPickerScreen
 import io.nekohasekai.sfa.compose.screen.tools.PowerReportDetailScreen
 import io.nekohasekai.sfa.compose.screen.tools.PowerReportFileContentScreen
 import io.nekohasekai.sfa.compose.screen.tools.PowerReportListScreen
@@ -231,6 +232,20 @@ fun NavHost(
         }
         composable(route = "tools/stun_test", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             STUNTestScreen(navController = navController, serviceStatus = serviceStatus)
+        }
+        composable(route = "tools/outbound_picker", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
+            OutboundPickerScreen(navController = navController, selectedOutbound = "")
+        }
+        composable(
+            route = "tools/outbound_picker/{selectedOutbound}",
+            arguments = listOf(navArgument("selectedOutbound") { type = NavType.StringType; defaultValue = "" }),
+            enterTransition = slideInFromRight,
+            exitTransition = slideOutToLeft,
+            popEnterTransition = slideInFromLeft,
+            popExitTransition = slideOutToRight,
+        ) { be ->
+            val selected = Uri.decode(be.arguments?.getString("selectedOutbound").orEmpty())
+            OutboundPickerScreen(navController = navController, selectedOutbound = selected)
         }
         composable(route = "settings", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             SettingsScreen(navController = navController)
