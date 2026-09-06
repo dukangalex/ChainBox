@@ -1,6 +1,6 @@
 # ChainBox
 
-ChainBox 是独立的 Android 代理客户端。内核基于 [sing-box](https://github.com/SagerNet/sing-box)，在其上提供可配置的多级出站（链式代理）以及相关的运行时覆盖选项。
+ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 Android 代理客户端，在其上提供可配置的多级出站（链式代理）以及相关的运行时覆盖选项。
 
 本项目与 SagerNet 及官方 sing-box 无从属或授权关系，不得使用官方名称及标志进行商业发布或应用商店上架。
 
@@ -63,6 +63,15 @@ ChainBox 是独立的 Android 代理客户端。内核基于 [sing-box](https://
 客户端版本号以 `version.properties` 为准。
 
 上游内核的跟进与发布节奏见 [docs/MAINTENANCE.md](docs/MAINTENANCE.md)。
+
+## 致谢
+
+ChainBox 建立在上游开源工作之上，谢谢：
+
+- [sing-box](https://github.com/SagerNet/sing-box)，由 [nekohasekai](https://github.com/nekohasekai) 与 [SagerNet](https://github.com/SagerNet) 维护的通用代理平台
+- [sing-box for Android](https://github.com/SagerNet/sing-box-for-android)，本客户端的上游界面与服务框架
+
+上述致谢不构成从属、授权或官方认可。
 
 ## 许可
 
