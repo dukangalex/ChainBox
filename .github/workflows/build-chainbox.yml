@@ -61,8 +61,20 @@ jobs:
       - name: Test Chain sing-box kernel
         working-directory: sing-box
         run: |
+          set +e
+          go test ./... > /tmp/go-test.log 2>&1
+          code=$?
           set -e
-          go test ./...
+          if [ $code -ne 0 ]; then
+            echo "::group::go test output (last 300 lines)"
+            tail -n 300 /tmp/go-test.log
+            echo "::endgroup::"
+            grep -nE '(--- FAIL|^# |^\./|panic:|^FAIL[[:space:]])' /tmp/go-test.log | head -30 | while IFS= read -r line; do
+              msg=$(printf '%s' "$line" | tr -d '\r' | cut -c1-500)
+              echo "::error::${msg}"
+            done
+          fi
+          exit $code
 
       - name: Build libbox.aar
         working-directory: sing-box
