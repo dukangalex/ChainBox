@@ -44,7 +44,13 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.26.7"
+          # Must match the kernel's own go.mod (dukangalex/sing-box@chain-dev
+          # currently declares `go 1.25.5`). experimental/libbox/internal/
+          # oomprofile uses go:linkname into unexported runtime/pprof
+          # internals, which are not a stable ABI across Go versions — a
+          # newer toolchain here breaks that link with "invalid reference to
+          # runtime/pprof.parseProcSelfMaps" and fails the whole build.
+          go-version: "1.25.5"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
