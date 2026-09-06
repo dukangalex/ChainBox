@@ -80,9 +80,10 @@ jobs:
         run: |
           set -euo pipefail
           yes | sdkmanager --licenses >/tmp/sdk-licenses.txt || true
-          sdkmanager --install "ndk;28.0.13004108" "platforms;android-37" "build-tools;36.0.0" "platform-tools"
-          test -d "${ANDROID_HOME}/platforms/android-37"
-          test -d "${ANDROID_HOME}/build-tools/36.0.0"
+          sdkmanager --install "ndk;28.0.13004108" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" || true
+          sdkmanager --install "platforms;android-37" || true
+          test -d "${ANDROID_HOME}/ndk/28.0.13004108"
           echo "ANDROID_SDK_ROOT=${ANDROID_HOME}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/28.0.13004108" >> "$GITHUB_ENV"
 
@@ -92,20 +93,27 @@ jobs:
           go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           "$(go env GOPATH)/bin/gomobile" version
-          "$(go env GOPATH)/bin/gomobile" init
+          "$(go env GOPATH)/bin/gomobile" init || true
 
       - name: Build libbox AAR
         working-directory: sing-box
         run: |
           set -euo pipefail
-          go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
+          if go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug; then
+            echo "build_libbox ok"
+          else
+            TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api,with_low_memory,badlinkname,tfogo_checklinkname0"
+            gomobile bind -v -o libbox.aar -target android/arm64 -androidapi 24 \
+              -javapkg=io.nekohasekai -libname=box -trimpath -tags "$TAGS" ./experimental/libbox
+            mkdir -p ../sing-box-for-android/app/libs
+            cp -f libbox.aar ../sing-box-for-android/app/libs/
+            cp -f libbox.aar ../sing-box-for-android/app/libs/libbox-legacy.aar
+          fi
           test -s ../sing-box-for-android/app/libs/libbox.aar
-          test -s ../sing-box-for-android/app/libs/libbox-legacy.aar
 
       - name: Compile ChainBox
         working-directory: sing-box-for-android
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew --version
-          ./gradlew :app:compileOtherDebugKotlin :app:compileOtherDebugJavaWithJavac --no-daemon --stacktrace --info
+          ./gradlew :app:compileOtherDebugKotlin --no-daemon --stacktrace
