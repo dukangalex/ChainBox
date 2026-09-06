@@ -17,45 +17,47 @@ object ConfigChainReapply {
         }
         val landingId = Settings.chainLandingProfileId
         val landingTag = Settings.chainLandingTag.trim()
-        if (landingId < 0 || landingTag.isEmpty()) return content
-
-        return try {
-            val landingProfile = ProfileManager.get(landingId) ?: return content
-            val landingPath = landingProfile.typed.path
-            if (!File(landingPath).isFile) return content
-            val root = JSONObject(content)
-            var outs = root.optJSONArray("outbounds") ?: JSONArray()
-            val cleaned = JSONArray()
-            for (i in 0 until outs.length()) {
-                val o = outs.optJSONObject(i) ?: continue
-                val tag = o.optString("tag")
-                if (tag.startsWith("ext-")) continue
-                if (o.has("detour") && o.optString("detour").startsWith("ext-")) o.remove("detour")
-                cleaned.put(o)
-            }
-            outs = cleaned
-            val hop = Hop(landingId, landingTag)
-            outs = mergeHopTree(outs, hop, landingPath)
-            val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
-            val routeFinal = route.optString("final").trim()
-            val main = resolveCurrentMainTag(outs, routeFinal) ?: return content
-            val mergedLanding = hop.mergedTag
-            var hasLanding = false
-            for (i in 0 until outs.length()) {
-                if (outs.optJSONObject(i)?.optString("tag") == mergedLanding) {
-                    hasLanding = true
-                    break
-                }
-            }
-            if (!hasLanding) return content
-            applyDetourToLeaves(outs, mergedLanding, main)
-            root.put("outbounds", outs)
-            route.put("final", mergedLanding)
-            root.toString()
-        } catch (e: Exception) {
-            android.util.Log.w("ChainBox", "chain reapply skipped: ${e.message}")
-            content
+        if (landingId < 0 || landingTag.isEmpty()) {
+            error("未选择链式出口")
         }
+        val landingProfile = ProfileManager.get(landingId)
+            ?: error("出口配置不存在或已被删除")
+        val landingPath = landingProfile.typed.path
+        if (!File(landingPath).isFile) {
+            error("出口配置文件丢失")
+        }
+        val root = JSONObject(content)
+        var outs = root.optJSONArray("outbounds") ?: JSONArray()
+        val cleaned = JSONArray()
+        for (i in 0 until outs.length()) {
+            val o = outs.optJSONObject(i) ?: continue
+            val tag = o.optString("tag")
+            if (tag.startsWith("ext-")) continue
+            if (o.has("detour") && o.optString("detour").startsWith("ext-")) o.remove("detour")
+            cleaned.put(o)
+        }
+        outs = cleaned
+        val hop = Hop(landingId, landingTag)
+        outs = mergeHopTree(outs, hop, landingPath)
+        val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
+        val routeFinal = route.optString("final").trim()
+        val main = resolveCurrentMainTag(outs, routeFinal)
+            ?: error("无法识别当前配置的主出站，请确认配置含 selector/urltest")
+        val mergedLanding = hop.mergedTag
+        var hasLanding = false
+        for (i in 0 until outs.length()) {
+            if (outs.optJSONObject(i)?.optString("tag") == mergedLanding) {
+                hasLanding = true
+                break
+            }
+        }
+        if (!hasLanding) {
+            error("无法从出口配置合并节点 「$landingTag」")
+        }
+        applyDetourToLeaves(outs, mergedLanding, main)
+        root.put("outbounds", outs)
+        route.put("final", mergedLanding)
+        return root.toString()
     }
 
     private data class Hop(val profileId: Long, val tag: String) {
@@ -122,11 +124,7 @@ object ConfigChainReapply {
     }
 
     private fun mergeHopTree(outs: JSONArray, hop: Hop, sourcePath: String): JSONArray {
-        val srcRoot = try {
-            JSONObject(File(sourcePath).readText())
-        } catch (_: Exception) {
-            return outs
-        }
+        val srcRoot = JSONObject(File(sourcePath).readText())
         val srcOuts = srcRoot.optJSONArray("outbounds") ?: return outs
         val visiting = mutableSetOf<String>()
         fun alreadyHas(tag: String): Boolean {
