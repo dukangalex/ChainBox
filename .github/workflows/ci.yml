@@ -1,0 +1,97 @@
+name: ChainBox CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - chain-dev
+  push:
+    branches:
+      - dev
+      - chain-dev
+
+permissions:
+  contents: read
+
+jobs:
+  kernel-test:
+    name: sing-box kernel tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout ChainBox
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          path: chainbox
+
+      - name: Checkout Chain kernel
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: dukangalex/sing-box
+          ref: chain-dev
+          path: sing-box
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+
+      - name: Test kernel
+        working-directory: sing-box
+        run: go test ./...
+
+  android-compile:
+    name: ChainBox Android compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout ChainBox
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          path: sing-box-for-android
+
+      - name: Checkout Chain kernel
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: dukangalex/sing-box
+          ref: chain-dev
+          path: sing-box
+          fetch-depth: 0
+
+      - name: Setup Java 17
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+
+      - name: Install Android SDK components
+        run: |
+          set -e
+          yes | sdkmanager --licenses >/tmp/sdk-licenses.txt || true
+          sdkmanager --install "ndk;28.0.13004108" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          echo "ANDROID_SDK_ROOT=${ANDROID_HOME}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/28.0.13004108" >> "$GITHUB_ENV"
+
+      - name: Build libbox AAR
+        working-directory: sing-box
+        run: |
+          set -e
+          go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
+          mkdir -p ../sing-box-for-android/app/libs
+          cp -f libbox.aar ../sing-box-for-android/app/libs/libbox.aar
+          cp -f libbox.aar ../sing-box-for-android/app/libs/libbox-legacy.aar
+
+      - name: Compile ChainBox
+        working-directory: sing-box-for-android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileOtherDebugKotlin :app:compileOtherDebugJavaWithJavac --no-daemon --stacktrace
