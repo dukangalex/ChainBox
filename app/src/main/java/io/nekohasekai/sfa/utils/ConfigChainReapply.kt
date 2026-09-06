@@ -6,13 +6,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/**
- * Re-apply persisted chain at service start/reload.
- * Path: entry (front) -> landing (VPS) -> target. Public IP is landing.
- */
 object ConfigChainReapply {
     suspend fun apply(content: String): String {
         if (!Settings.chainEnabled) return content
+        val currentId = Settings.selectedProfile
+        val boundId = Settings.chainBoundProfileId
+        if (boundId >= 0L && boundId != currentId) return content
+        if (boundId < 0L && currentId >= 0L) {
+            Settings.chainBoundProfileId = currentId
+        }
         val landingId = Settings.chainLandingProfileId
         val landingTag = Settings.chainLandingTag.trim()
         if (landingId < 0 || landingTag.isEmpty()) return content
@@ -21,29 +23,22 @@ object ConfigChainReapply {
             val landingProfile = ProfileManager.get(landingId) ?: return content
             val landingPath = landingProfile.typed.path
             if (!File(landingPath).isFile) return content
-
             val root = JSONObject(content)
             var outs = root.optJSONArray("outbounds") ?: JSONArray()
-
             val cleaned = JSONArray()
             for (i in 0 until outs.length()) {
                 val o = outs.optJSONObject(i) ?: continue
                 val tag = o.optString("tag")
                 if (tag.startsWith("ext-")) continue
-                if (o.has("detour") && o.optString("detour").startsWith("ext-")) {
-                    o.remove("detour")
-                }
+                if (o.has("detour") && o.optString("detour").startsWith("ext-")) o.remove("detour")
                 cleaned.put(o)
             }
             outs = cleaned
-
             val hop = Hop(landingId, landingTag)
             outs = mergeHopTree(outs, hop, landingPath)
-
             val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
             val routeFinal = route.optString("final").trim()
             val main = resolveCurrentMainTag(outs, routeFinal) ?: return content
-
             val mergedLanding = hop.mergedTag
             var hasLanding = false
             for (i in 0 until outs.length()) {
@@ -53,12 +48,12 @@ object ConfigChainReapply {
                 }
             }
             if (!hasLanding) return content
-
             applyDetourToLeaves(outs, mergedLanding, main)
             root.put("outbounds", outs)
             route.put("final", mergedLanding)
             root.toString()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.w("ChainBox", "chain reapply skipped: ${e.message}")
             content
         }
     }
@@ -73,8 +68,8 @@ object ConfigChainReapply {
             if (type == "urltest") s += 20
             if (type == "selector") s += 15
             val t = tag.lowercase()
-            if (t.contains("漏网") || t.contains("final") || t.contains("剩余")) s -= 80
-            if (t.contains("节点") || t.contains("选择") || t.contains("自动") || t.contains("proxy") || t.contains("select")) s += 25
+            if (t.contains("final")) s -= 80
+            if (t.contains("proxy") || t.contains("select")) s += 25
             if (t.equals("global", true)) s += 5
             return s
         }
@@ -134,14 +129,12 @@ object ConfigChainReapply {
         }
         val srcOuts = srcRoot.optJSONArray("outbounds") ?: return outs
         val visiting = mutableSetOf<String>()
-
         fun alreadyHas(tag: String): Boolean {
             for (i in 0 until outs.length()) {
                 if (outs.optJSONObject(i)?.optString("tag") == tag) return true
             }
             return false
         }
-
         fun findSrc(tag: String): JSONObject? {
             for (i in 0 until srcOuts.length()) {
                 val o = srcOuts.optJSONObject(i) ?: continue
@@ -149,7 +142,6 @@ object ConfigChainReapply {
             }
             return null
         }
-
         fun putClone(src: JSONObject, newTag: String) {
             if (alreadyHas(newTag)) return
             val clone = JSONObject(src.toString())
@@ -171,7 +163,6 @@ object ConfigChainReapply {
             }
             outs.put(clone)
         }
-
         fun mergeTag(tag: String) {
             if (tag.isEmpty() || tag == "direct" || tag == "block" || tag == "dns") return
             if (!visiting.add(tag)) return
@@ -194,7 +185,6 @@ object ConfigChainReapply {
             putClone(src, newTag)
             visiting.remove(tag)
         }
-
         mergeTag(hop.tag)
         return outs
     }
