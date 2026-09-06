@@ -85,6 +85,7 @@ object Settings {
     var chainEnabled by dataStore.boolean(SettingsKey.CHAIN_ENABLED) { false }
     var chainLandingProfileId by dataStore.long(SettingsKey.CHAIN_LANDING_PROFILE_ID) { -1L }
     var chainLandingTag by dataStore.string(SettingsKey.CHAIN_LANDING_TAG) { "" }
+    var chainBoundProfileId by dataStore.long(SettingsKey.CHAIN_BOUND_PROFILE_ID) { -1L }
     var webdavUrl by dataStore.string(SettingsKey.WEBDAV_URL) { "" }
     var webdavUser by dataStore.string(SettingsKey.WEBDAV_USER) { "" }
     var webdavPassword by dataStore.string(SettingsKey.WEBDAV_PASSWORD) { "" }
