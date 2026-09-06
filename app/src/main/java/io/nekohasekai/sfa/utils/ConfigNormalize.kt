@@ -77,10 +77,18 @@ object ConfigNormalize {
         return groups.maxByOrNull { score(it) } ?: "proxy"
     }
 
+    private fun dnsServer(tag: String, host: String, detour: String): JSONObject =
+        JSONObject()
+            .put("type", "https")
+            .put("tag", tag)
+            .put("server", host)
+            .put("address", "https://$host/dns-query")
+            .put("detour", detour)
+
     private fun buildDns(proxyTag: String): JSONObject {
         val servers = JSONArray()
-            .put(JSONObject().put("tag", "dns-remote").put("address", "https://1.1.1.1/dns-query").put("detour", proxyTag))
-            .put(JSONObject().put("tag", "dns-local").put("address", "https://223.5.5.5/dns-query").put("detour", "direct"))
+            .put(dnsServer("dns-remote", "1.1.1.1", proxyTag))
+            .put(dnsServer("dns-local", "223.5.5.5", "direct"))
         val rules = JSONArray().put(JSONObject().put("rule_set", "geosite-cn").put("server", "dns-local"))
         return JSONObject()
             .put("servers", servers)
