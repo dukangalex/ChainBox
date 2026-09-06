@@ -9,7 +9,7 @@ on:
         default: "false"
         type: string
       version_tag:
-        description: "Release tag (e.g. v0.1.18)"
+        description: "Release tag (e.g. v1.0.2)"
         required: false
         default: "v0.0.0-test"
         type: string
@@ -142,7 +142,6 @@ jobs:
           set -o pipefail
           chmod +x gradlew
           ls -lah app/libs/
-          # Prefer debug when secrets not configured
           if [ -f app/release.keystore ] && grep -q '^KEYSTORE_PASS=.' local.properties 2>/dev/null; then
             TASK=":app:assembleOtherRelease"
           else
@@ -191,7 +190,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.publish_release == true
+        if: success() && github.event_name == 'workflow_dispatch' && (inputs.publish_release == 'true' || inputs.publish_release == true)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.version_tag }}
@@ -205,6 +204,7 @@ jobs:
           files: |
             dist/ChainBox-android.apk
           draft: false
-          prerelease: true
+          prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
