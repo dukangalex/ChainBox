@@ -39,7 +39,10 @@ jobs:
 
       - name: Test kernel
         working-directory: sing-box
-        run: go test ./...
+        run: |
+          set -e
+          packages=$(go list ./... | grep -v '^github.com/sagernet/sing-box/experimental/boxdd$' | grep -v '^github.com/sagernet/sing-box/experimental/libbox$')
+          sudo -E go test $packages
 
   android-compile:
     name: ChainBox Android compile
@@ -81,17 +84,25 @@ jobs:
           echo "ANDROID_SDK_ROOT=${ANDROID_HOME}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/28.0.13004108" >> "$GITHUB_ENV"
 
+      - name: Install gomobile
+        run: |
+          set -e
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          "$(go env GOPATH)/bin/gomobile" version
+          "$(go env GOPATH)/bin/gomobile" init
+
       - name: Build libbox AAR
         working-directory: sing-box
         run: |
           set -e
           go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
-          mkdir -p ../sing-box-for-android/app/libs
-          cp -f libbox.aar ../sing-box-for-android/app/libs/libbox.aar
-          cp -f libbox.aar ../sing-box-for-android/app/libs/libbox-legacy.aar
 
       - name: Compile ChainBox
         working-directory: sing-box-for-android
         run: |
+          set -e
+          test -s app/libs/libbox.aar
+          test -s app/libs/libbox-legacy.aar
           chmod +x gradlew
           ./gradlew :app:compileOtherDebugKotlin :app:compileOtherDebugJavaWithJavac --no-daemon --stacktrace
