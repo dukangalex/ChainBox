@@ -20,7 +20,10 @@ import java.util.zip.ZipOutputStream
 
 object BackupManager {
     private const val MANIFEST = "manifest.json"
-    private const val VERSION = 1
+    private const val VERSION = 2
+    private const val MAX_ENTRIES = 512
+    private const val MAX_ENTRY_SIZE = 32L * 1024 * 1024
+    private const val MAX_TOTAL_SIZE = 128L * 1024 * 1024
 
     fun createBackupFile(context: Context, dest: File): Result<File> = runCatching {
         dest.parentFile?.mkdirs()
@@ -58,25 +61,40 @@ object BackupManager {
     fun restoreBackupFile(context: Context, src: File): Result<Unit> = runCatching {
         val keepDav = Settings.webdavPassword
         val keepTok = Settings.githubToken
+        var entries = 0
+        var total = 0L
         ZipInputStream(BufferedInputStream(FileInputStream(src))).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
+                if (++entries > MAX_ENTRIES) error("备份包含过多文件")
                 val name = entry.name.trimStart('/')
-                if (!entry.isDirectory && name.isNotEmpty() && !name.contains("..")) {
+                if (!entry.isDirectory && name.isNotEmpty() && !name.contains("..") && !name.contains('\\')) {
                     val outFile = when {
                         name == MANIFEST -> null
                         name.startsWith("configs/") -> {
-                            val configs = File(context.filesDir, "configs").also { it.mkdirs() }
-                            File(configs, name.removePrefix("configs/"))
+                            val relative = name.removePrefix("configs/")
+                            if (relative.isBlank() || relative.contains('/')) error("非法备份路径")
+                            File(context.filesDir, "configs").also { it.mkdirs() }.let { File(it, relative) }
                         }
-                        name.endsWith(".db") -> {
-                            context.getDatabasePath(name.substringAfterLast('/')).also { it.parentFile?.mkdirs() }
+                        name.endsWith(".db") && !name.contains('/') -> {
+                            context.getDatabasePath(name).also { it.parentFile?.mkdirs() }
                         }
                         else -> null
                     }
                     if (outFile != null) {
                         outFile.parentFile?.mkdirs()
-                        FileOutputStream(outFile).use { fos -> zis.copyTo(fos) }
+                        var entryBytes = 0L
+                        FileOutputStream(outFile).use { fos ->
+                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                            while (true) {
+                                val read = zis.read(buffer)
+                                if (read < 0) break
+                                entryBytes += read
+                                total += read
+                                if (entryBytes > MAX_ENTRY_SIZE || total > MAX_TOTAL_SIZE) error("备份展开大小超过限制")
+                                fos.write(buffer, 0, read)
+                            }
+                        }
                     }
                 }
                 zis.closeEntry()
@@ -87,9 +105,7 @@ object BackupManager {
         if (Settings.githubToken.isEmpty() && keepTok.isNotEmpty()) Settings.githubToken = keepTok
     }
 
-    fun webdavUpload(
-        baseUrl: String, username: String, password: String, remoteName: String, localFile: File,
-    ): Result<Unit> = runCatching {
+    fun webdavUpload(baseUrl: String, username: String, password: String, remoteName: String, localFile: File): Result<Unit> = runCatching {
         val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply {
             requestMethod = "PUT"
             doOutput = true
@@ -103,9 +119,7 @@ object BackupManager {
         if (code !in 200..299) error("WebDAV 上传失败 HTTP $code${err?.let { ": $it" } ?: ""}")
     }
 
-    fun webdavDownload(
-        baseUrl: String, username: String, password: String, remoteName: String, localFile: File,
-    ): Result<File> = runCatching {
+    fun webdavDownload(baseUrl: String, username: String, password: String, remoteName: String, localFile: File): Result<File> = runCatching {
         val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply { requestMethod = "GET" }
         val code = conn.responseCode
         if (code !in 200..299) {
@@ -120,10 +134,10 @@ object BackupManager {
     }
 
     fun webdavProbe(baseUrl: String, username: String, password: String): Result<Boolean> = runCatching {
-        val target = URL(baseUrl)
+        val target = URL(requireHttps(baseUrl))
         var lastDetail = "no response"
         for (method in listOf("OPTIONS", "PROPFIND")) {
-            val conn = openWebDav(baseUrl, username, password).apply {
+            val conn = openWebDav(target.toString(), username, password).apply {
                 requestMethod = method
                 instanceFollowRedirects = false
                 if (method == "PROPFIND") {
@@ -137,7 +151,7 @@ object BackupManager {
                 lastDetail = "HTTP $code"
                 if (code in 300..399 && loc.isNotEmpty()) {
                     val next = try { URL(target, loc) } catch (_: Exception) { null }
-                    if (next == null || next.host != target.host) error("连通性失败：重定向到其他主机 ($code)")
+                    if (next == null || next.protocol != "https" || next.host != target.host) error("连通性失败：重定向到不安全主机")
                 }
                 if (code == 404 || code == 410) continue
                 val dav = conn.getHeaderField("DAV").orEmpty()
@@ -156,7 +170,7 @@ object BackupManager {
     }
 
     private fun openWebDav(url: String, username: String, password: String): HttpURLConnection {
-        val conn = URL(url).openConnection(Proxy.NO_PROXY) as HttpURLConnection
+        val conn = URL(requireHttps(url)).openConnection(Proxy.NO_PROXY) as HttpURLConnection
         conn.connectTimeout = 15_000
         conn.readTimeout = 30_000
         conn.instanceFollowRedirects = false
@@ -165,6 +179,12 @@ object BackupManager {
             conn.setRequestProperty("Authorization", "Basic $token")
         }
         return conn
+    }
+
+    private fun requireHttps(url: String): String {
+        val normalized = url.trim()
+        require(normalized.startsWith("https://", ignoreCase = true)) { "WebDAV 必须使用 HTTPS" }
+        return normalized
     }
 
     private fun checkpoint(context: Context, dbName: String) {
@@ -183,6 +203,7 @@ object BackupManager {
     }
 
     private fun putFile(zos: ZipOutputStream, name: String, file: File) {
+        require(file.length() <= MAX_ENTRY_SIZE) { "备份文件过大：$name" }
         putEntry(zos, name, file.readBytes())
     }
 
@@ -192,7 +213,5 @@ object BackupManager {
         zos.closeEntry()
     }
 
-    private fun joinUrl(base: String, name: String): String {
-        return base.trimEnd('/') + "/" + name.trimStart('/')
-    }
+    private fun joinUrl(base: String, name: String): String = base.trimEnd('/') + "/" + name.trimStart('/')
 }
