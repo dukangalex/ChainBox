@@ -1,6 +1,7 @@
 package io.nekohasekai.sfa.utils
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import android.util.Base64
 import io.nekohasekai.sfa.constant.Path
 import io.nekohasekai.sfa.database.Settings
@@ -28,14 +29,18 @@ object BackupManager {
         Settings.webdavPassword = ""
         Settings.githubToken = ""
         try {
+            Thread.sleep(250)
+            checkpoint(context, Path.SETTINGS_DATABASE_PATH)
+            checkpoint(context, Path.PROFILES_DATABASE_PATH)
             ZipOutputStream(BufferedOutputStream(FileOutputStream(dest))).use { zos ->
                 val manifest = JSONObject()
                     .put("version", VERSION)
                     .put("app", "chainbox")
                     .put("time", System.currentTimeMillis())
+                    .put("secrets", "omitted")
                 putEntry(zos, MANIFEST, manifest.toString().toByteArray())
-                copyDbGroup(zos, context, Path.SETTINGS_DATABASE_PATH)
-                copyDbGroup(zos, context, Path.PROFILES_DATABASE_PATH)
+                copyMainDbOnly(zos, context, Path.SETTINGS_DATABASE_PATH)
+                copyMainDbOnly(zos, context, Path.PROFILES_DATABASE_PATH)
                 val configs = File(context.filesDir, "configs")
                 if (configs.isDirectory) {
                     configs.listFiles()?.forEach { f ->
@@ -51,6 +56,8 @@ object BackupManager {
     }
 
     fun restoreBackupFile(context: Context, src: File): Result<Unit> = runCatching {
+        val keepDav = Settings.webdavPassword
+        val keepTok = Settings.githubToken
         ZipInputStream(BufferedInputStream(FileInputStream(src))).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
@@ -62,10 +69,8 @@ object BackupManager {
                             val configs = File(context.filesDir, "configs").also { it.mkdirs() }
                             File(configs, name.removePrefix("configs/"))
                         }
-                        name.endsWith(".db") || name.contains(".db-") -> {
-                            context.getDatabasePath(name.substringAfterLast('/')).also {
-                                it.parentFile?.mkdirs()
-                            }
+                        name.endsWith(".db") -> {
+                            context.getDatabasePath(name.substringAfterLast('/')).also { it.parentFile?.mkdirs() }
                         }
                         else -> null
                     }
@@ -78,44 +83,30 @@ object BackupManager {
                 entry = zis.nextEntry
             }
         }
+        if (Settings.webdavPassword.isEmpty() && keepDav.isNotEmpty()) Settings.webdavPassword = keepDav
+        if (Settings.githubToken.isEmpty() && keepTok.isNotEmpty()) Settings.githubToken = keepTok
     }
 
     fun webdavUpload(
-        baseUrl: String,
-        username: String,
-        password: String,
-        remoteName: String,
-        localFile: File,
+        baseUrl: String, username: String, password: String, remoteName: String, localFile: File,
     ): Result<Unit> = runCatching {
-        val url = joinUrl(baseUrl, remoteName)
-        val conn = openWebDav(url, username, password).apply {
+        val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply {
             requestMethod = "PUT"
             doOutput = true
             setRequestProperty("Content-Type", "application/zip")
             setRequestProperty("Content-Length", localFile.length().toString())
         }
-        FileInputStream(localFile).use { input ->
-            conn.outputStream.use { output -> input.copyTo(output) }
-        }
+        FileInputStream(localFile).use { input -> conn.outputStream.use { output -> input.copyTo(output) } }
         val code = conn.responseCode
         val err = conn.errorStream?.bufferedReader()?.readText()
         conn.disconnect()
-        if (code !in 200..299) {
-            error("WebDAV 上传失败 HTTP $code${err?.let { ": $it" } ?: ""}")
-        }
+        if (code !in 200..299) error("WebDAV 上传失败 HTTP $code${err?.let { ": $it" } ?: ""}")
     }
 
     fun webdavDownload(
-        baseUrl: String,
-        username: String,
-        password: String,
-        remoteName: String,
-        localFile: File,
+        baseUrl: String, username: String, password: String, remoteName: String, localFile: File,
     ): Result<File> = runCatching {
-        val url = joinUrl(baseUrl, remoteName)
-        val conn = openWebDav(url, username, password).apply {
-            requestMethod = "GET"
-        }
+        val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply { requestMethod = "GET" }
         val code = conn.responseCode
         if (code !in 200..299) {
             val err = conn.errorStream?.bufferedReader()?.readText()
@@ -123,9 +114,7 @@ object BackupManager {
             error("WebDAV 下载失败 HTTP $code${err?.let { ": $it" } ?: ""}")
         }
         localFile.parentFile?.mkdirs()
-        conn.inputStream.use { input ->
-            FileOutputStream(localFile).use { output -> input.copyTo(output) }
-        }
+        conn.inputStream.use { input -> FileOutputStream(localFile).use { output -> input.copyTo(output) } }
         conn.disconnect()
         localFile
     }
@@ -145,25 +134,16 @@ object BackupManager {
             try {
                 val code = conn.responseCode
                 val loc = conn.getHeaderField("Location").orEmpty()
-                val dav = conn.getHeaderField("DAV").orEmpty()
-                val allow = conn.getHeaderField("Allow").orEmpty()
                 lastDetail = "HTTP $code"
                 if (code in 300..399 && loc.isNotEmpty()) {
                     val next = try { URL(target, loc) } catch (_: Exception) { null }
-                    if (next == null || next.host != target.host) {
-                        error("连通性失败：重定向到其他主机 ($code)")
-                    }
+                    if (next == null || next.host != target.host) error("连通性失败：重定向到其他主机 ($code)")
                 }
-                if (code == 404 || code == 410) {
-                    lastDetail = "HTTP $code 路径不存在"
-                    continue
-                }
-                val davLike = dav.isNotEmpty() ||
-                    allow.contains("PROPFIND", true) ||
-                    allow.contains("MKCOL", true) ||
-                    code == 207 ||
-                    (method == "OPTIONS" && code in 200..204) ||
-                    (method == "PROPFIND" && code in 200..207)
+                if (code == 404 || code == 410) continue
+                val dav = conn.getHeaderField("DAV").orEmpty()
+                val allow = conn.getHeaderField("Allow").orEmpty()
+                val davLike = dav.isNotEmpty() || allow.contains("PROPFIND", true) || code == 207 ||
+                    (method == "OPTIONS" && code in 200..204) || (method == "PROPFIND" && code in 200..207)
                 if (code == 401 || code == 403) return@runCatching true
                 if (davLike && code in 200..299) return@runCatching true
             } catch (e: Exception) {
@@ -187,13 +167,19 @@ object BackupManager {
         return conn
     }
 
-    private fun copyDbGroup(zos: ZipOutputStream, context: Context, dbName: String) {
+    private fun checkpoint(context: Context, dbName: String) {
+        val main = context.getDatabasePath(dbName)
+        if (!main.isFile) return
+        runCatching {
+            SQLiteDatabase.openDatabase(main.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+                db.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { it.moveToFirst() }
+            }
+        }
+    }
+
+    private fun copyMainDbOnly(zos: ZipOutputStream, context: Context, dbName: String) {
         val main = context.getDatabasePath(dbName)
         if (main.isFile) putFile(zos, dbName, main)
-        listOf("-wal", "-shm", "-journal").forEach { suffix ->
-            val side = File(main.path + suffix)
-            if (side.isFile) putFile(zos, dbName + suffix, side)
-        }
     }
 
     private fun putFile(zos: ZipOutputStream, name: String, file: File) {
@@ -207,8 +193,6 @@ object BackupManager {
     }
 
     private fun joinUrl(base: String, name: String): String {
-        val b = base.trimEnd('/')
-        val n = name.trimStart('/')
-        return "$b/$n"
+        return base.trimEnd('/') + "/" + name.trimStart('/')
     }
 }
