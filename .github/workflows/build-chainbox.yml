@@ -66,10 +66,16 @@ jobs:
           code=$?
           set -e
           if [ $code -ne 0 ]; then
-            echo "::group::go test output (last 300 lines)"
-            tail -n 300 /tmp/go-test.log
+            echo "::group::go test output (last 400 lines)"
+            tail -n 400 /tmp/go-test.log
             echo "::endgroup::"
-            grep -nE '(--- FAIL|^# |^\./|panic:|^FAIL[[:space:]])' /tmp/go-test.log | head -30 | while IFS= read -r line; do
+            # Compiler errors for a "[build failed]" package appear as up to
+            # 20 lines right after its "# package/path" header; grab those in
+            # full, plus the FAIL/--- FAIL summary lines, so the actual
+            # diagnostic text (not just the header) is visible as annotations.
+            awk '/^# /{capture=20} capture>0{print; capture--}' /tmp/go-test.log > /tmp/go-test-context.log
+            grep -nE '(--- FAIL|^FAIL[[:space:]])' /tmp/go-test.log >> /tmp/go-test-context.log
+            head -n 60 /tmp/go-test-context.log | while IFS= read -r line; do
               msg=$(printf '%s' "$line" | tr -d '\r' | cut -c1-500)
               echo "::error::${msg}"
             done
