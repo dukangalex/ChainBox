@@ -16,9 +16,11 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,6 +49,7 @@ import androidx.navigation.NavController
 import io.nekohasekai.sfa.bg.RootClient
 import io.nekohasekai.sfa.compose.base.UiEvent
 import io.nekohasekai.sfa.compose.base.rememberApplyServiceChangeNotifier
+import io.nekohasekai.sfa.compose.screen.profileoverride.PerAppProxyScanner
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Settings
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +70,8 @@ fun ProfileOverrideScreen(
 
     var autoRedirect by remember { mutableStateOf(Settings.autoRedirect) }
     var perAppProxyEnabled by remember { mutableStateOf(Settings.perAppProxyEnabled) }
+    var managedModeEnabled by remember { mutableStateOf(Settings.perAppProxyManagedMode) }
+    var isScanning by remember { mutableStateOf(false) }
     var configNormalize by remember { mutableStateOf(Settings.configNormalize) }
     var disableQuic by remember { mutableStateOf(Settings.disableQuic) }
     var excludeCnQuic by remember { mutableStateOf(Settings.excludeCnQuic) }
@@ -78,6 +83,20 @@ fun ProfileOverrideScreen(
     fun reload() {
         scope.launch(Dispatchers.Main) {
             notifyApplyChange(UiEvent.ApplyServiceChange.Mode.Reload)
+        }
+    }
+
+    fun scanAndSaveManagedList(shouldNotify: Boolean = false) {
+        isScanning = true
+        scope.launch {
+            val chinaApps = PerAppProxyScanner.scanAllChinaApps()
+            withContext(Dispatchers.IO) {
+                Settings.perAppProxyManagedList = chinaApps
+            }
+            isScanning = false
+            if (shouldNotify) {
+                withContext(Dispatchers.Main) { reload() }
+            }
         }
     }
 
@@ -160,7 +179,13 @@ fun ProfileOverrideScreen(
                                 perAppProxyEnabled = checked
                                 scope.launch(Dispatchers.IO) {
                                     Settings.perAppProxyEnabled = checked
-                                    withContext(Dispatchers.Main) { reload() }
+                                    withContext(Dispatchers.Main) {
+                                        if (checked && managedModeEnabled) {
+                                            scanAndSaveManagedList(shouldNotify = true)
+                                        } else {
+                                            reload()
+                                        }
+                                    }
                                 }
                             },
                         )
@@ -169,12 +194,38 @@ fun ProfileOverrideScreen(
                 )
                 if (perAppProxyEnabled) {
                     ListItem(
-                        headlineContent = { Text("管理应用") },
+                        headlineContent = { Text("管理") },
                         trailingContent = {
                             Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
                         },
-                        modifier = Modifier.clickable {
+                        modifier = Modifier.clickable(enabled = !managedModeEnabled) {
                             navController.navigate("settings/profile_override/manage")
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
+                    ListItem(
+                        headlineContent = { Text("托管模式") },
+                        supportingContent = { Text("自动排除中国应用") },
+                        leadingContent = { Icon(Icons.Outlined.SmartToy, contentDescription = null) },
+                        trailingContent = {
+                            if (isScanning) {
+                                CircularProgressIndicator()
+                            } else {
+                                Switch(
+                                    checked = managedModeEnabled,
+                                    onCheckedChange = { checked ->
+                                        managedModeEnabled = checked
+                                        scope.launch(Dispatchers.IO) {
+                                            Settings.perAppProxyManagedMode = checked
+                                        }
+                                        if (checked) {
+                                            scanAndSaveManagedList(shouldNotify = true)
+                                        } else {
+                                            reload()
+                                        }
+                                    },
+                                )
+                            }
                         },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
@@ -203,7 +254,7 @@ fun ProfileOverrideScreen(
                     onHelp = {
                         help = SwitchHelp(
                             "配置规范化",
-                            "这是运行时覆写脚本，不改磁盘上的订阅文件。\n\n保留：你的节点（vmess/vless/ss/等）和 selector/urltest 分组。\n覆写：DNS、路由规则、规则集、缺少的 TUN、direct/block。\n\n模板会：\n· 国内域名/国内 IP 走 direct\n· 私网走 direct\n· 拦截 STUN（3478/19302/5349）防 WebRTC 泄露真实 IP\n· DNS 境外走代理、国内走直连\n· 其余走你的主选择组\n\n失败时仪表盘会红色提示，不会暗中改走 DIRECT。关闭开关即恢复原配置逻辑。",
+                            "运行时覆写脚本，不改磁盘订阅。保留节点与分组，覆写 DNS/路由/TUN。",
                         )
                     },
                     onCheckedChange = {
