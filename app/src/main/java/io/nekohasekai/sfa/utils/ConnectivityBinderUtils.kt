@@ -9,27 +9,44 @@ import android.util.Log
 object ConnectivityBinderUtils {
     private const val TAG = "ConnectivityBinderUtils"
 
+    @Volatile
+    private var cachedBinder: IBinder? = null
+
     fun getBinder(context: Context): IBinder? {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return null
-        try {
-            val field = cm.javaClass.getDeclaredField("mService")
-            field.isAccessible = true
-            val service = field.get(cm) as? android.os.IInterface
-            if (service != null) {
-                return service.asBinder()
-            }
-        } catch (e: Throwable) {
-            Log.w(TAG, "Failed to get ConnectivityManager service binder", e)
+        val cached = cachedBinder
+        if (cached != null && cached.isBinderAlive) {
+            return cached
         }
-        return try {
+
+        // Try getting binder from ServiceManager first
+        val binderFromServiceManager = runCatching {
             val serviceManager = Class.forName("android.os.ServiceManager")
             val getService = serviceManager.getMethod("getService", String::class.java)
             getService.invoke(null, Context.CONNECTIVITY_SERVICE) as? IBinder
-        } catch (e: Throwable) {
-            Log.w(TAG, "Failed to get binder from ServiceManager", e)
-            null
+        }.getOrNull()
+
+        if (binderFromServiceManager != null) {
+            cachedBinder = binderFromServiceManager
+            return binderFromServiceManager
         }
+
+        // Fallback to ConnectivityManager.mService if ServiceManager lookup did not return a binder
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        if (cm != null) {
+            val binderFromCm = runCatching {
+                val field = cm.javaClass.getDeclaredField("mService")
+                field.isAccessible = true
+                val service = field.get(cm) as? android.os.IInterface
+                service?.asBinder()
+            }.getOrNull()
+
+            if (binderFromCm != null) {
+                cachedBinder = binderFromCm
+                return binderFromCm
+            }
+        }
+
+        return null
     }
 
     inline fun <T> withParcel(block: (data: Parcel, reply: Parcel) -> T): T {

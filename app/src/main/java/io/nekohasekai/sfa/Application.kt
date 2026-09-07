@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.content.getSystemService
@@ -29,6 +30,7 @@ import io.nekohasekai.sfa.vendor.Vendor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import org.lsposed.hiddenapibypass.HiddenApiBypass
 import java.io.File
 import java.util.Locale
 import io.nekohasekai.sfa.Application as BoxApplication
@@ -37,6 +39,13 @@ class Application : Application() {
     override fun attachBaseContext(base: Context?) {
         super.attachBaseContext(base)
         application = this
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            runCatching {
+                HiddenApiBypass.addHiddenApiExemptions("L")
+            }.onFailure {
+                Log.w("Application", "Failed to add hidden api exemptions", it)
+            }
+        }
     }
 
     override fun onCreate() {
