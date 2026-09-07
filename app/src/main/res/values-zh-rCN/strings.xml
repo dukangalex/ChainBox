@@ -1,1 +1,53 @@
-see local file /home/workdir/artifacts/strings-zh-rCN.xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">ChainBox</string>
+    <string name="app_version_title">应用版本</string>
+    <string name="language">语言</string>
+    <string name="system_default">跟随系统</string>
+    <string name="ok">确定</string>
+    <string name="cancel">取消</string>
+    <string name="save">保存</string>
+    <string name="enabled">启用</string>
+    <string name="disabled">关闭</string>
+    <string name="title_dashboard">仪表</string>
+    <string name="title_configuration">配置</string>
+    <string name="title_log">日志</string>
+    <string name="title_settings">设置</string>
+    <string name="title_app_settings">应用</string>
+    <string name="title_tools">工具</string>
+    <string name="title_debug">调试</string>
+    <string name="title_connections">连接</string>
+    <string name="title_others">其他</string>
+    <string name="status_default">服务未启动</string>
+    <string name="status_starting">启动中</string>
+    <string name="status_stopping">停止中</string>
+    <string name="status_started">已启动</string>
+    <string name="dashboard_items">仪表项</string>
+    <string name="memory">内存</string>
+    <string name="goroutines">协程</string>
+    <string name="upload">上传</string>
+    <string name="download">下载</string>
+    <string name="connections_in">入站</string>
+    <string name="connections_out">出站</string>
+    <string name="mode">模式</string>
+    <string name="profile_override">配置覆盖</string>
+    <string name="auto_redirect">自动重定向</string>
+    <string name="auto_redirect_description">需要 ROOT 权限</string>
+    <string name="per_app_proxy">分应用代理</string>
+    <string name="cache_size">缓存大小</string>
+    <string name="clear_cache">清除缓存</string>
+    <string name="notification_settings">通知</string>
+    <string name="enable_notification">启用通知</string>
+    <string name="dynamic_notification">在通知中显示实时网速</string>
+    <string name="update_settings">更新设置</string>
+    <string name="update_track">更新通道</string>
+    <string name="update_track_stable">稳定版</string>
+    <string name="github_token">GitHub Token</string>
+    <string name="github_token_description">获取更高的 GitHub API 速率限制</string>
+    <string name="check_update">检查更新</string>
+    <string name="check_update_automatic">自动检查更新</string>
+    <string name="error_title">错误</string>
+    <string name="error_start_service">启动服务</string>
+    <string name="service_reload_required">需要重载服务以应用更改</string>
+    <string name="tailscale_terminal_config">Ghostty 配置</string>
+</resources>
