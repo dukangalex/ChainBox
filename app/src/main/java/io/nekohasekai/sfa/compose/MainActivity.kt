@@ -236,9 +236,13 @@ class MainActivity :
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     val updateInfo = Vendor.checkUpdateAsync()
-                    UpdateState.setUpdate(updateInfo)
+                    withContext(Dispatchers.Main) {
+                        UpdateState.setUpdate(updateInfo)
+                    }
                 } catch (_: Exception) {
-                    UpdateState.setUpdate(null)
+                    withContext(Dispatchers.Main) {
+                        UpdateState.setUpdate(null)
+                    }
                 }
             }
         }
@@ -655,9 +659,11 @@ class MainActivity :
                         Settings.updateCheckPrompted = true
                         Settings.checkUpdateEnabled = true
                         showUpdateCheckPrompt = false
-                        scope.launch(Dispatchers.IO) {
+                        scope.launch {
                             try {
-                                val result = Vendor.checkUpdateAsync()
+                                val result = withContext(Dispatchers.IO) {
+                                    Vendor.checkUpdateAsync()
+                                }
                                 UpdateState.setUpdate(result)
                             } catch (_: Exception) {
                                 UpdateState.setUpdate(null)

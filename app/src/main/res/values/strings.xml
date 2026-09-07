@@ -286,6 +286,9 @@
     <string name="downloading">Downloading…</string>
     <string name="exporting">Exporting…</string>
     <string name="no_updates_available">No updates available</string>
+    <string name="no_updates_current">Already on the latest version: %s</string>
+    <string name="checking_update">Checking for updates…</string>
+    <string name="update_check_failed">Update check failed: %s</string>
     <string name="new_version_available">New version available: %s</string>
     <string name="auto_update">Auto Update</string>
     <string name="auto_update_description">Automatically download and install updates in background</string>

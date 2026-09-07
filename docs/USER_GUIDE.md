@@ -6,9 +6,11 @@
 2. 允许安装未知来源应用后安装。
 3. 同一签名且 versionCode 更大的新版可直接覆盖。
 
-设置 → 应用版本 应与 Release tag 一致（如 1.0.13）。
+设置 → 应用版本 应与 Release tag 一致（如 1.0.14）。
 
 语言可在 **设置 → 应用 → 语言** 中选择简体中文、繁体中文、English 等；不要只留「跟随系统」时若系统是中文、界面仍大量英文，请更新到 1.0.13+。
+
+检查更新：打开 **设置 → 应用 → 检查更新**。有新版本会弹出「下载安装 / 查看发布」；已是最新或失败也会弹窗，并可跳到 GitHub Releases。请先允许安装未知应用。
 
 ## 导入配置
 
@@ -46,6 +48,7 @@ Chain 是 sing-box 原生 outbound：按你指定的顺序串联已有出站。�
 | 排除国内 QUIC | 国内 UDP 443 走 direct，其余仍拦 |
 
 1.0.12 及更早版本开启规范化会因 legacy inbound sniff 字段无法启动，1.0.13 已修复。
+1.0.13 仍会把本地 DNS 的 `detour` 写成 `direct`，sing-box 1.12+ 会报 *empty direct outbound*；1.0.14 已去掉该 detour。
 
 ## 备份
 
@@ -63,8 +66,17 @@ debug 与正式签名混过。卸载后装正式 `ChainBox-android.apk`，以后
 **点更新闪退**  
 versionCode 没变大或签名不同。换正式版并且版本号递增的包。
 
+**链式保存后无法启动，提示 unknown field fail_closed**  
+内核 chain 出站只有 `outbounds` 字段。更新到 1.0.14+。
+
 **链式保存后无法启动，提示含 DIRECT**  
 入口被锁在「漏网之鱼」。更新到 1.0.13+，在链式页手动选「节点选择」等代理分组再保存。
 
+**配置规范化开启后报 empty direct outbound / detour to an empty direct**  
+本地 DNS 不要 detour 到空的 direct。更新到 1.0.14+。
+
 **配置规范化开启后报 legacy inbound fields**  
 更新到 1.0.13+。规范化不再把 `sniff` 写进入站。
+
+**检查更新没反应 / 没有安装提示**  
+1.0.14 起会弹窗；若系统拦截未知来源，会先跳到「允许安装未知应用」。也可点「查看发布」用浏览器下载 `ChainBox-android.apk`。

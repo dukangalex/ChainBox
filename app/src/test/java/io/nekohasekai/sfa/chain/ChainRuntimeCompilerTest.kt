@@ -64,7 +64,8 @@ class ChainRuntimeCompilerTest {
         val outs = root.getJSONArray("outbounds")
         val chain = (0 until outs.length()).map { outs.getJSONObject(it) }
             .first { it.optString("type") == "chain" }
-        assertEquals(true, chain.optBoolean("fail_closed"))
+        assertEquals("chain", chain.optString("type"))
+        assertFalse(chain.has("fail_closed"))
         val hops = chain.getJSONArray("outbounds")
         assertEquals(2, hops.length())
         val entryTag = hops.getString(0)

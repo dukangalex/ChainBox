@@ -279,6 +279,9 @@
     <string name="downloading">Загрузка...</string>
     <string name="exporting">Экспорт...</string>
     <string name="no_updates_available">Обновлений нет</string>
+    <string name="no_updates_current">Уже установлена последняя версия: %s</string>
+    <string name="checking_update">Проверка обновлений…</string>
+    <string name="update_check_failed">Не удалось проверить обновления: %s</string>
     <string name="new_version_available">Доступна новая версия: %s</string>
     <string name="auto_update">Автообновление</string>
     <string name="auto_update_description">Автоматически загружать и устанавливать обновления в фоне</string>

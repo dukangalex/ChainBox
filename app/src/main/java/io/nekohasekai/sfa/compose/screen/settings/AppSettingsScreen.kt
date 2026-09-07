@@ -110,6 +110,7 @@ import io.nekohasekai.sfa.update.UpdateSource
 import io.nekohasekai.sfa.update.UpdateState
 import io.nekohasekai.sfa.update.UpdateTrack
 import io.nekohasekai.sfa.utils.HookStatusClient
+import io.nekohasekai.sfa.vendor.GitHubUpdateChecker
 import io.nekohasekai.sfa.vendor.Vendor
 import io.nekohasekai.sfa.xposed.XposedActivation
 import kotlinx.coroutines.Dispatchers
@@ -288,6 +289,20 @@ fun AppSettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showErrorDialog = null }) {
                     Text(stringResource(R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showErrorDialog = null
+                        val intent = Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse(GitHubUpdateChecker.RELEASES_PAGE_URL),
+                        )
+                        context.startActivity(intent)
+                    },
+                ) {
+                    Text(stringResource(R.string.view_release))
                 }
             },
         )
@@ -1314,25 +1329,39 @@ fun AppSettingsScreen(
                         .clickable(enabled = !isChecking) {
                             scope.launch {
                                 UpdateState.isChecking.value = true
-                                withContext(Dispatchers.IO) {
-                                    try {
-                                        val result = Vendor.checkUpdateAsync()
+                                Toast.makeText(
+                                    context,
+                                    R.string.checking_update,
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                val outcome = withContext(Dispatchers.IO) {
+                                    runCatching { Vendor.checkUpdateAsync() }
+                                }
+                                UpdateState.isChecking.value = false
+                                outcome.fold(
+                                    onSuccess = { result ->
                                         UpdateState.setUpdate(result)
                                         if (result == null) {
-                                            showErrorDialog = context.getString(R.string.no_updates_available)
+                                            showErrorDialog = context.getString(
+                                                R.string.no_updates_current,
+                                                BuildConfig.VERSION_NAME,
+                                            )
                                         } else {
                                             showUpdateAvailableDialog = true
                                         }
-                                    } catch (_: UpdateCheckException.TrackNotSupported) {
+                                    },
+                                    onFailure = { e ->
                                         UpdateState.setUpdate(null)
-                                        showErrorDialog = context.getString(R.string.update_track_not_supported)
-                                    } catch (e: Exception) {
-                                        Log.e("AppSettingsScreen", "checkUpdateAsync failed", e)
-                                        UpdateState.setUpdate(null)
-                                        showErrorDialog = e.message
-                                    }
-                                }
-                                UpdateState.isChecking.value = false
+                                        showErrorDialog = when (e) {
+                                            is UpdateCheckException.TrackNotSupported ->
+                                                context.getString(R.string.update_track_not_supported)
+                                            else -> context.getString(
+                                                R.string.update_check_failed,
+                                                e.message ?: e.javaClass.simpleName,
+                                            )
+                                        }
+                                    },
+                                )
                             }
                         },
                     colors =

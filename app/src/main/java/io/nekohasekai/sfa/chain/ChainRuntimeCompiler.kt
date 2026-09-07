@@ -82,7 +82,6 @@ object ChainRuntimeCompiler {
             .put("type", NATIVE_CHAIN_TYPE)
             .put("tag", chainTag)
             .put("outbounds", JSONArray().put(entryHop).put(landingMergedTag))
-            .put("fail_closed", true)
         outs.put(chain)
         route.put("final", chainTag)
         root.put("outbounds", outs)

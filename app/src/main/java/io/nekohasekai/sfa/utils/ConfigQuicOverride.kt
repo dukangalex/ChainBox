@@ -108,7 +108,6 @@ object ConfigQuicOverride {
                 .put("tag", tag)
                 .put("format", "binary")
                 .put("url", "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs")
-                .put("download_detour", "direct")
                 .put("update_interval", "7d"),
         )
         return tag

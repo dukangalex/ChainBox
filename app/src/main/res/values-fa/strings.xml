@@ -279,6 +279,9 @@
     <string name="downloading">در حال دانلود…</string>
     <string name="exporting">در حال خروجی‌گیری…</string>
     <string name="no_updates_available">به‌روزرسانی‌ای موجود نیست</string>
+    <string name="no_updates_current">در حال حاضر آخرین نسخه نصب است: %s</string>
+    <string name="checking_update">در حال بررسی به‌روزرسانی…</string>
+    <string name="update_check_failed">بررسی به‌روزرسانی ناموفق بود: %s</string>
     <string name="new_version_available">نسخه جدید موجود است: %s</string>
     <string name="auto_update">به‌روزرسانی خودکار</string>
     <string name="auto_update_description">دانلود و نصب خودکار به‌روزرسانی‌ها در پس‌زمینه</string>

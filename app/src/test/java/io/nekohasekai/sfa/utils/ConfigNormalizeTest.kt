@@ -56,6 +56,15 @@ class ConfigNormalizeTest {
         val dns0 = out.getJSONObject("dns").getJSONArray("servers").getJSONObject(0)
         assertEquals("https", dns0.getString("type"))
         assertFalse(dns0.has("address"))
+        val dnsLocal = out.getJSONObject("dns").getJSONArray("servers").getJSONObject(1)
+        assertEquals("dns-local", dnsLocal.getString("tag"))
+        assertFalse(dnsLocal.has("detour"))
+        assertTrue(dns0.has("detour"))
+        assertFalse(dns0.getString("detour").equals("direct", ignoreCase = true))
+        val sets = out.getJSONObject("route").getJSONArray("rule_set")
+        for (i in 0 until sets.length()) {
+            assertFalse(sets.getJSONObject(i).optString("download_detour").equals("direct", ignoreCase = true))
+        }
         assertTrue(out.getJSONArray("outbounds").length() >= 3)
     }
 }

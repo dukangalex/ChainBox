@@ -259,6 +259,9 @@
     <string name="downloading">下载中…</string>
     <string name="exporting">汇出中…</string>
     <string name="no_updates_available">没有可用的更新</string>
+    <string name="no_updates_current">当前已是最新版本：%s</string>
+    <string name="checking_update">正在检查更新…</string>
+    <string name="update_check_failed">检查更新失败：%s</string>
     <string name="new_version_available">有新版本可用：%s</string>
     <string name="auto_update">自动更新</string>
     <string name="auto_update_description">在背景自动下载并安装更新</string>

@@ -99,18 +99,25 @@ object ConfigNormalize {
         return t.contains("漏网") || t.contains("final") || t.contains("剩余") || t.contains("unmatched")
     }
 
-    private fun dnsServer(tag: String, host: String, detour: String): JSONObject =
-        JSONObject()
+    private fun dnsServer(tag: String, host: String, detour: String? = null): JSONObject {
+        val server = JSONObject()
             .put("type", "https")
             .put("tag", tag)
             .put("server", host)
             .put("path", "/dns-query")
-            .put("detour", detour)
+        // sing-box 1.12+ rejects detour to an empty `direct` outbound
+        // ("detour to an empty direct outbound makes no sense"). Omit detour
+        // so the default dialer is used; only send non-direct detours.
+        if (!detour.isNullOrBlank() && !detour.equals("direct", ignoreCase = true)) {
+            server.put("detour", detour)
+        }
+        return server
+    }
 
     private fun buildDns(proxyTag: String): JSONObject {
         val servers = JSONArray()
             .put(dnsServer("dns-remote", "1.1.1.1", proxyTag))
-            .put(dnsServer("dns-local", "223.5.5.5", "direct"))
+            .put(dnsServer("dns-local", "223.5.5.5"))
         val rules = JSONArray().put(JSONObject().put("rule_set", "geosite-cn").put("server", "dns-local"))
         return JSONObject()
             .put("servers", servers)
@@ -172,7 +179,6 @@ object ConfigNormalize {
             .put("tag", tag)
             .put("format", "binary")
             .put("url", url)
-            .put("download_detour", "direct")
             .put("update_interval", "7d")
 
     private fun findTag(outs: JSONArray, tag: String): JSONObject? {

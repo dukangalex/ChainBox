@@ -14,8 +14,11 @@ import java.io.Closeable
 
 class GitHubUpdateChecker : Closeable {
     companion object {
-        private const val RELEASES_URL =
+        const val RELEASES_URL =
             "https://api.github.com/repos/dukangalex/ChainBox/releases"
+        const val RELEASES_PAGE_URL =
+            "https://github.com/dukangalex/ChainBox/releases"
+        private const val PREFERRED_APK = "ChainBox-android.apk"
     }
 
     private val client = Libbox.newHTTPClient().apply {
@@ -48,21 +51,32 @@ class GitHubUpdateChecker : Closeable {
         val metadata = selected.metadata
 
         val isLegacy = Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-        val apkAsset = release.assets.find { asset ->
-            asset.name.endsWith(".apk") &&
-                !asset.name.contains("play") &&
-                asset.name.contains("legacy-android-5") == isLegacy
-        }
+        val apkAsset = pickApkAsset(release.assets, isLegacy)
 
         return UpdateInfo(
             versionCode = metadata.versionCode,
             versionName = metadata.versionName,
             downloadUrl = apkAsset?.browserDownloadUrl ?: release.htmlUrl,
-            releaseUrl = release.htmlUrl,
+            releaseUrl = release.htmlUrl.ifBlank { RELEASES_PAGE_URL },
             releaseNotes = release.body,
             isPrerelease = release.prerelease,
             fileSize = apkAsset?.size ?: 0,
         )
+    }
+
+    private fun pickApkAsset(assets: List<GitHubAsset>, isLegacy: Boolean): GitHubAsset? {
+        val apks = assets.filter { asset ->
+            asset.name.endsWith(".apk", ignoreCase = true) &&
+                !asset.name.contains("play", ignoreCase = true)
+        }
+        if (apks.isEmpty()) return null
+        if (isLegacy) {
+            return apks.find { it.name.contains("legacy", ignoreCase = true) } ?: apks.first()
+        }
+        return apks.find { it.name.equals(PREFERRED_APK, ignoreCase = true) }
+            ?: apks.find { it.name.contains("ChainBox", ignoreCase = true) && !it.name.contains("legacy", ignoreCase = true) }
+            ?: apks.find { !it.name.contains("legacy", ignoreCase = true) }
+            ?: apks.first()
     }
 
     private fun getReleases(githubToken: String): List<GitHubRelease> {
@@ -75,9 +89,28 @@ class GitHubUpdateChecker : Closeable {
         }
         request.setUserAgent(HTTPClient.userAgent)
 
-        val response = request.execute()
-        val content = response.content.unwrap
-        return json.decodeFromString(content)
+        val content = try {
+            val response = request.execute()
+            response.content.unwrap
+        } catch (e: Exception) {
+            throw IllegalStateException(
+                "无法连接 GitHub Releases（${e.message ?: e.javaClass.simpleName}）。可在浏览器打开 $RELEASES_PAGE_URL",
+                e,
+            )
+        }
+        val trimmed = content.trim()
+        if (trimmed.isEmpty()) {
+            throw IllegalStateException("GitHub Releases 返回空响应")
+        }
+        if (trimmed.startsWith("{")) {
+            val err = runCatching { json.decodeFromString<GitHubApiError>(trimmed) }.getOrNull()
+            val msg = err?.message.orEmpty()
+            if (msg.contains("rate limit", ignoreCase = true)) {
+                throw IllegalStateException("GitHub API 速率限制，请稍后重试，或在设置里填写 GitHub Token")
+            }
+            throw IllegalStateException(msg.ifBlank { "GitHub API 错误" })
+        }
+        return json.decodeFromString(trimmed)
     }
 
     private fun isReleaseInTrack(release: GitHubRelease, track: UpdateTrack): Boolean {
@@ -99,12 +132,29 @@ class GitHubUpdateChecker : Closeable {
         return major * 10000 + minor * 100 + patch
     }
 
-    private fun isNewerThanCurrent(versionName: String): Boolean =
-        Libbox.compareSemver(versionName, BuildConfig.VERSION_NAME)
+    private fun isNewerThanCurrent(versionName: String): Boolean {
+        val byCode = versionCodeFromName(versionName) > BuildConfig.VERSION_CODE
+        val bySemver = try {
+            Libbox.compareSemver(versionName, BuildConfig.VERSION_NAME)
+        } catch (_: Throwable) {
+            false
+        }
+        return byCode || bySemver
+    }
 
     private fun isBetterVersion(version: VersionMetadata, other: VersionMetadata): Boolean {
-        if (Libbox.compareSemver(version.versionName, other.versionName)) return true
-        if (Libbox.compareSemver(other.versionName, version.versionName)) return false
+        val aNewer = try {
+            Libbox.compareSemver(version.versionName, other.versionName)
+        } catch (_: Throwable) {
+            false
+        }
+        val bNewer = try {
+            Libbox.compareSemver(other.versionName, version.versionName)
+        } catch (_: Throwable) {
+            false
+        }
+        if (aNewer) return true
+        if (bNewer) return false
         return version.versionCode > other.versionCode
     }
 
@@ -134,6 +184,11 @@ class GitHubUpdateChecker : Closeable {
     data class VersionMetadata(
         @SerialName("version_code") val versionCode: Int = 0,
         @SerialName("version_name") val versionName: String = "",
+    )
+
+    @Serializable
+    data class GitHubApiError(
+        val message: String = "",
     )
 
     private data class ReleaseCandidate(

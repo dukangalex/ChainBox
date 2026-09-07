@@ -20,7 +20,14 @@ def main() -> int:
     if "legacyInboundFields" not in normalize:
         errors.append("ConfigNormalize should list legacy inbound fields to strip")
 
+    if 'dnsServer("dns-local", "223.5.5.5", "direct")' in normalize:
+        errors.append("dns-local must not detour to empty direct (sing-box 1.12+ rejects it)")
+    if 'put("download_detour", "direct")' in normalize:
+        errors.append("rule_set download_detour=direct is rejected by sing-box 1.12+")
+
     chain = read("app/src/main/java/io/nekohasekai/sfa/chain/ChainRuntimeCompiler.kt")
+    if "fail_closed" in chain:
+        errors.append("Chain compiler must not emit fail_closed; kernel ChainOutboundOptions only has outbounds")
     if "不可作为前置代理" in chain:
         errors.append("Chain compiler must not fail closed just because a selector contains DIRECT")
     if "chainEntryTag" not in read("app/src/main/java/io/nekohasekai/sfa/database/Settings.kt"):
