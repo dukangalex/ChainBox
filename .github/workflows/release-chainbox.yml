@@ -29,16 +29,18 @@ jobs:
           path: sing-box
           fetch-depth: 0
 
-      - name: Setup Java 21
+      - name: Setup Java 17 and 21
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: |
+            17
+            21
 
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.26.7"
+          go-version: "1.25.5"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
@@ -53,12 +55,25 @@ jobs:
 
       - name: Test Chain kernel
         working-directory: sing-box
-        run: go test ./...
+        run: |
+          set -euo pipefail
+          packages=$(go list ./... | grep -v '^github.com/sagernet/sing-box/experimental/boxdd$' | grep -v '^github.com/sagernet/sing-box/experimental/libbox$')
+          sudo -E go test $packages
+
+      - name: Install gomobile
+        run: |
+          set -euo pipefail
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          "$(go env GOPATH)/bin/gomobile" init || true
 
       - name: Build libbox AAR
         working-directory: sing-box
         run: |
           set -e
+          export JAVA_HOME="${JAVA_HOME_17_X64:?JAVA_HOME_17_X64 not set}"
+          export PATH="$JAVA_HOME/bin:$(go env GOPATH)/bin:$PATH"
+          java --version
           go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
           mkdir -p ../sing-box-for-android/app/libs
           cp -f libbox.aar ../sing-box-for-android/app/libs/libbox.aar

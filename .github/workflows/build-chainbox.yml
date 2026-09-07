@@ -35,11 +35,16 @@ jobs:
           path: sing-box
           fetch-depth: 0
 
-      - name: Setup Java 21
+      - name: Setup Java 17 and 21
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
         with:
           distribution: temurin
-          java-version: "21"
+          # Last version becomes JAVA_HOME (Gradle / AGP 9.1.1).
+          # JDK 17 is also installed because sing-box build_libbox
+          # hard-requires `openjdk 17`.
+          java-version: |
+            17
+            21
 
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
@@ -67,26 +72,19 @@ jobs:
       - name: Test Chain sing-box kernel
         working-directory: sing-box
         run: |
-          set +e
-          go test ./... > /tmp/go-test.log 2>&1
-          code=$?
-          set -e
-          if [ $code -ne 0 ]; then
-            echo "::group::go test output (last 400 lines)"
-            tail -n 400 /tmp/go-test.log
-            echo "::endgroup::"
-            # Compiler errors for a "[build failed]" package appear as up to
-            # 20 lines right after its "# package/path" header; grab those in
-            # full, plus the FAIL/--- FAIL summary lines, so the actual
-            # diagnostic text (not just the header) is visible as annotations.
-            awk '/^# /{capture=20} capture>0{print; capture--}' /tmp/go-test.log > /tmp/go-test-context.log
-            grep -nE '(--- FAIL|^FAIL[[:space:]])' /tmp/go-test.log >> /tmp/go-test-context.log
-            head -n 60 /tmp/go-test-context.log | while IFS= read -r line; do
-              msg=$(printf '%s' "$line" | tr -d '\r' | cut -c1-500)
-              echo "::error::${msg}"
-            done
-          fi
-          exit $code
+          set -euo pipefail
+          # Match CI: libbox/boxdd cannot be tested here because oomprofile
+          # go:linkname's into unexported runtime/pprof.parseProcSelfMaps.
+          # common/netns tests need CAP_SYS_ADMIN (sudo).
+          packages=$(go list ./... | grep -v '^github.com/sagernet/sing-box/experimental/boxdd$' | grep -v '^github.com/sagernet/sing-box/experimental/libbox$')
+          sudo -E go test $packages
+
+      - name: Install gomobile
+        run: |
+          set -euo pipefail
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          "$(go env GOPATH)/bin/gomobile" init || true
 
       - name: Build libbox.aar
         working-directory: sing-box
@@ -96,7 +94,9 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
         run: |
           set -e
-          export PATH="$(go env GOPATH)/bin:$PATH"
+          export JAVA_HOME="${JAVA_HOME_17_X64:?JAVA_HOME_17_X64 not set}"
+          export PATH="$JAVA_HOME/bin:$(go env GOPATH)/bin:$PATH"
+          java --version
           export ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
           go run ./cmd/internal/build_libbox -target android -platform android/arm64 -debug
 
