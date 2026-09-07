@@ -59,6 +59,7 @@ jobs:
           set -euo pipefail
           packages=$(go list ./... | grep -v '^github.com/sagernet/sing-box/experimental/boxdd$' | grep -v '^github.com/sagernet/sing-box/experimental/libbox$')
           sudo -E go test $packages
+          sudo chown -R "$(id -u):$(id -g)" "$(go env GOPATH)" "$(go env GOCACHE)" "$(go env GOMODCACHE)"
 
       - name: Install gomobile
         run: |
