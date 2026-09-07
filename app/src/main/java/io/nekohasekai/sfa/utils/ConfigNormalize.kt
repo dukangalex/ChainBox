@@ -82,7 +82,7 @@ object ConfigNormalize {
             .put("type", "https")
             .put("tag", tag)
             .put("server", host)
-            .put("address", "https://$host/dns-query")
+            .put("path", "/dns-query")
             .put("detour", detour)
 
     private fun buildDns(proxyTag: String): JSONObject {
