@@ -76,6 +76,7 @@ object Settings {
     var disableIpv6 by dataStore.boolean(SettingsKey.DISABLE_IPV6) { false }
     var configNormalize by dataStore.boolean(SettingsKey.CONFIG_NORMALIZE) { false }
     var chainEnabled by dataStore.boolean(SettingsKey.CHAIN_ENABLED) { false }
+    var chainEntryTag by dataStore.string(SettingsKey.CHAIN_ENTRY_TAG) { "" }
     var chainLandingProfileId by dataStore.long(SettingsKey.CHAIN_LANDING_PROFILE_ID) { -1L }
     var chainLandingTag by dataStore.string(SettingsKey.CHAIN_LANDING_TAG) { "" }
     var chainBoundProfileId by dataStore.long(SettingsKey.CHAIN_BOUND_PROFILE_ID) { -1L }

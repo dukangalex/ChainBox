@@ -739,4 +739,10 @@
     <string name="endpoint_browser_navigation_failed">Browser navigation failed: %1$s</string>
     <string name="endpoint_browser_too_many_windows">The authentication page opened too many browser windows.</string>
     <string name="endpoint_browser_profile_unavailable">Browser authentication is unavailable on this device.</string>
+
+    <!-- ChainBox -->
+    <string name="backup_and_restore">Backup and Restore</string>
+    <string name="chain_builder">Chain Proxy</string>
+    <string name="chain_builder_title">Chain proxy builder</string>
+    <string name="chain_builder_subtitle">Pick entry then landing; builds a native sing-box chain outbound</string>
 </resources>

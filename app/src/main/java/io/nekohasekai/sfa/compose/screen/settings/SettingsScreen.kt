@@ -85,7 +85,7 @@ fun SettingsScreen(navController: NavController) {
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(
-                headlineContent = { Text("备份与恢复", style = MaterialTheme.typography.bodyLarge) },
+                headlineContent = { Text(stringResource(R.string.backup_and_restore), style = MaterialTheme.typography.bodyLarge) },
                 leadingContent = {
                     Icon(Icons.Outlined.SettingsRemote, null, tint = MaterialTheme.colorScheme.primary)
                 },

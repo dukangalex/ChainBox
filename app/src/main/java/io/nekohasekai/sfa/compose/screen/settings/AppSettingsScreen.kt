@@ -1589,22 +1589,29 @@ private fun calculateDirSize(dir: File?): Long {
 }
 
 private fun getSupportedLocales(context: Context): List<Locale> {
+    val fromXml = parseLocalesXml(context, "locales_config")
+    if (fromXml.isNotEmpty()) return fromXml
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        val localeConfig = LocaleConfig(context)
-        val localeList = localeConfig.supportedLocales ?: return emptyList()
-        return (0 until localeList.size()).map { localeList.get(it) }
+        val localeList = LocaleConfig(context).supportedLocales
+        if (localeList != null && localeList.size() > 0) {
+            return (0 until localeList.size()).map { localeList.get(it) }
+        }
     }
-    return parseLocalesConfig(context)
+    val generated = parseLocalesXml(context, "_generated_res_locale_config")
+    if (generated.isNotEmpty()) return generated
+    return listOf(
+        Locale.forLanguageTag("en-US"),
+        Locale.forLanguageTag("zh-CN"),
+        Locale.forLanguageTag("zh-TW"),
+        Locale.forLanguageTag("ru-RU"),
+        Locale.forLanguageTag("fa"),
+    )
 }
 
-private fun parseLocalesConfig(context: Context): List<Locale> {
+private fun parseLocalesXml(context: Context, resourceName: String): List<Locale> {
     val locales = mutableListOf<Locale>()
     try {
-        val resId = context.resources.getIdentifier(
-            "_generated_res_locale_config",
-            "xml",
-            context.packageName,
-        )
+        val resId = context.resources.getIdentifier(resourceName, "xml", context.packageName)
         if (resId == 0) return emptyList()
         val parser = context.resources.getXml(resId)
         while (parser.next() != XmlPullParser.END_DOCUMENT) {
@@ -1612,7 +1619,7 @@ private fun parseLocalesConfig(context: Context): List<Locale> {
                 val name = parser.getAttributeValue(
                     "http://schemas.android.com/apk/res/android",
                     "name",
-                )
+                ) ?: parser.getAttributeValue(null, "name")
                 if (name != null) {
                     locales.add(Locale.forLanguageTag(name))
                 }

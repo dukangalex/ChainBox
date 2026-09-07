@@ -3,6 +3,12 @@ package io.nekohasekai.sfa.utils
 import org.json.JSONArray
 import org.json.JSONObject
 
+/**
+ * Runtime overlay: keep the user's nodes/groups, replace DNS / route / inbounds
+ * with a sing-box 1.12+ template. Legacy inbound fields (`sniff`,
+ * `sniff_override_destination`, `domain_strategy`) are never written — they
+ * were removed in sing-box 1.13 and must live as route rule actions instead.
+ */
 object ConfigNormalize {
 
     private val dropOutboundTypes = setOf("direct", "block", "dns", "chain")
@@ -11,6 +17,13 @@ object ConfigNormalize {
         "shadowsocks", "shadowsocks2022", "vmess", "vless", "trojan",
         "hysteria", "hysteria2", "tuic", "wireguard", "shadowtls", "anytls",
         "socks", "http", "naive", "ssh", "tor", "mieru",
+    )
+    private val legacyInboundFields = listOf(
+        "sniff",
+        "sniff_override_destination",
+        "sniff_timeout",
+        "domain_strategy",
+        "inbound_sniffing",
     )
 
     fun apply(content: String): String {
@@ -45,14 +58,18 @@ object ConfigNormalize {
             nodeTags.forEach { members.put(it) }
             keptOuts.put(JSONObject().put("type", "selector").put("tag", proxyTag).put("outbounds", members))
         }
-        keptOuts.put(JSONObject().put("type", "direct").put("tag", "direct"))
-        keptOuts.put(JSONObject().put("type", "block").put("tag", "block"))
+        if (findTag(keptOuts, "direct") == null) {
+            keptOuts.put(JSONObject().put("type", "direct").put("tag", "direct"))
+        }
+        if (findTag(keptOuts, "block") == null) {
+            keptOuts.put(JSONObject().put("type", "block").put("tag", "block"))
+        }
 
         val out = JSONObject()
         val logLevel = src.optJSONObject("log")?.optString("level").orEmpty().ifBlank { "info" }
         out.put("log", JSONObject().put("level", logLevel).put("timestamp", true))
         out.put("dns", buildDns(proxyTag))
-        out.put("inbounds", buildInbounds(src.optJSONArray("inbounds")))
+        out.put("inbounds", buildInbounds())
         out.put("outbounds", keptOuts)
         if (src.has("endpoints")) out.put("endpoints", src.get("endpoints"))
         out.put("route", buildRoute(proxyTag))
@@ -66,15 +83,20 @@ object ConfigNormalize {
 
     private fun pickProxyTag(src: JSONObject, groups: List<String>, nodes: List<String>): String {
         val fin = src.optJSONObject("route")?.optString("final").orEmpty().trim()
-        if (fin.isNotEmpty() && (fin in groups || fin in nodes)) return fin
+        if (fin.isNotEmpty() && (fin in groups || fin in nodes) && !isFinalLike(fin)) return fin
         fun score(tag: String): Int {
             val t = tag.lowercase()
             var s = 0
-            if (t.contains("proxy") || t.contains("select")) s += 20
-            if (t.contains("final")) s -= 50
+            if (t.contains("proxy") || t.contains("select") || t.contains("节点") || t.contains("选择") || t.contains("自动")) s += 20
+            if (isFinalLike(tag)) s -= 50
             return s
         }
         return groups.maxByOrNull { score(it) } ?: "proxy"
+    }
+
+    private fun isFinalLike(tag: String): Boolean {
+        val t = tag.lowercase()
+        return t.contains("漏网") || t.contains("final") || t.contains("剩余") || t.contains("unmatched")
     }
 
     private fun dnsServer(tag: String, host: String, detour: String): JSONObject =
@@ -98,33 +120,31 @@ object ConfigNormalize {
             .put("independent_cache", true)
     }
 
-    private fun buildInbounds(src: JSONArray?): JSONArray {
-        val result = JSONArray()
-        var hasTun = false
-        if (src != null) {
-            for (i in 0 until src.length()) {
-                val ib = src.optJSONObject(i) ?: continue
-                if (ib.optString("type") == "tun") {
-                    hasTun = true
-                    if (!ib.has("sniff")) ib.put("sniff", true)
-                    if (!ib.has("auto_route")) ib.put("auto_route", true)
-                }
-                result.put(ib)
-            }
-        }
-        if (!hasTun) {
-            result.put(
-                JSONObject()
-                    .put("type", "tun")
-                    .put("tag", "tun-in")
-                    .put("address", JSONArray().put("172.19.0.1/30"))
-                    .put("mtu", 9000)
-                    .put("auto_route", true)
-                    .put("strict_route", false)
-                    .put("sniff", true),
-            )
-        }
-        return result
+    /**
+     * Always emit a 1.13-safe TUN + local mixed inbound. Do not copy the
+     * subscription's inbounds: those commonly still carry removed sniff fields.
+     * Sniffing is done via route action instead (see [buildRoute]).
+     */
+    fun buildInbounds(): JSONArray {
+        val tun = JSONObject()
+            .put("type", "tun")
+            .put("tag", "tun-in")
+            .put("address", JSONArray().put("172.19.0.1/30"))
+            .put("mtu", 9000)
+            .put("auto_route", true)
+            .put("strict_route", false)
+        val mixed = JSONObject()
+            .put("type", "mixed")
+            .put("tag", "mixed-in")
+            .put("listen", "127.0.0.1")
+            .put("listen_port", 2080)
+        stripLegacyInboundFields(tun)
+        stripLegacyInboundFields(mixed)
+        return JSONArray().put(tun).put(mixed)
+    }
+
+    fun stripLegacyInboundFields(inbound: JSONObject) {
+        for (field in legacyInboundFields) inbound.remove(field)
     }
 
     private fun buildRoute(proxyTag: String): JSONObject {
@@ -154,4 +174,9 @@ object ConfigNormalize {
             .put("url", url)
             .put("download_detour", "direct")
             .put("update_interval", "7d")
+
+    private fun findTag(outs: JSONArray, tag: String): JSONObject? {
+        for (i in 0 until outs.length()) if (outs.optJSONObject(i)?.optString("tag") == tag) return outs.optJSONObject(i)
+        return null
+    }
 }

@@ -24,6 +24,7 @@ object SettingsKey {
     const val DISABLE_IPV6 = "disable_ipv6"
     const val CONFIG_NORMALIZE = "config_normalize"
     const val CHAIN_ENABLED = "chain_enabled"
+    const val CHAIN_ENTRY_TAG = "chain_entry_tag"
     const val CHAIN_LANDING_PROFILE_ID = "chain_landing_profile_id"
     const val CHAIN_LANDING_TAG = "chain_landing_tag"
     const val CHAIN_BOUND_PROFILE_ID = "chain_bound_profile_id"

@@ -671,4 +671,8 @@
     <string name="taildrop_dismiss">關閉</string>
     <string name="taildrop_open_app">開啟 sing-box</string>
     <string name="taildrop_notification_title">正在傳送檔案</string>
+    <string name="backup_and_restore">備份與還原</string>
+    <string name="chain_builder">鏈式代理</string>
+    <string name="chain_builder_title">鏈式代理產生器</string>
+    <string name="chain_builder_subtitle">點選入口與落地，產生 sing-box 原生 chain 出站</string>
 </resources>

@@ -254,7 +254,7 @@ fun ProfileOverrideScreen(
                     onHelp = {
                         help = SwitchHelp(
                             "配置规范化",
-                            "运行时覆写脚本，不改磁盘订阅。保留节点与分组，覆写 DNS/路由/TUN。",
+                            "运行时覆写脚本，不改磁盘订阅。保留节点与分组，DNS/路由/TUN 换成 sing-box 1.13 标准模板（嗅探走路由 action，不再写已删除的 inbound sniff 字段）。",
                         )
                     },
                     onCheckedChange = {

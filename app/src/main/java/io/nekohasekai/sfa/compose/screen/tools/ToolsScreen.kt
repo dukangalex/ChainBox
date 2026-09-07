@@ -381,13 +381,13 @@ fun ToolsScreen(
             ListItem(
                 headlineContent = {
                     Text(
-                        "链式代理生成器",
+                        stringResource(R.string.chain_builder_title),
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 },
                 supportingContent = {
                     Text(
-                        "点选节点顺序，生成 chain 配置",
+                        stringResource(R.string.chain_builder_subtitle),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 },
