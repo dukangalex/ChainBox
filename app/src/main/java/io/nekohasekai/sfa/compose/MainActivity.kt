@@ -329,15 +329,15 @@ class MainActivity :
                 return
             }
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN &&
-            !hasPermission(Manifest.permission.ACCESS_LOCAL_NETWORK) &&
+        if (Build.VERSION.SDK_INT >= 36 &&
+            !hasPermission("android.permission.ACCESS_LOCAL_NETWORK") &&
             !localNetworkPermissionRequested
         ) {
             localNetworkPermissionRequested = true
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_LOCAL_NETWORK)) {
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this, "android.permission.ACCESS_LOCAL_NETWORK")) {
                 showLocalNetworkPermissionDialog = true
             } else {
-                localNetworkPermissionLauncher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+                localNetworkPermissionLauncher.launch("android.permission.ACCESS_LOCAL_NETWORK")
             }
             return
         }
@@ -542,7 +542,7 @@ class MainActivity :
         if (showLocalNetworkPermissionDialog) {
             LocalNetworkPermissionDialog(onConfirm = {
                 showLocalNetworkPermissionDialog = false
-                localNetworkPermissionLauncher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+                localNetworkPermissionLauncher.launch("android.permission.ACCESS_LOCAL_NETWORK")
             }, onDismiss = {
                 showLocalNetworkPermissionDialog = false
                 startService()

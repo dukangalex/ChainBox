@@ -41,7 +41,7 @@ android {
     defaultConfig {
         applicationId = "io.chainbox.app"
         minSdk = 24
-        targetSdk = 37
+        targetSdk = 35
         versionCode = getVersionProps("VERSION_CODE").toInt()
         versionName = getVersionProps("VERSION_NAME")
         buildConfigField("String", "FLAVOR", "\"other\"")
@@ -236,3 +236,16 @@ spotless {
         googleJavaFormat()
     }
 }
+
+tasks.register("compileOtherDebugKotlin") {
+    dependsOn("compileDebugKotlin")
+}
+
+tasks.register("assembleOtherDebug") {
+    dependsOn("assembleDebug")
+}
+
+tasks.register("assembleOtherRelease") {
+    dependsOn("assembleRelease")
+}
+

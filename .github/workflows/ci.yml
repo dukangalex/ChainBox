@@ -62,11 +62,11 @@ jobs:
           path: sing-box
           fetch-depth: 0
 
-      - name: Setup Java 17
+      - name: Setup Java 21
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
@@ -80,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           yes | sdkmanager --licenses >/tmp/sdk-licenses.txt || true
-          sdkmanager --install "ndk;28.0.13004108" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          sdkmanager --install "ndk;28.0.13004108" "platforms;android-37.1" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
           test -d "${ANDROID_HOME}/ndk/28.0.13004108"
           echo "ANDROID_SDK_ROOT=${ANDROID_HOME}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/28.0.13004108" >> "$GITHUB_ENV"
