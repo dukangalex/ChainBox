@@ -90,7 +90,10 @@ android {
     }
 
     androidResources {
-        generateLocaleConfig = true
+        // Manifest already points at res/xml/locales_config.xml. AGP refuses
+        // to also auto-generate localeConfig ("Locale config generation was
+        // requested but user locale config is present in manifest").
+        generateLocaleConfig = false
     }
 
     buildFeatures {
