@@ -54,6 +54,23 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        val localProps = Properties()
+        val localPropsFile = rootProject.file("local.properties")
+        if (localPropsFile.exists()) {
+            localProps.load(FileInputStream(localPropsFile))
+        }
+        val releaseStore = file("release.keystore")
+        val releasePass = localProps.getProperty("KEYSTORE_PASS").orEmpty()
+        val releaseAlias = localProps.getProperty("ALIAS_NAME").orEmpty()
+        val releaseKeyPass = localProps.getProperty("ALIAS_PASS").orEmpty()
+        if (releaseStore.exists() && releasePass.isNotBlank() && releaseAlias.isNotBlank() && releaseKeyPass.isNotBlank()) {
+            create("releaseConfig") {
+                storeFile = releaseStore
+                storePassword = releasePass
+                keyAlias = releaseAlias
+                keyPassword = releaseKeyPass
+            }
+        }
     }
 
     buildTypes {
@@ -63,7 +80,11 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debugConfig")
+            signingConfig = if (signingConfigs.findByName("releaseConfig") != null) {
+                signingConfigs.getByName("releaseConfig")
+            } else {
+                signingConfigs.getByName("debugConfig")
+            }
             vcsInfo.include = false
         }
     }

@@ -104,6 +104,17 @@ jobs:
             echo "ALIAS_PASS=$KEY_PASS"
           } >> local.properties
 
+      - name: Ensure debug keystore
+        working-directory: sing-box-for-android
+        run: |
+          set -e
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair -keystore debug.keystore -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
       - name: Assemble release APK
         working-directory: sing-box-for-android
         run: |
