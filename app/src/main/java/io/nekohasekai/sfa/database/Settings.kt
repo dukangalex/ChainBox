@@ -87,6 +87,8 @@ object Settings {
     var webdavUser by dataStore.string(SettingsKey.WEBDAV_USER) { "" }
     var webdavPassword by dataStore.string(SettingsKey.WEBDAV_PASSWORD) { "" }
     var webdavRemoteFile by dataStore.string(SettingsKey.WEBDAV_REMOTE_FILE) { "backup.zip" }
+    var webdavProbeOk by dataStore.int(SettingsKey.WEBDAV_PROBE_OK) { -1 }
+    var restoreCompat by dataStore.boolean(SettingsKey.RESTORE_COMPAT) { false }
     var perAppProxyEnabled by dataStore.boolean(SettingsKey.PER_APP_PROXY_ENABLED) { false }
     var perAppProxyMode by dataStore.int(SettingsKey.PER_APP_PROXY_MODE) { PER_APP_PROXY_EXCLUDE }
     var perAppProxyList by dataStore.stringSet(SettingsKey.PER_APP_PROXY_LIST) { emptySet() }

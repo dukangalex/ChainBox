@@ -144,4 +144,105 @@ class ChainRuntimeCompilerTest {
         assertEquals("节点选择", hops.getString(0))
         assertEquals("jp-1", hops.getString(1))
     }
+
+    @Test
+    fun pinTrafficRewritesProxyRoutesAndDnsDetour() {
+        val src = JSONObject(profile("节点选择"))
+        src.getJSONObject("route").put(
+            "rules",
+            JSONArray()
+                .put(JSONObject().put("clash_mode", "Global").put("outbound", "节点选择"))
+                .put(JSONObject().put("geosite", "cn").put("outbound", "direct")),
+        )
+        src.put(
+            "dns",
+            JSONObject().put(
+                "servers",
+                JSONArray().put(
+                    JSONObject().put("tag", "remote").put("address", "8.8.8.8").put("detour", "节点选择"),
+                ),
+            ),
+        )
+        val compiled = ChainRuntimeCompiler.apply(
+            ChainRuntimeCompiler.ApplyRequest(
+                content = src.toString(),
+                currentProfileId = 1L,
+                entryTag = "节点选择",
+                landingProfileId = 1L,
+                landingTag = "jp-1",
+                landingContent = null,
+            ),
+        )
+        val root = JSONObject(compiled)
+        val chainTag = root.getJSONObject("route").getString("final")
+        assertTrue(chainTag.startsWith("chainbox-chain-"))
+        val rules = root.getJSONObject("route").getJSONArray("rules")
+        assertEquals(chainTag, rules.getJSONObject(0).getString("outbound"))
+        assertEquals("direct", rules.getJSONObject(1).getString("outbound"))
+        val detour = root.getJSONObject("dns").getJSONArray("servers").getJSONObject(0).getString("detour")
+        assertEquals(chainTag, detour)
+        val outs = root.getJSONArray("outbounds")
+        val chain = (0 until outs.length()).map { outs.getJSONObject(it) }
+            .first { it.optString("type") == "chain" }
+        assertEquals("节点选择", chain.getJSONArray("outbounds").getString(0))
+        val proxyOutbounds = (0 until rules.length()).map { rules.getJSONObject(it).optString("outbound") }
+        assertFalse(proxyOutbounds.contains("节点选择"))
+    }
+
+    @Test
+    fun chainClonePreservesTlsEch() {
+        val src = JSONObject()
+            .put(
+                "outbounds",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("type", "vless")
+                            .put("tag", "cf")
+                            .put("tls", JSONObject().put("enabled", true).put("ech", JSONObject().put("enabled", true).put("query_server_name", "cloudflare-ech.com"))),
+                    )
+                    .put(
+                        JSONObject()
+                            .put("type", "selector")
+                            .put("tag", "节点选择")
+                            .put("outbounds", JSONArray().put("cf")),
+                    )
+                    .put(JSONObject().put("type", "direct").put("tag", "direct")),
+            )
+            .put("route", JSONObject().put("final", "节点选择"))
+        val landing = JSONObject()
+            .put(
+                "outbounds",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("type", "vless")
+                            .put("tag", "us")
+                            .put("tls", JSONObject().put("enabled", true).put("ech", JSONObject().put("enabled", true).put("query_server_name", "cloudflare-ech.com"))),
+                    ),
+            )
+            .toString()
+        val compiled = ChainRuntimeCompiler.apply(
+            ChainRuntimeCompiler.ApplyRequest(
+                content = src.toString(),
+                currentProfileId = 3L,
+                entryTag = "节点选择",
+                landingProfileId = 9L,
+                landingTag = "us",
+                landingContent = landing,
+            ),
+        )
+        val outs = JSONObject(compiled).getJSONArray("outbounds")
+        val landingOut = (0 until outs.length()).map { outs.getJSONObject(it) }
+            .first { it.optString("tag").startsWith("chainbox-landing-9-") }
+        val ech = landingOut.getJSONObject("tls").getJSONObject("ech")
+        assertEquals(true, ech.getBoolean("enabled"))
+        assertEquals("cloudflare-ech.com", ech.getString("query_server_name"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun oversizedConfigIsRejected() {
+        val huge = "x".repeat(ChainRuntimeCompiler.MAX_CONFIG_CHARS + 8)
+        ChainRuntimeCompiler.parseConfig(huge, "测试")
+    }
 }

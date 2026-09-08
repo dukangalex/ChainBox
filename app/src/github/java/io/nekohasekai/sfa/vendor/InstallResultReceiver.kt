@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.util.Log
+import io.nekohasekai.sfa.bg.BootReceiver
 import io.nekohasekai.sfa.update.UpdateState
 
 class InstallResultReceiver : BroadcastReceiver() {
@@ -37,6 +38,7 @@ class InstallResultReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_SUCCESS -> {
                 Log.d(TAG, "Installation successful")
                 UpdateState.setInstallStatus(UpdateState.InstallStatus.Success)
+                BootReceiver.launchApp(context.applicationContext)
             }
             else -> {
                 Log.e(TAG, "Installation failed: $status - $message")

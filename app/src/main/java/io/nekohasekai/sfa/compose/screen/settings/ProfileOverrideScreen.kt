@@ -269,13 +269,17 @@ fun ProfileOverrideScreen(
                 )
                 OverrideSwitch(
                     title = "ECH（DNS HTTPS）",
-                    subtitle = "放行 EchConfig 所需的 HTTPS/SVCB DNS 查询",
+                    subtitle = "解析 EchConfig：放行 HTTPS/SVCB 并走独立 DoH",
                     checked = echDns,
                     onHelp = {
                         help = SwitchHelp(
                             "ECH（DNS HTTPS）",
-                            "官方 sing-box 会在 tls.ech.enabled 且未写死 config 时，用 HTTPS DNS 记录拉取 EchConfig。部分订阅会拦截 query_type=HTTPS/SVCB，导致 ECH 失效。\n\n" +
-                                "开启后：去掉这类拦截规则，节点里已有的 tls.ech 原样交给内核。不会给所有节点强开 ECH。",
+                            "官方 sing-box 在 tls.ech.enabled 且未写死 config 时，会查 HTTPS/SVCB DNS 记录拉取 EchConfig（例如 cloudflare-ech.com）。部分订阅会拦截这些查询，导致面板里开了 ECH、App 里却无效。\n\n" +
+                                "开启后：\n" +
+                                "1. 去掉拦截 HTTPS/SVCB 的 DNS 规则；\n" +
+                                "2. 注入独立 DoH（dns.google）专门解析 EchConfig；\n" +
+                                "3. 节点里已有的 tls.ech（含 query_server_name）原样交给内核。\n\n" +
+                                "不会给所有节点强开 ECH。机场面板里填的 EchConfig DNS / 解析域名写在订阅 JSON 里，ChainBox 不会删掉。",
                         )
                     },
                     onCheckedChange = {

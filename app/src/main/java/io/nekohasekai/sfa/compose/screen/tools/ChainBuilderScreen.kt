@@ -58,7 +58,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 
 private data class HopRef(
@@ -114,7 +113,7 @@ fun ChainBuilderScreen(
                     return@launch
                 }
                 val content = File(current.typed.path).readText()
-                val root = JSONObject(content)
+                val root = ChainRuntimeCompiler.parseConfig(content)
                 val routeFinal = root.optJSONObject("route")?.optString("final")?.trim().orEmpty()
                 val hops = ChainRuntimeCompiler.listSelectableHops(content, current.id, current.name).map {
                     HopRef(it.profileId, it.profileName, it.tag, it.type)
@@ -187,7 +186,7 @@ fun ChainBuilderScreen(
                 runCatching {
                     val file = File(path)
                     val raw = file.readText()
-                    val originalFinal = JSONObject(raw).optJSONObject("route")
+                    val originalFinal = ChainRuntimeCompiler.parseConfig(raw).optJSONObject("route")
                         ?.optString("final")
                         ?.takeIf { it.isNotBlank() && !it.startsWith(ChainRuntimeCompiler.GENERATED_PREFIX) }
                     val landingContent = if (landing.profileId == boundId) {
@@ -197,6 +196,9 @@ fun ChainBuilderScreen(
                             ?: error("落地配置不存在")
                         File(landingProfile.typed.path).readText()
                     }
+                    // apply() is validation-only here: it throws if entry/landing
+                    // is illegal. The profile JSON stays clean (clear() writes it
+                    // back). Runtime chaining is deferred to ConfigChainReapply.
                     ChainRuntimeCompiler.apply(
                         ChainRuntimeCompiler.ApplyRequest(
                             content = raw,
@@ -223,7 +225,9 @@ fun ChainBuilderScreen(
                 chainActive = true
                 savedHint = "仅当前配置：${main.tag} → ${landing.displayLine}"
                 notifyApplyChange(UiEvent.ApplyServiceChange.Mode.Reload)
-                snackbar.showSnackbar("已保存「$currentProfileName」的链式出口。其他配置不受影响。启动或重载后按入口→落地串联。")
+                if (!navController.popBackStack("dashboard", false)) {
+                    navController.popBackStack()
+                }
             } else {
                 snackbar.showSnackbar("保存失败：${result.exceptionOrNull()?.message}")
             }
@@ -238,7 +242,7 @@ fun ChainBuilderScreen(
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val file = File(path)
-                    val root = JSONObject(file.readText())
+                    val root = ChainRuntimeCompiler.parseConfig(file.readText())
                     val final = ChainRuntimeCompiler.resolveMainTag(root.optJSONArray("outbounds") ?: JSONArray(), "")
                     file.writeText(ChainRuntimeCompiler.clear(root.toString(), final))
                     ChainBindings.remove(boundId)
@@ -278,7 +282,7 @@ fun ChainBuilderScreen(
             Text("当前配置：$currentProfileName", fontWeight = FontWeight.Medium)
             savedHint?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             Text(
-                "链路只绑定当前这一份配置。切换到 Kitty / MYCF / 其他配置时，各自使用自己保存的落地，互不影响。订阅更新只换节点列表，不会清掉这份绑定。",
+                "链路只绑定当前这一份配置。切换到其他配置时，各自使用自己保存的落地，互不影响。订阅更新只换节点列表，不会清掉这份绑定。",
                 style = MaterialTheme.typography.bodyMedium,
             )
             if (otherBound > 0) {
@@ -392,13 +396,13 @@ fun ChainBuilderScreen(
             title = { Text("链式代理说明") },
             text = {
                 Text(
-                    "1. 入口：当前配置里流量先走的分组或节点（前置机场）。不要依赖「漏网之鱼」。\n" +
-                        "2. 落地：下一跳，出口 IP 应该是落地节点，不是前置机场。可来自当前或其他配置。\n" +
-                        "3. 保存后只绑定当前配置。Kitty、MYCF、edgetunne 可以各绑不同落地。\n" +
+                    "1. 入口：当前配置里流量先走的分组或节点（前置）。不要依赖「漏网之鱼」。前置只作为链式第一跳，不会单独成为出口。\n" +
+                        "2. 落地：下一跳，出口 IP 应该是落地节点，不是前置。可来自当前或其他配置。\n" +
+                        "3. 保存后只绑定当前配置。每个配置可以各绑不同落地。\n" +
                         "4. 绑定存在本地，不写进订阅 JSON。远程订阅更新后不必重配；入口改名会自动改用主分组。\n" +
                         "5. 使用 sing-box 原生 Chain outbound：入口 → 落地 → 目标。\n" +
                         "6. Fail Closed：链路失败会明确报错并停止启动，不会偷偷改走 DIRECT。\n" +
-                        "7. 哪些流量走 Chain 仍由路由规则决定；Chain 只提供串联能力。",
+                        "7. 保存后会回到仪表。哪些流量走 Chain 由路由规则决定，但指向前置的规则会被改写到 Chain，避免前置泄漏。",
                 )
             },
             confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },

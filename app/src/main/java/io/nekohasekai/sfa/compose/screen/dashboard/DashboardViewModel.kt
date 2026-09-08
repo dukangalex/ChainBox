@@ -280,42 +280,32 @@ class DashboardViewModel :
     }
 
     fun selectProfile(profileId: Long) {
-        if (currentState.isLoading) return
+        if (profileId == currentState.selectedProfileId) return
+        val name = currentState.profiles.find { it.id == profileId }?.name
+        updateState {
+            copy(
+                selectedProfileId = profileId,
+                selectedProfileName = name ?: selectedProfileName,
+                showProfilePickerSheet = false,
+            )
+        }
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                updateState { copy(isLoading = true) }
-                val profile = ProfileManager.get(profileId) ?: return@launch
-
                 Settings.selectedProfile = profileId
-
-                // Check if service is running
                 if (_serviceStatus.value == Status.Started) {
-                    val restart = Settings.rebuildServiceMode()
+                    val restart = runCatching { Settings.rebuildServiceMode() }.getOrDefault(false)
                     if (restart) {
-                        // Need full restart
                         BoxService.stop()
                         sendGlobalEvent(UiEvent.RequestReconnectService)
-                        for (i in 0 until 30) {
-                            if (_serviceStatus.value == Status.Stopped) {
-                                break
-                            }
-                            delay(100L)
-                        }
-                        sendGlobalEvent(UiEvent.RequestStartService)
                     } else {
-                        // Just reload
-                        Libbox.newStandaloneCommandClient().serviceReload()
+                        runCatching { Libbox.newStandaloneCommandClient().serviceReload() }
                     }
                 }
-
-                withContext(Dispatchers.Main) {
-                    loadProfiles()
-                }
+                loadProfiles()
             } catch (e: Exception) {
                 sendError(e)
-            } finally {
-                updateState { copy(isLoading = false) }
+                loadProfiles()
             }
         }
     }

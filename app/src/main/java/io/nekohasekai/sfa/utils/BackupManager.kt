@@ -83,10 +83,15 @@ object BackupManager {
         dest
     }
 
-    fun restoreBackupFile(context: Context, src: File): Result<Unit> = runCatching {
-        require(isZipFile(src)) { "不是有效的 ZIP 备份（可能下到了网页错误页）。请重新备份后再恢复。" }
+    fun restoreBackupFile(context: Context, src: File, compat: Boolean = false): Result<Unit> = runCatching {
+        if (!isZipFile(src)) {
+            if (!compat) error("不是有效的 ZIP 备份（可能下到了网页错误页）。请重新备份后再恢复。")
+        }
         val keepDav = Settings.webdavPassword
         val keepTok = Settings.githubToken
+        val keepUrl = Settings.webdavUrl
+        val keepUser = Settings.webdavUser
+        val keepRemote = Settings.webdavRemoteFile
         val staging = File(context.cacheDir, "restore-staging").also {
             it.deleteRecursively()
             it.mkdirs()
@@ -94,42 +99,53 @@ object BackupManager {
         var entries = 0
         var total = 0L
         var hasData = false
-        ZipInputStream(BufferedInputStream(FileInputStream(src))).use { zis ->
-            var entry = zis.nextEntry
-            while (entry != null) {
-                if (++entries > MAX_ENTRIES) error("备份包含过多文件")
-                val name = entry.name.trimStart('/')
-                if (!entry.isDirectory && name.isNotEmpty() && !name.contains("..") && !name.contains('\\')) {
-                    val outFile = when {
-                        name == MANIFEST -> File(staging, MANIFEST)
-                        name.startsWith("configs/") -> {
-                            val relative = name.removePrefix("configs/")
-                            if (relative.isBlank() || relative.contains('/')) error("非法备份路径")
-                            File(staging, "configs").also { it.mkdirs() }.let { File(it, relative) }
-                        }
-                        name.endsWith(".db") && !name.contains('/') -> File(staging, name)
-                        else -> null
+        try {
+            ZipInputStream(BufferedInputStream(FileInputStream(src))).use { zis ->
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    if (++entries > MAX_ENTRIES) {
+                        if (compat) break else error("备份包含过多文件")
                     }
-                    if (outFile != null) {
-                        if (name.endsWith(".db") || name.startsWith("configs/")) hasData = true
-                        outFile.parentFile?.mkdirs()
-                        var entryBytes = 0L
-                        FileOutputStream(outFile).use { fos ->
-                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                            while (true) {
-                                val read = zis.read(buffer)
-                                if (read < 0) break
-                                entryBytes += read
-                                total += read
-                                if (entryBytes > MAX_ENTRY_SIZE || total > MAX_TOTAL_SIZE) error("备份展开大小超过限制")
-                                fos.write(buffer, 0, read)
+                    val name = entry.name.trimStart('/')
+                    if (!entry.isDirectory && name.isNotEmpty() && !name.contains("..") && !name.contains('\\')) {
+                        val outFile = when {
+                            name == MANIFEST -> File(staging, MANIFEST)
+                            name.startsWith("configs/") -> {
+                                val relative = name.removePrefix("configs/")
+                                if (relative.isBlank() || relative.contains('/')) {
+                                    if (compat) null else error("非法备份路径")
+                                } else {
+                                    File(staging, "configs").also { it.mkdirs() }.let { File(it, relative) }
+                                }
+                            }
+                            name.endsWith(".db") && !name.contains('/') -> File(staging, name)
+                            else -> null
+                        }
+                        if (outFile != null) {
+                            if (name.endsWith(".db") || name.startsWith("configs/")) hasData = true
+                            outFile.parentFile?.mkdirs()
+                            var entryBytes = 0L
+                            FileOutputStream(outFile).use { fos ->
+                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                while (true) {
+                                    val read = zis.read(buffer)
+                                    if (read < 0) break
+                                    entryBytes += read
+                                    total += read
+                                    if (entryBytes > MAX_ENTRY_SIZE || total > MAX_TOTAL_SIZE) {
+                                        if (compat) break else error("备份展开大小超过限制")
+                                    }
+                                    fos.write(buffer, 0, read)
+                                }
                             }
                         }
                     }
+                    zis.closeEntry()
+                    entry = zis.nextEntry
                 }
-                zis.closeEntry()
-                entry = zis.nextEntry
             }
+        } catch (e: Exception) {
+            if (!compat) throw e
         }
         if (!hasData) error("备份里没有配置或数据库，无法恢复")
 
@@ -158,28 +174,34 @@ object BackupManager {
         if (stagedConfigs.isDirectory) {
             val live = File(context.filesDir, "configs").also { it.mkdirs() }
             stagedConfigs.listFiles()?.forEach { f ->
-                if (f.isFile) f.copyTo(File(live, f.name), overwrite = true)
+                if (f.isFile) runCatching { f.copyTo(File(live, f.name), overwrite = true) }
             }
         }
 
         val liveSettings = context.getDatabasePath(Path.SETTINGS_DATABASE_PATH)
         if (keepDav.isNotEmpty()) putSettingString(liveSettings, SettingsKey.WEBDAV_PASSWORD, keepDav)
         if (keepTok.isNotEmpty()) putSettingString(liveSettings, SettingsKey.GITHUB_TOKEN, keepTok)
+        if (keepUrl.isNotEmpty()) putSettingString(liveSettings, SettingsKey.WEBDAV_URL, keepUrl)
+        if (keepUser.isNotEmpty()) putSettingString(liveSettings, SettingsKey.WEBDAV_USER, keepUser)
+        if (keepRemote.isNotEmpty()) putSettingString(liveSettings, SettingsKey.WEBDAV_REMOTE_FILE, keepRemote)
         staging.deleteRecursively()
     }
 
     fun webdavUpload(baseUrl: String, username: String, password: String, remoteName: String, localFile: File): Result<Unit> = runCatching {
+        require(username.isNotBlank() && password.isNotBlank()) { "请填写 WebDAV 用户名和密码" }
         wrapSsl {
             val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply {
                 requestMethod = "PUT"
                 doOutput = true
-                setRequestProperty("Content-Type", "application/zip")
-                setRequestProperty("Content-Length", localFile.length().toString())
+                setRequestProperty("Content-Type", "application/octet-stream")
+                setRequestProperty("Overwrite", "T")
+                setFixedLengthStreamingMode(localFile.length())
             }
             try {
                 FileInputStream(localFile).use { input -> conn.outputStream.use { output -> input.copyTo(output) } }
                 val code = conn.responseCode
                 val err = conn.errorStream?.bufferedReader()?.readText()
+                if (code == 401 || code == 403) error(authFailedMessage(baseUrl, code, err))
                 if (code !in 200..299) error("WebDAV 上传失败 HTTP $code${err?.let { ": $it" } ?: ""}")
             } finally {
                 conn.disconnect()
@@ -188,12 +210,14 @@ object BackupManager {
     }
 
     fun webdavDownload(baseUrl: String, username: String, password: String, remoteName: String, localFile: File): Result<File> = runCatching {
+        require(username.isNotBlank() && password.isNotBlank()) { "请填写 WebDAV 用户名和密码" }
         wrapSsl {
             val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply { requestMethod = "GET" }
             try {
                 val code = conn.responseCode
+                val err = conn.errorStream?.bufferedReader()?.readText()
+                if (code == 401 || code == 403) error(authFailedMessage(baseUrl, code, err))
                 if (code !in 200..299) {
-                    val err = conn.errorStream?.bufferedReader()?.readText()
                     error("WebDAV 下载失败 HTTP $code${err?.let { ": $it" } ?: ""}")
                 }
                 localFile.parentFile?.mkdirs()
@@ -210,9 +234,13 @@ object BackupManager {
 
     fun webdavProbe(baseUrl: String, username: String, password: String): Result<Boolean> = runCatching {
         wrapSsl {
+            if (username.isBlank() || password.isBlank()) {
+                error("请填写 WebDAV 用户名和密码")
+            }
             val target = URL(requireHttps(baseUrl))
             var lastDetail = "no response"
-            for (method in listOf("OPTIONS", "PROPFIND", "GET")) {
+            var sawAuthFailure = false
+            for (method in listOf("PROPFIND", "OPTIONS", "GET")) {
                 val conn = openWebDav(target.toString(), username, password).apply {
                     requestMethod = method
                     instanceFollowRedirects = false
@@ -228,31 +256,70 @@ object BackupManager {
                     }
                     val code = conn.responseCode
                     val loc = conn.getHeaderField("Location").orEmpty()
-                    lastDetail = "HTTP $code"
-                    if (code in 300..399 && loc.isNotEmpty()) {
-                        val next = try { URL(target, loc) } catch (_: Exception) { null }
-                        if (next == null || next.protocol != "https" || next.host != target.host) {
-                            error("连通性失败：重定向到不安全主机")
+                    lastDetail = "$method HTTP $code"
+                    when (classifyProbe(code)) {
+                        ProbeClass.AUTH -> {
+                            sawAuthFailure = true
+                            lastDetail = authFailedMessage(baseUrl, code, conn.errorStream?.bufferedReader()?.readText())
                         }
-                        lastDetail = "redirect $code"
+                        ProbeClass.REDIRECT -> {
+                            if (loc.isNotEmpty()) {
+                                val next = try { URL(target, loc) } catch (_: Exception) { null }
+                                if (next == null || next.protocol != "https" || next.host != target.host) {
+                                    error("连通性失败：重定向到不安全主机")
+                                }
+                            }
+                            lastDetail = "redirect $code"
+                        }
+                        ProbeClass.MISS -> { }
+                        ProbeClass.OK -> {
+                            val dav = conn.getHeaderField("DAV").orEmpty()
+                            val allow = conn.getHeaderField("Allow").orEmpty()
+                            val davLike = dav.isNotEmpty() ||
+                                allow.contains("PROPFIND", true) ||
+                                allow.contains("PUT", true) ||
+                                code == 207 ||
+                                method == "PROPFIND" ||
+                                method == "GET"
+                            if (method == "OPTIONS" && code in 200..204 && dav.isEmpty() && allow.isEmpty()) {
+                                continue
+                            }
+                            if (davLike || code in 200..299) return@runCatching true
+                        }
+                        ProbeClass.OTHER -> { }
                     }
-                    if (code == 404 || code == 410) continue
-                    val dav = conn.getHeaderField("DAV").orEmpty()
-                    val allow = conn.getHeaderField("Allow").orEmpty()
-                    val davLike = dav.isNotEmpty() || allow.contains("PROPFIND", true) || code == 207 ||
-                        (method == "OPTIONS" && code in 200..204) ||
-                        (method == "PROPFIND" && code in 200..207) ||
-                        (method == "GET" && code in 200..299)
-                    if (code == 401 || code == 403) return@runCatching true
-                    if (davLike && code in 200..299) return@runCatching true
                 } catch (e: Exception) {
+                    if (e is IllegalStateException && (e.message?.contains("认证") == true || e.message?.contains("重定向") == true)) throw e
                     lastDetail = e.message ?: e.javaClass.simpleName
                 } finally {
                     try { conn.disconnect() } catch (_: Exception) {}
                 }
             }
+            if (sawAuthFailure) error(lastDetail)
             error("连通性失败：$lastDetail")
         }
+    }
+
+    internal enum class ProbeClass { OK, AUTH, MISS, REDIRECT, OTHER }
+
+    internal fun classifyProbe(code: Int): ProbeClass = when (code) {
+        401, 403 -> ProbeClass.AUTH
+        207 -> ProbeClass.OK
+        in 200..299 -> ProbeClass.OK
+        404, 410 -> ProbeClass.MISS
+        in 300..399 -> ProbeClass.REDIRECT
+        else -> ProbeClass.OTHER
+    }
+
+    internal fun authFailedMessage(baseUrl: String, code: Int, body: String?): String {
+        val host = try { URL(baseUrl).host } catch (_: Exception) { baseUrl }
+        val extra = if (host.contains("koofr", true)) {
+            " Koofr 请使用账号邮箱 + 在 Koofr 设置里生成的应用密码，不是登录密码。"
+        } else {
+            " 请核对用户名/密码；部分网盘需要单独的应用密码。"
+        }
+        val snippet = body?.trim()?.take(80).orEmpty()
+        return "认证失败 HTTP $code。$extra" + if (snippet.isNotEmpty()) " 服务器：$snippet" else ""
     }
 
     internal fun isZipFile(file: File): Boolean {

@@ -23,8 +23,8 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 
 - 多级出站：在当前配置中选择入口分组/节点，再选择落地（可来自当前或其他配置）；外部访问的源地址应为落地节点地址。**每份配置独立保存链路**。
 - 链路保持：出口选择保存于本地；远程订阅更新后仍按已保存的出口复用，不必重配。
-- 运行时覆盖：中国直连、ECH（DNS HTTPS）、严格路由、DNS、IPv6、QUIC、WebRTC 防护，不修改订阅原文。
-- 备份与恢复：支持本地文件及远程 WebDAV（VPN 开启时尽量走系统直连；恢复前关闭数据库并清 WAL）。
+- 运行时覆盖：中国直连、ECH（DNS HTTPS / EchConfig）、严格路由、DNS、IPv6、QUIC、WebRTC 防护，不修改订阅原文。
+- 备份与恢复：本地文件及 WebDAV（连通性指示灯常驻；支持覆盖/兼容恢复；VPN 开启时尽量走系统直连）。
 
 具体操作见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
 

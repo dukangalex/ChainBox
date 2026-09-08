@@ -4,12 +4,19 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,12 +37,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -74,10 +86,51 @@ fun BackupRestoreScreen(navController: NavController) {
     var webdavUser by remember { mutableStateOf(Settings.webdavUser) }
     var webdavPass by remember { mutableStateOf(Settings.webdavPassword) }
     var remoteFile by remember { mutableStateOf(Settings.webdavRemoteFile.ifEmpty { "backup.zip" }) }
-    var connectivity by remember { mutableStateOf<Boolean?>(null) }
+    var probeState by remember { mutableIntStateOf(Settings.webdavProbeOk) }
+    var probeDetail by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var showWebdavEditor by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
+    var restoreCompat by remember { mutableStateOf(Settings.restoreCompat) }
+
+    fun persistProbe(ok: Boolean, detail: String?) {
+        val value = if (ok) 1 else 0
+        probeState = value
+        probeDetail = detail
+        Settings.webdavProbeOk = value
+    }
+
+    fun runProbe(silent: Boolean = false) {
+        if (webdavUrl.isBlank()) {
+            probeState = -1
+            probeDetail = null
+            Settings.webdavProbeOk = -1
+            return
+        }
+        scope.launch {
+            if (!silent) busy = true
+            val result = withContext(Dispatchers.IO) {
+                BackupManager.webdavProbe(webdavUrl, webdavUser, webdavPass)
+            }
+            val ok = result.getOrDefault(false)
+            persistProbe(ok, result.exceptionOrNull()?.message)
+            if (!silent) {
+                busy = false
+                snackbar.showSnackbar(
+                    when {
+                        ok -> "WebDAV 可访问"
+                        result.exceptionOrNull() != null ->
+                            "连通失败: ${result.exceptionOrNull()?.message ?: "未知错误"}"
+                        else -> "WebDAV 不可用"
+                    },
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (webdavUrl.isNotBlank()) runProbe(silent = true)
+    }
 
     val createDoc = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
@@ -111,7 +164,7 @@ fun BackupRestoreScreen(navController: NavController) {
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         FileOutputStream(tmp).use { output -> input.copyTo(output) }
                     } ?: error("无法读取文件")
-                    BackupManager.restoreBackupFile(context, tmp).getOrThrow()
+                    BackupManager.restoreBackupFile(context, tmp, Settings.restoreCompat).getOrThrow()
                 }
             }
             busy = false
@@ -132,10 +185,11 @@ fun BackupRestoreScreen(navController: NavController) {
             text = {
                 Text(
                     "备份内容包括：设置、配置列表、各订阅/配置 JSON。\n\n" +
-                        "恢复策略为覆盖：会先停服务、关掉数据库，再写回 settings/profiles 与 configs，并清掉 SQLite WAL，避免「备份成功但恢复后还是旧数据」。\n\n" +
+                        "恢复策略：\n" +
+                        "· 覆盖：停服务、关数据库后完整写回。\n" +
+                        "· 兼容：尽量恢复能读的部分，跳过损坏条目，并保留当前 WebDAV 账号。\n\n" +
                         "恢复后会自动重新加载应用。\n\n" +
-                        "WebDAV 需填写可访问的 HTTPS 目录 URL（例如 https://miya.teracloud.jp/dav/）以及账号密码。\n" +
-                        "连通性测试会尽量绕过 VPN 走系统网络。下载后会校验是否为 ZIP；若下到 HTML 错误页会明确报错。",
+                        "WebDAV 需填写可访问的 HTTPS 目录 URL 以及账号密码。连通性指示灯会在进入页面和改账号后自动检测：绿灯可写，红灯认证/网络失败。Koofr 请用应用密码。",
                 )
             },
             confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },
@@ -187,6 +241,7 @@ fun BackupRestoreScreen(navController: NavController) {
                         Settings.webdavRemoteFile = remoteFile
                     }
                     showWebdavEditor = false
+                    runProbe(silent = true)
                 }) { Text("保存") }
             },
             dismissButton = {
@@ -230,12 +285,23 @@ fun BackupRestoreScreen(navController: NavController) {
                         Text(if (webdavUrl.isBlank()) "未配置 WebDAV" else webdavUrl)
                     },
                     supportingContent = {
-                        val status = when (connectivity) {
-                            true -> "连通性：正常"
-                            false -> "连通性：失败"
-                            null -> "连通性：未测试"
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val lamp = when (probeState) {
+                                1 -> Color(0xFF2E7D32)
+                                0 -> Color(0xFFC62828)
+                                else -> Color(0xFF9E9E9E)
+                            }
+                            Box(
+                                modifier = Modifier.size(10.dp).clip(CircleShape).background(lamp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            val status = when (probeState) {
+                                1 -> "连通性：正常"
+                                0 -> "连通性：失败${probeDetail?.let { " · $it" } ?: ""}"
+                                else -> "连通性：未测试"
+                            }
+                            Text(status)
                         }
-                        Text(status)
                     },
                     trailingContent = {
                         TextButton(onClick = { showWebdavEditor = true }) { Text("编辑") }
@@ -264,6 +330,7 @@ fun BackupRestoreScreen(navController: NavController) {
                                     ).getOrThrow()
                                 }
                             }
+                            persistProbe(result.isSuccess, result.exceptionOrNull()?.message)
                             busy = false
                             snackbar.showSnackbar(
                                 if (result.isSuccess) "WebDAV 备份完成"
@@ -288,9 +355,10 @@ fun BackupRestoreScreen(navController: NavController) {
                                     BackupManager.webdavDownload(
                                         webdavUrl, webdavUser, webdavPass, remoteFile, tmp,
                                     ).getOrThrow()
-                                    BackupManager.restoreBackupFile(context, tmp).getOrThrow()
+                                    BackupManager.restoreBackupFile(context, tmp, Settings.restoreCompat).getOrThrow()
                                 }
                             }
+                            persistProbe(result.isSuccess, result.exceptionOrNull()?.message)
                             busy = false
                             if (result.isSuccess) {
                                 snackbar.showSnackbar("恢复完成，正在重新加载…")
@@ -304,26 +372,8 @@ fun BackupRestoreScreen(navController: NavController) {
                 )
                 ListItem(
                     headlineContent = { Text("测试连通性") },
-                    supportingContent = { Text("仅作参考，以备份/恢复是否成功为准") },
-                    modifier = Modifier.clickable(enabled = !busy) {
-                        scope.launch {
-                            busy = true
-                            val result = withContext(Dispatchers.IO) {
-                                BackupManager.webdavProbe(webdavUrl, webdavUser, webdavPass)
-                            }
-                            val ok = result.getOrDefault(false)
-                            connectivity = ok
-                            busy = false
-                            snackbar.showSnackbar(
-                                when {
-                                    ok -> "WebDAV 可访问"
-                                    result.exceptionOrNull() != null ->
-                                        "连通失败: ${result.exceptionOrNull()?.message ?: "未知错误"}"
-                                    else -> "WebDAV 不可用"
-                                },
-                            )
-                        }
-                    },
+                    supportingContent = { Text("自动检测，绿灯正常、红灯失败") },
+                    modifier = Modifier.clickable(enabled = !busy) { runProbe(silent = false) },
                 )
             }
 
@@ -365,8 +415,25 @@ fun BackupRestoreScreen(navController: NavController) {
             ) {
                 ListItem(
                     headlineContent = { Text("恢复策略") },
-                    trailingContent = { Text("覆盖", color = MaterialTheme.colorScheme.primary) },
-                    supportingContent = { Text("当前仅支持覆盖写入") },
+                    trailingContent = {
+                        Text(
+                            if (restoreCompat) "兼容" else "覆盖",
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            if (restoreCompat) {
+                                "兼容模式：尽量恢复能读的部分，跳过损坏条目，保留当前 WebDAV 账号"
+                            } else {
+                                "覆盖写入全部数据。点此切换为兼容模式"
+                            },
+                        )
+                    },
+                    modifier = Modifier.clickable {
+                        restoreCompat = !restoreCompat
+                        Settings.restoreCompat = restoreCompat
+                    },
                 )
             }
         }

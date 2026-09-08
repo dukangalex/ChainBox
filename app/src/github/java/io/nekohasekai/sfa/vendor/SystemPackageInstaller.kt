@@ -40,21 +40,21 @@ object SystemPackageInstaller {
             context.startActivity(settings)
             throw IllegalStateException("请先允许 ChainBox 安装未知应用，返回后再点一次更新")
         }
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.cache",
-            apkFile,
-        )
-        val view = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-            putExtra(Intent.EXTRA_RETURN_RESULT, true)
-        }
         try {
-            context.startActivity(view)
-        } catch (_: Exception) {
             commitSession(context, apkFile)
+        } catch (_: Exception) {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.cache",
+                apkFile,
+            )
+            val view = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                putExtra(Intent.EXTRA_RETURN_RESULT, true)
+            }
+            context.startActivity(view)
         }
     }
 
@@ -64,6 +64,9 @@ object SystemPackageInstaller {
         params.setAppPackageName(context.packageName)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             params.setRequireUserAction(AndroidPackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+        }
+        if (Build.VERSION.SDK_INT >= 34) {
+            runCatching { params.setDontKillApp(true) }
         }
 
         val sessionId = packageInstaller.createSession(params)

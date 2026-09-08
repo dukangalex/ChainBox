@@ -1,5 +1,6 @@
 package io.nekohasekai.sfa.utils
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,5 +34,17 @@ class BackupManagerTest {
         tmp.writeText("<html>error</html>")
         assertFalse(BackupManager.isZipFile(tmp))
         tmp.delete()
+    }
+
+    @Test
+    fun probeTreats401AsAuthFailure() {
+        assertEquals(BackupManager.ProbeClass.AUTH, BackupManager.classifyProbe(401))
+        assertEquals(BackupManager.ProbeClass.AUTH, BackupManager.classifyProbe(403))
+        assertEquals(BackupManager.ProbeClass.OK, BackupManager.classifyProbe(207))
+        assertEquals(BackupManager.ProbeClass.OK, BackupManager.classifyProbe(200))
+        assertEquals(BackupManager.ProbeClass.MISS, BackupManager.classifyProbe(404))
+        val msg = BackupManager.authFailedMessage("https://app.koofr.net/dav/Koofr", 401, "Unauthorized")
+        assertTrue(msg.contains("认证失败"))
+        assertTrue(msg.contains("Koofr"))
     }
 }

@@ -65,6 +65,13 @@ def main() -> int:
         errors.append("Chain builder UI must say the binding is current-profile only")
     if "订阅更新" not in ui:
         errors.append("Chain builder should tell users bindings survive subscription refresh")
+    for leak in ("Kitty", "MYCF", "edgetunne"):
+        if leak in ui:
+            errors.append(f"Chain builder UI must not hardcode airport name {leak}")
+    if "validation-only" not in ui and "仅用于提前校验" not in ui and "validation-only here" not in ui:
+        errors.append("save() must comment that apply() is validation-only")
+    if 'popBackStack("dashboard"' not in ui:
+        errors.append("saving a chain should return to the dashboard")
 
     locales = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/AppSettingsScreen.kt")
     if "locales_config" not in locales:
@@ -86,6 +93,8 @@ def main() -> int:
         errors.append("Settings.echDns missing")
     if "fun closeDatabase" not in settings:
         errors.append("Settings.closeDatabase missing; restore would hit open WAL")
+    if "restoreCompat" not in settings:
+        errors.append("Settings.restoreCompat missing")
 
     china = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigChinaDirect.kt")
     for needle in ("ip_is_private", "CHINA_DNS_IPS", "CHINA_DNS_DOMAINS", "LAN_DOMAIN_SUFFIXES", "cnDomainSuffixArray"):
@@ -93,12 +102,16 @@ def main() -> int:
             errors.append(f"China direct overlay missing {needle}")
     if "unblockHttpsQueries" not in china:
         errors.append("ECH DNS unblock helper missing")
+    if "applyEchDns" not in china or "ECH_DNS_TAG" not in china:
+        errors.append("ECH overlay must inject a dedicated HTTPS DNS server")
 
     override = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigQuicOverride.kt")
     if "Settings.chinaDirect" not in override:
         errors.append("ConfigQuicOverride must apply china direct")
     if "Settings.echDns" not in override:
         errors.append("ConfigQuicOverride must honor ECH DNS overlay")
+    if "applyEchDns" not in override:
+        errors.append("runtime overlay must call applyEchDns, not only unblock rejects")
     if "entryMissing" not in override:
         errors.append("subscription update should fall back when entry tag is gone")
 
@@ -111,6 +124,10 @@ def main() -> int:
     compiler = read("app/src/main/java/io/nekohasekai/sfa/chain/ChainRuntimeCompiler.kt")
     if "保存的入口" in compiler and "已不存在" in compiler:
         errors.append("compiler must not fail closed when a saved entry tag disappeared after subscription update")
+    if "MAX_CONFIG_CHARS" not in compiler:
+        errors.append("compiler must cap JSON size before JSONObject(content)")
+    if "pinTrafficToChain" not in compiler:
+        errors.append("compiler must rewrite proxy routes so the entry cannot become the public exit")
 
     dav = read("app/src/main/java/io/nekohasekai/sfa/utils/BackupManager.kt")
     if "pickNonVpnNetwork" not in dav:
@@ -125,6 +142,24 @@ def main() -> int:
         errors.append("restore must reject non-zip downloads")
     if "closeDatabase" not in dav:
         errors.append("restore must close Room before overwriting db files")
+    if "classifyProbe" not in dav:
+        errors.append("WebDAV probe must classify 401 as auth failure, not success")
+    if "if (code == 401 || code == 403) return@runCatching true" in dav:
+        errors.append("WebDAV probe must not treat HTTP 401 as success")
+    if "authFailedMessage" not in dav:
+        errors.append("WebDAV 401 must produce a dedicated auth error")
+    if "compat: Boolean" not in dav:
+        errors.append("restore must support compatibility mode")
+
+    dash = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardViewModel.kt")
+    if "if (currentState.isLoading) return" in dash:
+        errors.append("profile switch must not block on isLoading")
+    if "selectedProfileId = profileId" not in dash:
+        errors.append("profile switch must update UI immediately")
+
+    boot = read("app/src/main/java/io/nekohasekai/sfa/bg/BootReceiver.kt")
+    if "ACTION_MY_PACKAGE_REPLACED" not in boot or "launchApp" not in boot:
+        errors.append("update install must relaunch the app")
 
     icon_bg = read("app/src/main/res/values/ic_launcher_background.xml")
     if "#000000" in icon_bg or "#000" in icon_bg:

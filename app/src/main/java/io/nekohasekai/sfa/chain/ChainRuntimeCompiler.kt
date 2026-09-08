@@ -19,6 +19,11 @@ import org.json.JSONObject
  * DIRECT as a UI choice; those members are stripped from the hop clone so the
  * generated chain never includes an unauthorized DIRECT/block/dns hop.
  * Connection failure is fail-closed (no silent DIRECT fallback).
+ *
+ * After the chain outbound is created, every route/DNS detour that would have
+ * used the front airport as an exit is rewritten to the chain tag. The entry
+ * outbound is only referenced as hop 0 of the chain — it must never become
+ * the public exit.
  */
 object ChainRuntimeCompiler {
     const val NATIVE_CHAIN_TYPE = "chain"
@@ -27,6 +32,7 @@ object ChainRuntimeCompiler {
     const val ENTRY_PREFIX = "chainbox-entry-"
     const val LEGACY_PREFIX = "ext-"
     const val LEGACY_CHAIN_TAG = "my-chain"
+    const val MAX_CONFIG_CHARS = 8 * 1024 * 1024
 
     private val forbiddenTypes = setOf("direct", "block", "dns", NATIVE_CHAIN_TYPE)
     private val forbiddenTags = setOf("direct", "block", "dns")
@@ -50,7 +56,7 @@ object ChainRuntimeCompiler {
 
     fun apply(req: ApplyRequest): String {
         require(req.landingTag.isNotEmpty()) { "未选择链式落地出口" }
-        val root = JSONObject(req.content)
+        val root = parseConfig(req.content, "当前配置")
         val outs = cleanGeneratedOutbounds(root.optJSONArray("outbounds") ?: JSONArray())
         root.put("outbounds", outs)
         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
@@ -67,7 +73,7 @@ object ChainRuntimeCompiler {
             find(outs, req.landingTag) ?: error("落地 outbound 不存在：${req.landingTag}")
             prepareGroupHop(outs, req.landingTag, extraExclude = setOf(main), tagPrefix = "$LANDING_PREFIX${req.currentProfileId}-")
         } else {
-            val landingRoot = JSONObject(req.landingContent)
+            val landingRoot = parseConfig(req.landingContent!!, "落地配置")
             val landingOuts = landingRoot.optJSONArray("outbounds") ?: error("落地配置没有 outbounds")
             mergeLandingGraph(outs, landingOuts, req.landingProfileId, req.landingTag)
         }
@@ -88,11 +94,12 @@ object ChainRuntimeCompiler {
         outs.put(chain)
         route.put("final", chainTag)
         root.put("outbounds", outs)
+        pinTrafficToChain(root, chainTag, landingMergedTag)
         return root.toString()
     }
 
     fun clear(content: String, restoreFinal: String?): String {
-        val root = JSONObject(content)
+        val root = parseConfig(content, "当前配置")
         val cleaned = cleanGeneratedOutbounds(root.optJSONArray("outbounds") ?: JSONArray())
         root.put("outbounds", cleaned)
         val route = root.optJSONObject("route")
@@ -138,7 +145,7 @@ object ChainRuntimeCompiler {
     }
 
     fun listSelectableHops(content: String, profileId: Long, profileName: String): List<Hop> {
-        val outs = JSONObject(content).optJSONArray("outbounds") ?: return emptyList()
+        val outs = parseConfig(content, "配置").optJSONArray("outbounds") ?: return emptyList()
         return buildList {
             for (i in 0 until outs.length()) {
                 val o = outs.optJSONObject(i) ?: continue
@@ -146,6 +153,62 @@ object ChainRuntimeCompiler {
                 val type = o.optString("type").trim()
                 if (tag.isEmpty() || isGeneratedTag(tag) || type in forbiddenTypes) continue
                 add(Hop(profileId, profileName, tag, type))
+            }
+        }
+    }
+
+    fun parseConfig(content: String, label: String = "配置"): JSONObject {
+        require(content.length <= MAX_CONFIG_CHARS) {
+            "${label}过大（>${MAX_CONFIG_CHARS} 字符），已拒绝解析"
+        }
+        return JSONObject(content)
+    }
+
+    /**
+     * Front airport outbounds may only appear as hop 0 of the generated chain.
+     * Rewrite route.final, route.rules[].outbound and dns.servers[].detour so
+     * unmatched / Global / explicit-proxy traffic cannot exit via the entry.
+     */
+    internal fun pinTrafficToChain(root: JSONObject, chainTag: String, landingTag: String) {
+        val outs = root.optJSONArray("outbounds") ?: return
+        val protected = mutableSetOf(chainTag, landingTag)
+        for (i in 0 until outs.length()) {
+            val o = outs.optJSONObject(i) ?: continue
+            val tag = o.optString("tag").trim()
+            val type = o.optString("type").trim()
+            if (tag.isEmpty()) continue
+            if (type in forbiddenTypes || tag.lowercase() in forbiddenTags) protected.add(tag)
+            if (tag.startsWith(LANDING_PREFIX)) protected.add(tag)
+        }
+        val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
+        val currentFinal = route.optString("final").trim()
+        if (currentFinal.isEmpty() || currentFinal !in protected) {
+            route.put("final", chainTag)
+        }
+        rewriteRuleOutbounds(route.optJSONArray("rules"), protected, chainTag)
+        rewriteDnsDetours(root.optJSONObject("dns"), protected, chainTag)
+    }
+
+    private fun rewriteRuleOutbounds(rules: JSONArray?, protected: Set<String>, chainTag: String) {
+        if (rules == null) return
+        for (i in 0 until rules.length()) {
+            val rule = rules.optJSONObject(i) ?: continue
+            val outbound = rule.optString("outbound").trim()
+            if (outbound.isNotEmpty() && outbound !in protected) {
+                rule.put("outbound", chainTag)
+            }
+            rewriteRuleOutbounds(rule.optJSONArray("rules"), protected, chainTag)
+        }
+    }
+
+    private fun rewriteDnsDetours(dns: JSONObject?, protected: Set<String>, chainTag: String) {
+        if (dns == null) return
+        val servers = dns.optJSONArray("servers") ?: return
+        for (i in 0 until servers.length()) {
+            val server = servers.optJSONObject(i) ?: continue
+            val detour = server.optString("detour").trim()
+            if (detour.isNotEmpty() && detour !in protected) {
+                server.put("detour", chainTag)
             }
         }
     }

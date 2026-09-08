@@ -13,11 +13,12 @@ import kotlinx.coroutines.withContext
 class BootReceiver : BroadcastReceiver() {
     @OptIn(DelicateCoroutinesApi::class)
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
-            }
-
-            else -> return
+        val action = intent.action ?: return
+        if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            launchApp(context)
+        }
+        if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) {
+            return
         }
         GlobalScope.launch(Dispatchers.IO) {
             if (Settings.startedByUser) {
@@ -30,6 +31,18 @@ class BootReceiver : BroadcastReceiver() {
                     BoxService.start()
                 }
             }
+        }
+    }
+
+    companion object {
+        fun launchApp(context: Context) {
+            val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return
+            launch.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED,
+            )
+            runCatching { context.startActivity(launch) }
         }
     }
 }

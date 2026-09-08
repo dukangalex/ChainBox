@@ -72,4 +72,53 @@ class ConfigChinaDirectTest {
         assertEquals(0, ConfigChinaDirect.unblockHttpsQueries(dns))
         assertEquals(1, dns.getJSONArray("rules").length())
     }
+
+    @Test
+    fun unblocksHttpsRejectEvenWithClashMode() {
+        val dns = JSONObject().put(
+            "rules",
+            JSONArray().put(
+                JSONObject()
+                    .put("query_type", JSONArray().put("HTTPS").put("SVCB"))
+                    .put("action", "reject")
+                    .put("clash_mode", "Rule"),
+            ),
+        )
+        assertEquals(1, ConfigChinaDirect.unblockHttpsQueries(dns))
+        assertEquals(0, dns.getJSONArray("rules").length())
+    }
+
+    @Test
+    fun applyEchDnsInjectsDoHAndKeepsTlsEch() {
+        val root = JSONObject()
+            .put(
+                "dns",
+                JSONObject().put(
+                    "rules",
+                    JSONArray().put(
+                        JSONObject().put("query_type", JSONArray().put("HTTPS")).put("action", "reject"),
+                    ),
+                ),
+            )
+            .put(
+                "outbounds",
+                JSONArray().put(
+                    JSONObject()
+                        .put("type", "vless")
+                        .put("tag", "n")
+                        .put("tls", JSONObject().put("ech", JSONObject().put("enabled", true))),
+                ),
+            )
+        assertTrue(ConfigChinaDirect.applyEchDns(root))
+        val dns = root.getJSONObject("dns")
+        val first = dns.getJSONArray("rules").getJSONObject(0)
+        assertEquals(ConfigChinaDirect.ECH_DNS_TAG, first.getString("server"))
+        val servers = dns.getJSONArray("servers")
+        val tags = (0 until servers.length()).map { servers.getJSONObject(it).optString("tag") }
+        assertTrue(tags.contains(ConfigChinaDirect.ECH_DNS_TAG))
+        assertEquals(
+            true,
+            root.getJSONArray("outbounds").getJSONObject(0).getJSONObject("tls").getJSONObject("ech").getBoolean("enabled"),
+        )
+    }
 }

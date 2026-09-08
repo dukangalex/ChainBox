@@ -44,12 +44,11 @@ object ConfigQuicOverride {
             try {
                 val root = JSONObject(out)
                 var changed = extras
-                if (Settings.echDns) {
-                    val dns = root.optJSONObject("dns")
-                    if (dns != null && ConfigChinaDirect.unblockHttpsQueries(dns) > 0) changed = true
-                }
                 if (Settings.webrtcProtect) applyWebrtc(root)
                 if (Settings.chinaDirect) ConfigChinaDirect.apply(root)
+                if (Settings.echDns) {
+                    if (ConfigChinaDirect.applyEchDns(root)) changed = true
+                }
                 if (Settings.disableQuic) applyQuic(root)
                 if (Settings.strictRoute) applyStrictRoute(root)
                 if (Settings.dnsProtect) applyDnsProtect(root)

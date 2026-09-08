@@ -35,6 +35,8 @@ object SettingsKey {
     const val WEBDAV_USER = "webdav_user"
     const val WEBDAV_PASSWORD = "webdav_password"
     const val WEBDAV_REMOTE_FILE = "webdav_remote_file"
+    const val WEBDAV_PROBE_OK = "webdav_probe_ok"
+    const val RESTORE_COMPAT = "restore_compat"
     const val PER_APP_PROXY_ENABLED = "per_app_proxy_enabled"
     const val PER_APP_PROXY_MODE = "per_app_proxy_mode"
     const val PER_APP_PROXY_LIST = "per_app_proxy_list"
