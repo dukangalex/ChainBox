@@ -1,12 +1,17 @@
 package io.nekohasekai.sfa.utils
 
+import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.SSLCertificateSocketFactory
 import android.util.Base64
 import io.nekohasekai.sfa.Application
+import io.nekohasekai.sfa.bg.BoxService
 import io.nekohasekai.sfa.constant.Path
+import io.nekohasekai.sfa.constant.SettingsKey
+import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import org.json.JSONObject
 import java.io.BufferedInputStream
@@ -35,7 +40,13 @@ object BackupManager {
 
     private val systemSslSocketFactory by lazy {
         val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-        tmf.init(null as KeyStore?)
+        try {
+            val store = KeyStore.getInstance("AndroidCAStore")
+            store.load(null)
+            tmf.init(store)
+        } catch (_: Exception) {
+            tmf.init(null as KeyStore?)
+        }
         SSLContext.getInstance("TLS").also { it.init(null, tmf.trustManagers, SecureRandom()) }.socketFactory
     }
 
@@ -73,10 +84,16 @@ object BackupManager {
     }
 
     fun restoreBackupFile(context: Context, src: File): Result<Unit> = runCatching {
+        require(isZipFile(src)) { "不是有效的 ZIP 备份（可能下到了网页错误页）。请重新备份后再恢复。" }
         val keepDav = Settings.webdavPassword
         val keepTok = Settings.githubToken
+        val staging = File(context.cacheDir, "restore-staging").also {
+            it.deleteRecursively()
+            it.mkdirs()
+        }
         var entries = 0
         var total = 0L
+        var hasData = false
         ZipInputStream(BufferedInputStream(FileInputStream(src))).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
@@ -84,18 +101,17 @@ object BackupManager {
                 val name = entry.name.trimStart('/')
                 if (!entry.isDirectory && name.isNotEmpty() && !name.contains("..") && !name.contains('\\')) {
                     val outFile = when {
-                        name == MANIFEST -> null
+                        name == MANIFEST -> File(staging, MANIFEST)
                         name.startsWith("configs/") -> {
                             val relative = name.removePrefix("configs/")
                             if (relative.isBlank() || relative.contains('/')) error("非法备份路径")
-                            File(context.filesDir, "configs").also { it.mkdirs() }.let { File(it, relative) }
+                            File(staging, "configs").also { it.mkdirs() }.let { File(it, relative) }
                         }
-                        name.endsWith(".db") && !name.contains('/') -> {
-                            context.getDatabasePath(name).also { it.parentFile?.mkdirs() }
-                        }
+                        name.endsWith(".db") && !name.contains('/') -> File(staging, name)
                         else -> null
                     }
                     if (outFile != null) {
+                        if (name.endsWith(".db") || name.startsWith("configs/")) hasData = true
                         outFile.parentFile?.mkdirs()
                         var entryBytes = 0L
                         FileOutputStream(outFile).use { fos ->
@@ -115,8 +131,41 @@ object BackupManager {
                 entry = zis.nextEntry
             }
         }
-        if (Settings.webdavPassword.isEmpty() && keepDav.isNotEmpty()) Settings.webdavPassword = keepDav
-        if (Settings.githubToken.isEmpty() && keepTok.isNotEmpty()) Settings.githubToken = keepTok
+        if (!hasData) error("备份里没有配置或数据库，无法恢复")
+
+        runCatching { BoxService.stop() }
+        Thread.sleep(350)
+        Settings.closeDatabase()
+        ProfileManager.closeDatabase()
+
+        val settingsDb = File(staging, Path.SETTINGS_DATABASE_PATH)
+        val profilesDb = File(staging, Path.PROFILES_DATABASE_PATH)
+        if (settingsDb.isFile) {
+            val dest = context.getDatabasePath(Path.SETTINGS_DATABASE_PATH)
+            dest.parentFile?.mkdirs()
+            deleteSidecars(dest)
+            settingsDb.copyTo(dest, overwrite = true)
+            deleteSidecars(dest)
+        }
+        if (profilesDb.isFile) {
+            val dest = context.getDatabasePath(Path.PROFILES_DATABASE_PATH)
+            dest.parentFile?.mkdirs()
+            deleteSidecars(dest)
+            profilesDb.copyTo(dest, overwrite = true)
+            deleteSidecars(dest)
+        }
+        val stagedConfigs = File(staging, "configs")
+        if (stagedConfigs.isDirectory) {
+            val live = File(context.filesDir, "configs").also { it.mkdirs() }
+            stagedConfigs.listFiles()?.forEach { f ->
+                if (f.isFile) f.copyTo(File(live, f.name), overwrite = true)
+            }
+        }
+
+        val liveSettings = context.getDatabasePath(Path.SETTINGS_DATABASE_PATH)
+        if (keepDav.isNotEmpty()) putSettingString(liveSettings, SettingsKey.WEBDAV_PASSWORD, keepDav)
+        if (keepTok.isNotEmpty()) putSettingString(liveSettings, SettingsKey.GITHUB_TOKEN, keepTok)
+        staging.deleteRecursively()
     }
 
     fun webdavUpload(baseUrl: String, username: String, password: String, remoteName: String, localFile: File): Result<Unit> = runCatching {
@@ -149,6 +198,9 @@ object BackupManager {
                 }
                 localFile.parentFile?.mkdirs()
                 conn.inputStream.use { input -> FileOutputStream(localFile).use { output -> input.copyTo(output) } }
+                require(isZipFile(localFile)) {
+                    "下载内容不是 ZIP 备份（服务器可能返回了错误页）。请确认远程文件名「$remoteName」正确。"
+                }
                 localFile
             } finally {
                 conn.disconnect()
@@ -167,9 +219,13 @@ object BackupManager {
                     if (method == "PROPFIND") {
                         setRequestProperty("Depth", "0")
                         setRequestProperty("Content-Type", "application/xml; charset=utf-8")
+                        doOutput = true
                     }
                 }
                 try {
+                    if (method == "PROPFIND") {
+                        conn.outputStream.use { it.write(ByteArray(0)) }
+                    }
                     val code = conn.responseCode
                     val loc = conn.getHeaderField("Location").orEmpty()
                     lastDetail = "HTTP $code"
@@ -196,6 +252,15 @@ object BackupManager {
                 }
             }
             error("连通性失败：$lastDetail")
+        }
+    }
+
+    internal fun isZipFile(file: File): Boolean {
+        if (!file.isFile || file.length() < 4L) return false
+        return FileInputStream(file).use { ins ->
+            val magic = ByteArray(4)
+            if (ins.read(magic) != 4) return@use false
+            magic[0] == 0x50.toByte() && magic[1] == 0x4B.toByte()
         }
     }
 
@@ -240,6 +305,7 @@ object BackupManager {
         conn.readTimeout = 30_000
         conn.instanceFollowRedirects = false
         conn.setRequestProperty("User-Agent", "ChainBox-WebDAV")
+        conn.setRequestProperty("Connection", "close")
         if (username.isNotEmpty()) {
             val token = Base64.encodeToString("$username:$password".toByteArray(), Base64.NO_WRAP)
             conn.setRequestProperty("Authorization", "Basic $token")
@@ -256,10 +322,23 @@ object BackupManager {
             url.openConnection(Proxy.NO_PROXY) as HttpURLConnection
         }
         if (conn is HttpsURLConnection) {
-            conn.sslSocketFactory = systemSslSocketFactory
+            conn.sslSocketFactory = platformSslSocketFactory()
             conn.hostnameVerifier = HttpsURLConnection.getDefaultHostnameVerifier()
         }
         return conn
+    }
+
+    @Suppress("DEPRECATION")
+    private fun platformSslSocketFactory(): javax.net.ssl.SSLSocketFactory {
+        return try {
+            SSLCertificateSocketFactory.getDefault(15_000, null)
+        } catch (_: Exception) {
+            try {
+                HttpsURLConnection.getDefaultSSLSocketFactory()
+            } catch (_: Exception) {
+                systemSslSocketFactory
+            }
+        }
     }
 
     private fun pickNonVpnNetwork(): Network? {
@@ -296,6 +375,25 @@ object BackupManager {
         runCatching {
             SQLiteDatabase.openDatabase(main.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
                 db.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { it.moveToFirst() }
+            }
+        }
+    }
+
+    private fun deleteSidecars(dbFile: File) {
+        listOf("-wal", "-shm", "-journal").forEach { suffix ->
+            File(dbFile.path + suffix).delete()
+        }
+    }
+
+    private fun putSettingString(dbFile: File, key: String, value: String) {
+        if (value.isEmpty() || !dbFile.isFile) return
+        runCatching {
+            SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+                val cv = ContentValues()
+                cv.put("key", key)
+                cv.put("valueType", 4)
+                cv.put("value", value.toByteArray())
+                db.insertWithOnConflict("KeyValueEntity", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
             }
         }
     }

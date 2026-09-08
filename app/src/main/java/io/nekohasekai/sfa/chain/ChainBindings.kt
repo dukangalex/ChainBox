@@ -13,6 +13,8 @@ data class ChainBinding(
 /**
  * Per-profile chain bindings. Each configuration keeps its own entry/landing
  * pair; switching profiles never inherits another profile's chain.
+ * Stored in Settings, not inside the subscription JSON, so a remote refresh
+ * does not wipe the binding.
  */
 object ChainBindingCodec {
     fun parse(json: String): Map<Long, ChainBinding> {
@@ -98,6 +100,16 @@ object ChainBindings {
         if (profileId < 0L) return
         val next = load().toMutableMap()
         if (next.remove(profileId) != null) save(next)
+    }
+
+    @Synchronized
+    fun removeProfile(profileId: Long) {
+        if (profileId < 0L) return
+        val next = load().toMutableMap()
+        var changed = next.remove(profileId) != null
+        val stale = next.filterValues { it.landingProfileId == profileId }.keys
+        stale.forEach { next.remove(it) }
+        if (changed || stale.isNotEmpty()) save(next)
     }
 
     @Synchronized

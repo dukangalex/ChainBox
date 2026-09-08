@@ -14,14 +14,24 @@ object ConfigQuicOverride {
         val warnings = mutableListOf<OverrideNotice>()
         var out = ConfigCompat.sanitize(content)
 
-        if (ChainBindings.get(Settings.selectedProfile) != null) {
+        val binding = ChainBindings.get(Settings.selectedProfile)
+        if (binding != null) {
+            val savedEntry = binding.entryTag.trim()
+            val entryMissing = savedEntry.isNotEmpty() && !outboundExists(out, savedEntry)
             try {
                 out = ConfigChainReapply.apply(out)
+                if (entryMissing) {
+                    warnings += OverrideNotice(
+                        title = "链式入口已随订阅更新",
+                        reason = "保存的入口「$savedEntry」在新订阅里不存在，已自动改用当前配置的主分组。落地绑定仍有效。",
+                        hint = "不必重新配链式。若入口不对，到「工具 → 链式代理」重选一次即可。",
+                    )
+                }
             } catch (e: Exception) {
                 val notice = OverrideNotice(
                     title = "链式代理未生效，已停止启动",
                     reason = e.message ?: "无法串联出站",
-                    hint = "链路只绑定当前配置。请到「工具 → 链式代理」为这个配置重新选择入口和落地并保存。失败不会自动改走 DIRECT。",
+                    hint = "链路只绑定当前配置，订阅更新不会清掉绑定。请到「工具 → 链式代理」确认入口和落地。失败不会自动改走 DIRECT。",
                 )
                 OverrideStatus.set(warnings + notice)
                 throw ChainApplyException(notice.reason)
@@ -29,16 +39,22 @@ object ConfigQuicOverride {
         }
 
         val extras = Settings.disableQuic || Settings.strictRoute || Settings.dnsProtect ||
-            Settings.disableIpv6 || Settings.webrtcProtect
-        if (extras) {
+            Settings.disableIpv6 || Settings.webrtcProtect || Settings.chinaDirect
+        if (extras || Settings.echDns) {
             try {
                 val root = JSONObject(out)
+                var changed = extras
+                if (Settings.echDns) {
+                    val dns = root.optJSONObject("dns")
+                    if (dns != null && ConfigChinaDirect.unblockHttpsQueries(dns) > 0) changed = true
+                }
                 if (Settings.webrtcProtect) applyWebrtc(root)
+                if (Settings.chinaDirect) ConfigChinaDirect.apply(root)
                 if (Settings.disableQuic) applyQuic(root)
                 if (Settings.strictRoute) applyStrictRoute(root)
                 if (Settings.dnsProtect) applyDnsProtect(root)
                 if (Settings.disableIpv6) applyDisableIpv6(root)
-                out = root.toString()
+                if (changed) out = root.toString()
             } catch (e: Exception) {
                 warnings += OverrideNotice(
                     title = "网络增强开关部分未生效",
@@ -113,5 +129,17 @@ object ConfigQuicOverride {
         val merged = JSONArray().put(JSONObject().put("ip_version", 6).put("action", "reject"))
         for (i in 0 until old.length()) merged.put(old.get(i))
         route.put("rules", merged)
+    }
+
+    private fun outboundExists(content: String, tag: String): Boolean {
+        return try {
+            val outs = JSONObject(content).optJSONArray("outbounds") ?: return false
+            for (i in 0 until outs.length()) {
+                if (outs.optJSONObject(i)?.optString("tag") == tag) return true
+            }
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 }

@@ -15,6 +15,7 @@ import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
 import io.nekohasekai.sfa.utils.CommandClient
 import io.nekohasekai.sfa.utils.CommandTarget
+import io.nekohasekai.sfa.utils.ConfigCompat
 import io.nekohasekai.sfa.utils.HTTPClient
 import io.nekohasekai.sfa.utils.RemoteControlManager
 import kotlinx.coroutines.Dispatchers
@@ -364,7 +365,7 @@ class DashboardViewModel :
 
             try {
                 // Fetch remote config
-                val content = HTTPClient().use { it.getString(profile.typed.remoteURL) }
+                val content = ConfigCompat.sanitize(HTTPClient().use { it.getString(profile.typed.remoteURL) })
                 Libbox.checkConfig(content)
 
                 // Check if content changed

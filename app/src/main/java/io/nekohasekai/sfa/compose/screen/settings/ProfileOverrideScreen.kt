@@ -73,6 +73,8 @@ fun ProfileOverrideScreen(
     var managedModeEnabled by remember { mutableStateOf(Settings.perAppProxyManagedMode) }
     var isScanning by remember { mutableStateOf(false) }
     var webrtcProtect by remember { mutableStateOf(Settings.webrtcProtect) }
+    var echDns by remember { mutableStateOf(Settings.echDns) }
+    var chinaDirect by remember { mutableStateOf(Settings.chinaDirect) }
     var disableQuic by remember { mutableStateOf(Settings.disableQuic) }
     var excludeCnQuic by remember { mutableStateOf(Settings.excludeCnQuic) }
     var strictRoute by remember { mutableStateOf(Settings.strictRoute) }
@@ -261,6 +263,61 @@ fun ProfileOverrideScreen(
                         webrtcProtect = it
                         scope.launch(Dispatchers.IO) {
                             Settings.webrtcProtect = it
+                            withContext(Dispatchers.Main) { reload() }
+                        }
+                    },
+                )
+                OverrideSwitch(
+                    title = "ECH（DNS HTTPS）",
+                    subtitle = "放行 EchConfig 所需的 HTTPS/SVCB DNS 查询",
+                    checked = echDns,
+                    onHelp = {
+                        help = SwitchHelp(
+                            "ECH（DNS HTTPS）",
+                            "官方 sing-box 会在 tls.ech.enabled 且未写死 config 时，用 HTTPS DNS 记录拉取 EchConfig。部分订阅会拦截 query_type=HTTPS/SVCB，导致 ECH 失效。\n\n" +
+                                "开启后：去掉这类拦截规则，节点里已有的 tls.ech 原样交给内核。不会给所有节点强开 ECH。",
+                        )
+                    },
+                    onCheckedChange = {
+                        echDns = it
+                        scope.launch(Dispatchers.IO) {
+                            Settings.echDns = it
+                            withContext(Dispatchers.Main) { reload() }
+                        }
+                    },
+                )
+            }
+            Text(
+                text = "中国直连",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            ) {
+                OverrideSwitch(
+                    title = "中国直连",
+                    subtitle = "绕过中国 IP/域名、公共 DNS 与局域网",
+                    checked = chinaDirect,
+                    onHelp = {
+                        help = SwitchHelp(
+                            "中国直连",
+                            "一个开关打包六项运行时绕过，不改订阅文件：\n" +
+                                "1. 绕过中国 IP（配置里若已有 geoip-cn 规则集会直接用）\n" +
+                                "2. 绕过中国域名（.cn 及常用国内站点）\n" +
+                                "3. 绕过中国公共 DNS IP（阿里/114/DNSPod 等）\n" +
+                                "4. 绕过中国公共 DNS 域名\n" +
+                                "5. 绕过局域网 IP（ip_is_private）\n" +
+                                "6. 绕过局域网域名（.local / .lan 等）\n\n" +
+                                "国内域名解析走 223.5.5.5，流量走 direct。",
+                        )
+                    },
+                    onCheckedChange = {
+                        chinaDirect = it
+                        scope.launch(Dispatchers.IO) {
+                            Settings.chinaDirect = it
                             withContext(Dispatchers.Main) { reload() }
                         }
                     },

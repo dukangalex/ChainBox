@@ -2,6 +2,7 @@ package io.nekohasekai.sfa.database
 
 import androidx.room.Room
 import io.nekohasekai.sfa.Application
+import io.nekohasekai.sfa.chain.ChainBindings
 import io.nekohasekai.sfa.constant.Path
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
@@ -74,6 +75,7 @@ object ProfileManager {
 
     suspend fun delete(profile: Profile): Int {
         try {
+            runCatching { ChainBindings.removeProfile(profile.id) }
             return instance.profileDao().delete(profile)
         } finally {
             for (callback in callbacks.toList()) {
@@ -84,6 +86,9 @@ object ProfileManager {
 
     suspend fun delete(profiles: List<Profile>): Int {
         try {
+            profiles.forEach { p ->
+                runCatching { ChainBindings.removeProfile(p.id) }
+            }
             return instance.profileDao().delete(profiles)
         } finally {
             for (callback in callbacks.toList()) {
@@ -95,4 +100,8 @@ object ProfileManager {
     suspend fun list(): List<Profile> = instance.profileDao().list()
 
     fun remoteServerDao(): RemoteServer.Dao = instance.remoteServerDao()
+
+    fun closeDatabase() {
+        runCatching { instance.close() }
+    }
 }

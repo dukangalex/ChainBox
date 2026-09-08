@@ -6,8 +6,11 @@ import org.json.JSONObject
 /**
  * Single source of truth for ChainBox runtime chain materialization.
  * The source profile remains the user's configuration; only the runtime
- * overlay is rebuilt on every apply/update. The final outbound is always a
- * native sing-box `type: chain` outbound.
+ * overlay is rebuilt on every apply/update. Subscription refresh overwrites
+ * the JSON file but does not clear per-profile ChainBindings. If the saved
+ * entry tag disappeared, apply() falls back to resolveMainTag so the landing
+ * binding stays in effect. The final outbound is always a native sing-box
+ * `type: chain` outbound.
  *
  * Packet path: outbounds[0] is the entry (closest to the client), last is the
  * landing/exit (public IP). The kernel clones later hops with detour=previous
@@ -56,9 +59,6 @@ object ChainRuntimeCompiler {
         val main = when {
             requested.isNotEmpty() && find(outs, requested) != null -> requested
             else -> resolveMainTag(outs, routeFinal) ?: error("无法识别当前配置的链式入口，请到「工具 → 链式代理」手动选择入口")
-        }
-        if (requested.isNotEmpty() && find(outs, requested) == null) {
-            error("保存的入口「$requested」已不存在，请到「工具 → 链式代理」重新选择入口")
         }
 
         val sameProfile = req.landingContent.isNullOrBlank() || req.landingProfileId == req.currentProfileId

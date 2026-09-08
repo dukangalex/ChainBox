@@ -123,4 +123,25 @@ class ChainRuntimeCompilerTest {
         assertEquals("节点选择", hops.getString(0))
         assertEquals("chainbox-landing-99-zgo", hops.getString(1))
     }
+
+    @Test
+    fun missingSavedEntryFallsBackAfterSubscriptionUpdate() {
+        val compiled = ChainRuntimeCompiler.apply(
+            ChainRuntimeCompiler.ApplyRequest(
+                content = profile("节点选择"),
+                currentProfileId = 1L,
+                entryTag = "旧分组名已不存在",
+                landingProfileId = 1L,
+                landingTag = "jp-1",
+                landingContent = null,
+            ),
+        )
+        val root = JSONObject(compiled)
+        val outs = root.getJSONArray("outbounds")
+        val chain = (0 until outs.length()).map { outs.getJSONObject(it) }
+            .first { it.optString("type") == "chain" }
+        val hops = chain.getJSONArray("outbounds")
+        assertEquals("节点选择", hops.getString(0))
+        assertEquals("jp-1", hops.getString(1))
+    }
 }

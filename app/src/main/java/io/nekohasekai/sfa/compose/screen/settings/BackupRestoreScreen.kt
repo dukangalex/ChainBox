@@ -132,10 +132,10 @@ fun BackupRestoreScreen(navController: NavController) {
             text = {
                 Text(
                     "备份内容包括：设置、配置列表、各订阅/配置 JSON。\n\n" +
-                        "恢复策略为覆盖：会写回数据库与 configs 目录。\n\n" +
-                        "恢复后会自动重新加载应用，无需手动强行停止。\n\n" +
-                        "WebDAV 需填写可访问的目录 URL，以及账号密码（若需要）。\n" +
-                        "「测试连通性」仅作参考；备份/恢复成功即表示云端可用。",
+                        "恢复策略为覆盖：会先停服务、关掉数据库，再写回 settings/profiles 与 configs，并清掉 SQLite WAL，避免「备份成功但恢复后还是旧数据」。\n\n" +
+                        "恢复后会自动重新加载应用。\n\n" +
+                        "WebDAV 需填写可访问的 HTTPS 目录 URL（例如 https://miya.teracloud.jp/dav/）以及账号密码。\n" +
+                        "连通性测试会尽量绕过 VPN 走系统网络。下载后会校验是否为 ZIP；若下到 HTML 错误页会明确报错。",
                 )
             },
             confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },

@@ -278,7 +278,7 @@ fun ChainBuilderScreen(
             Text("当前配置：$currentProfileName", fontWeight = FontWeight.Medium)
             savedHint?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             Text(
-                "链路只绑定当前这一份配置。切换到 Kitty / MYCF / 其他配置时，各自使用自己保存的落地，互不影响。",
+                "链路只绑定当前这一份配置。切换到 Kitty / MYCF / 其他配置时，各自使用自己保存的落地，互不影响。订阅更新只换节点列表，不会清掉这份绑定。",
                 style = MaterialTheme.typography.bodyMedium,
             )
             if (otherBound > 0) {
@@ -395,9 +395,10 @@ fun ChainBuilderScreen(
                     "1. 入口：当前配置里流量先走的分组或节点（前置机场）。不要依赖「漏网之鱼」。\n" +
                         "2. 落地：下一跳，出口 IP 应该是落地节点，不是前置机场。可来自当前或其他配置。\n" +
                         "3. 保存后只绑定当前配置。Kitty、MYCF、edgetunne 可以各绑不同落地。\n" +
-                        "4. 使用 sing-box 原生 Chain outbound：入口 → 落地 → 目标。\n" +
-                        "5. Fail Closed：链路失败会明确报错并停止启动，不会偷偷改走 DIRECT。\n" +
-                        "6. 哪些流量走 Chain 仍由路由规则决定；Chain 只提供串联能力。",
+                        "4. 绑定存在本地，不写进订阅 JSON。远程订阅更新后不必重配；入口改名会自动改用主分组。\n" +
+                        "5. 使用 sing-box 原生 Chain outbound：入口 → 落地 → 目标。\n" +
+                        "6. Fail Closed：链路失败会明确报错并停止启动，不会偷偷改走 DIRECT。\n" +
+                        "7. 哪些流量走 Chain 仍由路由规则决定；Chain 只提供串联能力。",
                 )
             },
             confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },

@@ -75,6 +75,8 @@ object Settings {
     var dnsProtect by dataStore.boolean(SettingsKey.DNS_PROTECT) { false }
     var disableIpv6 by dataStore.boolean(SettingsKey.DISABLE_IPV6) { false }
     var webrtcProtect by dataStore.boolean(SettingsKey.WEBRTC_PROTECT) { false }
+    var chinaDirect by dataStore.boolean(SettingsKey.CHINA_DIRECT) { false }
+    var echDns by dataStore.boolean(SettingsKey.ECH_DNS) { true }
     var chainEnabled by dataStore.boolean(SettingsKey.CHAIN_ENABLED) { false }
     var chainEntryTag by dataStore.string(SettingsKey.CHAIN_ENTRY_TAG) { "" }
     var chainLandingProfileId by dataStore.long(SettingsKey.CHAIN_LANDING_PROFILE_ID) { -1L }
@@ -152,5 +154,9 @@ object Settings {
             if (inbound.optString("type") == "tun") return true
         }
         return false
+    }
+
+    fun closeDatabase() {
+        runCatching { instance.close() }
     }
 }
