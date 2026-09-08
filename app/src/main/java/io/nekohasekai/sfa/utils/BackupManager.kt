@@ -199,7 +199,7 @@ object BackupManager {
         }
     }
 
-    private fun <T> wrapSsl(block: () -> T): T {
+    private inline fun <T> wrapSsl(block: () -> T): T {
         return try {
             block()
         } catch (e: Exception) {
