@@ -338,11 +338,11 @@ fun ChainBuilderScreen(navController: NavController) {
             title = { Text("链式代理说明") },
             text = {
                 Text(
-                    "1. 入口：当前配置里流量先走的分组或节点。不要依赖「漏网之鱼」——它通常含 DIRECT，以前会把入口锁死。\n" +
-                        "2. 落地：下一跳，可以是当前配置里的另一个节点，也可以是另一份配置。\n" +
-                        "3. 保存后使用 sing-box 原生 Chain outbound，订阅更新会按同样入口/落地重新编译。\n" +
-                        "4. Fail Closed：链路或节点失败会明确报错并停止启动，不会偷偷改走 DIRECT。\n" +
-                        "5. 哪些流量走 Chain 仍由你自己的路由规则决定；Chain 只提供串联能力。",
+                    "1. 入口：当前配置里流量先走的分组或节点（前置机场）。不要依赖「漏网之鱼」。\n" +
+                        "2. 落地：下一跳，出口 IP 应该是落地节点，不是前置机场。\n" +
+                        "3. 保存后使用 sing-box 原生 Chain outbound：入口 → 落地 → 目标。\n" +
+                        "4. Fail Closed：链路失败会明确报错并停止启动，不会偷偷改走 DIRECT。\n" +
+                        "5. 哪些流量走 Chain 仍由路由规则决定；Chain 只提供串联能力。",
                 )
             },
             confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },

@@ -14,6 +14,7 @@ import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.utils.HTTPClient
+import io.nekohasekai.sfa.utils.ConfigCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -255,7 +256,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
                 var selectedProfileUpdated = false
 
                 // Fetch remote config
-                val content = HTTPClient().use { it.getString(profile.typed.remoteURL) }
+                val content = ConfigCompat.sanitize(HTTPClient().use { it.getString(profile.typed.remoteURL) })
                 Libbox.checkConfig(content)
 
                 // Check if content changed

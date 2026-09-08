@@ -11,6 +11,7 @@ import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.utils.HTTPClient
+import io.nekohasekai.sfa.utils.ConfigCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -240,7 +241,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
         typedProfile.path = configFile.path
 
         // Get config content
-        val configContent =
+        val configContent = ConfigCompat.sanitize(
             when (state.profileSource) {
                 ProfileSource.CreateNew -> "{}"
                 ProfileSource.Import -> {
@@ -266,7 +267,8 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
                         } ?: "{}"
                     }
                 }
-            }
+            },
+        )
 
         // Validate config
         Libbox.checkConfig(configContent)
@@ -300,7 +302,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
         typedProfile.path = configFile.path
 
         // Fetch initial config - this MUST succeed for remote profiles
-        val content = HTTPClient().use { it.getString(state.remoteUrl) }
+        val content = ConfigCompat.sanitize(HTTPClient().use { it.getString(state.remoteUrl) })
         Libbox.checkConfig(content)
         val configContent = content
 

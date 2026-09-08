@@ -9,6 +9,9 @@ import org.json.JSONObject
  * overlay is rebuilt on every apply/update. The final outbound is always a
  * native sing-box `type: chain` outbound.
  *
+ * Packet path: outbounds[0] is the entry (closest to the client), last is the
+ * landing/exit (public IP). The kernel clones later hops with detour=previous
+ * so IP checks show the landing node, not the front airport.
  * Chain hops are user-selected outbounds. Selector/urltest groups may contain
  * DIRECT as a UI choice; those members are stripped from the hop clone so the
  * generated chain never includes an unauthorized DIRECT/block/dns hop.

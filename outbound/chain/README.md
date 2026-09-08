@@ -19,12 +19,13 @@ The real implementation lives in the kernel fork:
 }
 ```
 
-That is the entire public schema (`option.ChainOutboundOptions`). The kernel
-compiler clones intermediate hops, sets `detour` internally, skips
-direct/block/dns members of selector/urltest groups, and fail-closes on
-missing hops.
+Packet path order: `outbounds[0]` is closest to the client (前置/入口).
+The last tag is the exit hop (落地). IP checks must show the last hop.
 
-Do **not** add extra JSON fields. Unknown fields (historically `fail_closed`)
-make sing-box refuse to decode the config.
+The kernel clones later hops and sets `detour` to the previous hop, then
+dials the last clone. Do not reverse this list in the app.
+
+That is the entire public schema (`option.ChainOutboundOptions`). Unknown
+fields (historically `fail_closed`) make sing-box refuse to decode the config.
 
 See `docs/CHAIN.md` in the kernel repository.

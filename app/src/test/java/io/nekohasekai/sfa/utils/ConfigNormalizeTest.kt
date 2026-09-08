@@ -24,17 +24,30 @@ class ConfigNormalizeTest {
     }
 
     @Test
-    fun applyUsesRouteSniffActionInsteadOfInboundSniff() {
+    fun applyUsesRouteSniffAndLocalDnsWithoutGithub() {
         val src = JSONObject()
             .put(
                 "outbounds",
-                JSONArray().put(
-                    JSONObject()
-                        .put("type", "vless")
-                        .put("tag", "n1")
-                        .put("server", "1.1.1.1")
-                        .put("server_port", 443),
-                ),
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("type", "vless")
+                            .put("tag", "n1")
+                            .put("server", "node.example.com")
+                            .put("server_port", 443),
+                    )
+                    .put(
+                        JSONObject()
+                            .put("type", "shadowsocks")
+                            .put("tag", "ss1")
+                            .put("server", "ss.example.com")
+                            .put("server_port", 8388)
+                            .put("plugin", "obfs-local")
+                            .put(
+                                "plugin_opts",
+                                JSONObject().put("mode", "tls").put("host", "www.bing.com"),
+                            ),
+                    ),
             )
             .put(
                 "inbounds",
@@ -53,18 +66,30 @@ class ConfigNormalizeTest {
         }
         val rules = out.getJSONObject("route").getJSONArray("rules")
         assertEquals("sniff", rules.getJSONObject(0).getString("action"))
+        assertFalse(out.getJSONObject("route").has("rule_set"))
         val dns0 = out.getJSONObject("dns").getJSONArray("servers").getJSONObject(0)
         assertEquals("https", dns0.getString("type"))
         assertFalse(dns0.has("address"))
-        val dnsLocal = out.getJSONObject("dns").getJSONArray("servers").getJSONObject(1)
-        assertEquals("dns-local", dnsLocal.getString("tag"))
-        assertFalse(dnsLocal.has("detour"))
         assertTrue(dns0.has("detour"))
         assertFalse(dns0.getString("detour").equals("direct", ignoreCase = true))
-        val sets = out.getJSONObject("route").getJSONArray("rule_set")
-        for (i in 0 until sets.length()) {
-            assertFalse(sets.getJSONObject(i).optString("download_detour").equals("direct", ignoreCase = true))
+        val dnsLocal = out.getJSONObject("dns").getJSONArray("servers").getJSONObject(1)
+        assertEquals("dns-local", dnsLocal.getString("tag"))
+        assertEquals("udp", dnsLocal.getString("type"))
+        assertFalse(dnsLocal.has("detour"))
+        val ss = (0 until out.getJSONArray("outbounds").length())
+            .map { out.getJSONArray("outbounds").getJSONObject(it) }
+            .first { it.optString("tag") == "ss1" }
+        assertTrue(ss.get("plugin_opts") is String)
+        assertTrue(ss.getString("plugin_opts").contains("obfs=tls"))
+        val dnsRules = out.getJSONObject("dns").getJSONArray("rules")
+        val firstDnsRule = dnsRules.getJSONObject(0).getJSONArray("domain")
+        assertTrue((0 until firstDnsRule.length()).any { firstDnsRule.getString(it) == "node.example.com" })
+        var sawReject = false
+        for (i in 0 until rules.length()) {
+            val r = rules.getJSONObject(i)
+            if (r.optString("action") == "reject" && r.optInt("port") == 3478) sawReject = true
         }
+        assertTrue(sawReject)
         assertTrue(out.getJSONArray("outbounds").length() >= 3)
     }
 }

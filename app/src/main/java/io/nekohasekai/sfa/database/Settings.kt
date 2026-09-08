@@ -75,6 +75,7 @@ object Settings {
     var dnsProtect by dataStore.boolean(SettingsKey.DNS_PROTECT) { false }
     var disableIpv6 by dataStore.boolean(SettingsKey.DISABLE_IPV6) { false }
     var configNormalize by dataStore.boolean(SettingsKey.CONFIG_NORMALIZE) { false }
+    var webrtcProtect by dataStore.boolean(SettingsKey.WEBRTC_PROTECT) { false }
     var chainEnabled by dataStore.boolean(SettingsKey.CHAIN_ENABLED) { false }
     var chainEntryTag by dataStore.string(SettingsKey.CHAIN_ENTRY_TAG) { "" }
     var chainLandingProfileId by dataStore.long(SettingsKey.CHAIN_LANDING_PROFILE_ID) { -1L }

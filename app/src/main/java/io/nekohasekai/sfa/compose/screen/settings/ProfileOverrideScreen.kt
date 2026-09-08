@@ -73,6 +73,7 @@ fun ProfileOverrideScreen(
     var managedModeEnabled by remember { mutableStateOf(Settings.perAppProxyManagedMode) }
     var isScanning by remember { mutableStateOf(false) }
     var configNormalize by remember { mutableStateOf(Settings.configNormalize) }
+    var webrtcProtect by remember { mutableStateOf(Settings.webrtcProtect) }
     var disableQuic by remember { mutableStateOf(Settings.disableQuic) }
     var excludeCnQuic by remember { mutableStateOf(Settings.excludeCnQuic) }
     var strictRoute by remember { mutableStateOf(Settings.strictRoute) }
@@ -249,18 +250,37 @@ fun ProfileOverrideScreen(
             ) {
                 OverrideSwitch(
                     title = "配置规范化",
-                    subtitle = "覆写脚本：保留节点，其余换成 sing-box 标准模板",
+                    subtitle = "覆写：保留节点，换成分流 + 防泄漏模板（不访问 GitHub）",
                     checked = configNormalize,
                     onHelp = {
                         help = SwitchHelp(
                             "配置规范化",
-                            "运行时覆写脚本，不改磁盘订阅。保留节点与分组，DNS/路由/TUN 换成 sing-box 1.13 标准模板（嗅探走路由 action，不再写已删除的 inbound sniff 字段）。",
+                            "运行时覆写，不改磁盘订阅。保留节点与分组，DNS/路由/TUN 换成内置模板：国内域名直连、私有地址直连、UDP DNS 引导、WebRTC STUN 拦截。不再下载 GitHub rule-set，因此不会因为 raw.githubusercontent.com 解析失败而无法启动。",
                         )
                     },
                     onCheckedChange = {
                         configNormalize = it
                         scope.launch(Dispatchers.IO) {
                             Settings.configNormalize = it
+                            withContext(Dispatchers.Main) { reload() }
+                        }
+                    },
+                )
+                OverrideSwitch(
+                    title = "防 WebRTC 泄露",
+                    subtitle = "拦截 STUN/TURN（UDP 3478/19302/5349）",
+                    checked = webrtcProtect || configNormalize,
+                    enabled = !configNormalize,
+                    onHelp = {
+                        help = SwitchHelp(
+                            "防 WebRTC 泄露",
+                            "拦截浏览器/应用的 STUN 探测，避免真实 IP 从 WebRTC 漏出。配置规范化开启时已包含此项。开启后「工具 → STUN 测试」会失败，这是预期行为。",
+                        )
+                    },
+                    onCheckedChange = {
+                        webrtcProtect = it
+                        scope.launch(Dispatchers.IO) {
+                            Settings.webrtcProtect = it
                             withContext(Dispatchers.Main) { reload() }
                         }
                     },

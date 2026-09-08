@@ -24,6 +24,16 @@ def main() -> int:
         errors.append("dns-local must not detour to empty direct (sing-box 1.12+ rejects it)")
     if 'put("download_detour", "direct")' in normalize:
         errors.append("rule_set download_detour=direct is rejected by sing-box 1.12+")
+    if "raw.githubusercontent.com" in normalize:
+        errors.append("ConfigNormalize must not fetch GitHub rule-sets at startup")
+    if 'put("type", "udp")' not in normalize:
+        errors.append("dns-local should be UDP bootstrap without DoH/detour")
+    if "webrtcRejectRules" not in normalize:
+        errors.append("overwrite template should reject STUN ports")
+
+    compat = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigCompat.kt")
+    if "plugin_opts" not in compat or "objectToPluginOpts" not in compat:
+        errors.append("ConfigCompat must coerce Clash plugin_opts objects to strings")
 
     chain = read("app/src/main/java/io/nekohasekai/sfa/chain/ChainRuntimeCompiler.kt")
     if "fail_closed" in chain:
@@ -36,6 +46,8 @@ def main() -> int:
         errors.append("resolveMainTag should be reusable by the UI")
     if "isFinalLike" not in chain:
         errors.append("isFinalLike missing; 漏网之鱼 would be locked as entry again")
+    if "landing/exit" not in chain and "public IP" not in chain:
+        errors.append("chain compiler should document packet path: entry first, landing last")
 
     ui = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ChainBuilderScreen.kt")
     if 'picker == "entry"' not in ui:
@@ -49,6 +61,10 @@ def main() -> int:
     for key in ("core", "service", "network_quality", "silent_install", "remote_control", "chain_builder"):
         if f'name="{key}"' not in cn:
             errors.append(f"zh-rCN missing {key}")
+
+    settings = read("app/src/main/java/io/nekohasekai/sfa/database/Settings.kt")
+    if "webrtcProtect" not in settings:
+        errors.append("Settings.webrtcProtect missing")
 
     if errors:
         print("FAIL")

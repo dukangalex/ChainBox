@@ -4,10 +4,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Runtime overlay: keep the user's nodes/groups, replace DNS / route / inbounds
- * with a sing-box 1.12+ template. Legacy inbound fields (`sniff`,
- * `sniff_override_destination`, `domain_strategy`) are never written — they
- * were removed in sing-box 1.13 and must live as route rule actions instead.
+ * Runtime overwrite: keep the user's nodes/groups, replace DNS / route / inbounds
+ * with a sing-box 1.12+ template that always starts without GitHub rule-sets.
+ *
+ * China split uses an inline domain_suffix list (no remote geoip/geosite).
+ * Local DNS is UDP without detour so node hostnames and bootstrap never loop
+ * through the proxy. WebRTC STUN ports are rejected.
  */
 object ConfigNormalize {
 
@@ -26,14 +28,55 @@ object ConfigNormalize {
         "inbound_sniffing",
     )
 
+    val CN_DOMAIN_SUFFIXES: List<String> = listOf(
+        "cn",
+        "qq.com", "weixin.com", "wechat.com", "qpic.cn", "gtimg.cn", "idqqimg.com",
+        "tencent.com", "tencent-cloud.net", "qcloud.com", "myqcloud.com",
+        "baidu.com", "bdstatic.com", "bdimg.com",
+        "alibaba.com", "alicdn.com", "aliyun.com", "alipay.com", "aliyuncs.com",
+        "taobao.com", "tmall.com", "1688.com",
+        "163.com", "126.com", "127.net", "netease.com",
+        "jd.com", "360buyimg.com",
+        "bilibili.com", "hdslb.com", "biliapi.net",
+        "iqiyi.com", "iqiyipic.com",
+        "youku.com", "ykimg.com",
+        "douyin.com", "amemv.com", "toutiao.com", "bytedance.com", "pstatp.com", "snssdk.com",
+        "weibo.com", "sina.com.cn", "sinaimg.cn",
+        "zhihu.com", "zhimg.com",
+        "meituan.com", "dianping.com", "sankuai.com",
+        "pinduoduo.com", "yangkeduo.com",
+        "xiaomi.com", "mi.com", "miui.com",
+        "huawei.com", "honor.com", "hicloud.com", "vmall.com",
+        "oppo.com", "heytap.com", "realme.com", "oneplus.com", "vivo.com",
+        "ctrip.com", "qunar.com",
+        "suning.com", "smzdm.com",
+        "kugou.com", "kuwo.cn",
+        "migu.cn", "10086.cn", "10010.com", "189.cn",
+        "gov.cn", "edu.cn", "ac.cn", "org.cn", "com.cn", "net.cn",
+        "douban.com", "csdn.net", "gitee.com",
+        "ele.me", "dingtalk.com", "feishu.cn",
+        "wps.cn", "unionpay.com",
+        "alidns.com", "dnspod.cn", "360.cn",
+        "sogou.com", "so.com", "uc.cn",
+        "cctv.com", "people.com.cn", "xinhuanet.com",
+        "coolapk.com", "thepaper.cn",
+    )
+
+    fun cnDomainSuffixArray(): JSONArray {
+        val a = JSONArray()
+        CN_DOMAIN_SUFFIXES.forEach { a.put(it) }
+        return a
+    }
+
     fun apply(content: String): String {
-        val src = JSONObject(content)
+        val src = JSONObject(ConfigCompat.sanitize(content))
         val keptOuts = JSONArray()
         val nodeTags = mutableListOf<String>()
         val groupTags = mutableListOf<String>()
         val srcOuts = src.optJSONArray("outbounds") ?: JSONArray()
         for (i in 0 until srcOuts.length()) {
             val o = srcOuts.optJSONObject(i) ?: continue
+            ConfigCompat.sanitizeOutbound(o)
             val type = o.optString("type").trim()
             val tag = o.optString("tag").trim()
             if (tag.isEmpty()) continue
@@ -61,14 +104,12 @@ object ConfigNormalize {
         if (findTag(keptOuts, "direct") == null) {
             keptOuts.put(JSONObject().put("type", "direct").put("tag", "direct"))
         }
-        if (findTag(keptOuts, "block") == null) {
-            keptOuts.put(JSONObject().put("type", "block").put("tag", "block"))
-        }
 
+        val serverHosts = collectServerHosts(keptOuts)
         val out = JSONObject()
         val logLevel = src.optJSONObject("log")?.optString("level").orEmpty().ifBlank { "info" }
         out.put("log", JSONObject().put("level", logLevel).put("timestamp", true))
-        out.put("dns", buildDns(proxyTag))
+        out.put("dns", buildDns(proxyTag, serverHosts))
         out.put("inbounds", buildInbounds())
         out.put("outbounds", keptOuts)
         if (src.has("endpoints")) out.put("endpoints", src.get("endpoints"))
@@ -99,26 +140,47 @@ object ConfigNormalize {
         return t.contains("漏网") || t.contains("final") || t.contains("剩余") || t.contains("unmatched")
     }
 
-    private fun dnsServer(tag: String, host: String, detour: String? = null): JSONObject {
-        val server = JSONObject()
-            .put("type", "https")
-            .put("tag", tag)
-            .put("server", host)
-            .put("path", "/dns-query")
-        // sing-box 1.12+ rejects detour to an empty `direct` outbound
-        // ("detour to an empty direct outbound makes no sense"). Omit detour
-        // so the default dialer is used; only send non-direct detours.
-        if (!detour.isNullOrBlank() && !detour.equals("direct", ignoreCase = true)) {
-            server.put("detour", detour)
+    internal fun collectServerHosts(outs: JSONArray): List<String> {
+        val hosts = LinkedHashSet<String>()
+        for (i in 0 until outs.length()) {
+            val o = outs.optJSONObject(i) ?: continue
+            addHost(hosts, o.optString("server"))
+            addHost(hosts, o.optString("server_name"))
+            o.optJSONObject("tls")?.let { addHost(hosts, it.optString("server_name")) }
+            o.optJSONObject("transport")?.let { addHost(hosts, it.optString("host")) }
         }
-        return server
+        return hosts.toList()
     }
 
-    private fun buildDns(proxyTag: String): JSONObject {
-        val servers = JSONArray()
-            .put(dnsServer("dns-remote", "1.1.1.1", proxyTag))
-            .put(dnsServer("dns-local", "223.5.5.5"))
-        val rules = JSONArray().put(JSONObject().put("rule_set", "geosite-cn").put("server", "dns-local"))
+    private fun addHost(hosts: MutableSet<String>, raw: String) {
+        val h = raw.trim().lowercase()
+        if (h.isEmpty()) return
+        if (h[0].isDigit() && h.all { it.isDigit() || it == '.' }) return
+        if (':' in h) return
+        hosts.add(h)
+    }
+
+    private fun buildDns(proxyTag: String, serverHosts: List<String>): JSONObject {
+        val local = JSONObject()
+            .put("type", "udp")
+            .put("tag", "dns-local")
+            .put("server", "223.5.5.5")
+        val remote = JSONObject()
+            .put("type", "https")
+            .put("tag", "dns-remote")
+            .put("server", "1.1.1.1")
+            .put("path", "/dns-query")
+        if (proxyTag.isNotBlank() && !proxyTag.equals("direct", ignoreCase = true)) {
+            remote.put("detour", proxyTag)
+        }
+        val servers = JSONArray().put(remote).put(local)
+        val rules = JSONArray()
+        if (serverHosts.isNotEmpty()) {
+            val domains = JSONArray()
+            serverHosts.forEach { domains.put(it) }
+            rules.put(JSONObject().put("domain", domains).put("server", "dns-local"))
+        }
+        rules.put(JSONObject().put("domain_suffix", cnDomainSuffixArray()).put("server", "dns-local"))
         return JSONObject()
             .put("servers", servers)
             .put("rules", rules)
@@ -154,32 +216,27 @@ object ConfigNormalize {
         for (field in legacyInboundFields) inbound.remove(field)
     }
 
+    fun webrtcRejectRules(): JSONArray {
+        val rules = JSONArray()
+        for (p in intArrayOf(3478, 19302, 5349)) {
+            rules.put(JSONObject().put("network", "udp").put("port", p).put("action", "reject"))
+        }
+        return rules
+    }
+
     private fun buildRoute(proxyTag: String): JSONObject {
-        val ruleSet = JSONArray()
-            .put(remoteSet("geoip-cn", "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"))
-            .put(remoteSet("geosite-cn", "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs"))
         val rules = JSONArray()
             .put(JSONObject().put("action", "sniff"))
             .put(JSONObject().put("protocol", "dns").put("action", "hijack-dns"))
             .put(JSONObject().put("ip_is_private", true).put("outbound", "direct"))
-        for (p in intArrayOf(3478, 19302, 5349)) {
-            rules.put(JSONObject().put("network", "udp").put("port", p).put("outbound", "block"))
-        }
-        rules.put(JSONObject().put("rule_set", JSONArray().put("geosite-cn").put("geoip-cn")).put("outbound", "direct"))
+        val webrtc = webrtcRejectRules()
+        for (i in 0 until webrtc.length()) rules.put(webrtc.get(i))
+        rules.put(JSONObject().put("domain_suffix", cnDomainSuffixArray()).put("outbound", "direct"))
         return JSONObject()
-            .put("rule_set", ruleSet)
             .put("rules", rules)
             .put("final", proxyTag)
             .put("auto_detect_interface", true)
     }
-
-    private fun remoteSet(tag: String, url: String): JSONObject =
-        JSONObject()
-            .put("type", "remote")
-            .put("tag", tag)
-            .put("format", "binary")
-            .put("url", url)
-            .put("update_interval", "7d")
 
     private fun findTag(outs: JSONArray, tag: String): JSONObject? {
         for (i in 0 until outs.length()) if (outs.optJSONObject(i)?.optString("tag") == tag) return outs.optJSONObject(i)
