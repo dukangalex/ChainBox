@@ -38,33 +38,55 @@ object ConfigQuicOverride {
             }
         }
 
-        val extras = Settings.disableQuic || Settings.strictRoute || Settings.dnsProtect ||
-            Settings.disableIpv6 || Settings.webrtcProtect || Settings.chinaDirect
-        if (extras || Settings.echDns) {
-            try {
-                val root = JSONObject(out)
-                var changed = extras
+        try {
+            val root = JSONObject(out)
+            applyLogLevel(root)
+            applyOne(warnings, "防 WebRTC 泄露") {
                 if (Settings.webrtcProtect) applyWebrtc(root)
-                if (Settings.chinaDirect) ConfigChinaDirect.apply(root)
-                if (Settings.echDns) {
-                    if (ConfigChinaDirect.applyEchDns(root)) changed = true
-                }
-                if (Settings.disableQuic) applyQuic(root)
-                if (Settings.strictRoute) applyStrictRoute(root)
-                if (Settings.dnsProtect) applyDnsProtect(root)
-                if (Settings.disableIpv6) applyDisableIpv6(root)
-                if (changed) out = root.toString()
-            } catch (e: Exception) {
-                warnings += OverrideNotice(
-                    title = "网络增强开关部分未生效",
-                    reason = e.message ?: "覆盖失败",
-                    hint = "请检查配置是否含 TUN/路由段，或临时关闭对应开关。",
-                )
             }
+            applyOne(warnings, "中国直连") {
+                if (Settings.chinaDirect) ConfigChinaDirect.apply(root)
+            }
+            applyOne(warnings, "禁用 QUIC") {
+                if (Settings.disableQuic) applyQuic(root)
+            }
+            applyOne(warnings, "严格路由") {
+                if (Settings.strictRoute) applyStrictRoute(root)
+            }
+            applyOne(warnings, "DNS 防泄漏") {
+                if (Settings.dnsProtect) applyDnsProtect(root)
+            }
+            applyOne(warnings, "禁用 IPv6") {
+                if (Settings.disableIpv6) applyDisableIpv6(root)
+            }
+            out = root.toString()
+        } catch (e: Exception) {
+            warnings += OverrideNotice(
+                title = "网络增强开关部分未生效",
+                reason = e.message ?: "覆盖失败",
+                hint = "请检查配置是否含 TUN/路由段，或临时关闭对应开关。",
+            )
         }
 
         OverrideStatus.set(warnings)
         return out
+    }
+
+    private fun applyOne(warnings: MutableList<OverrideNotice>, title: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            warnings += OverrideNotice(
+                title = "$title 未完全生效",
+                reason = e.message ?: "覆盖失败",
+                hint = "该开关会强制覆盖运行时配置，不改订阅文件。其它已开启的开关仍会继续写入。",
+            )
+        }
+    }
+
+    internal fun applyLogLevel(root: JSONObject) {
+        val log = root.optJSONObject("log") ?: JSONObject().also { root.put("log", it) }
+        log.put("level", "info")
     }
 
     private fun applyWebrtc(root: JSONObject) {
@@ -87,7 +109,7 @@ object ConfigQuicOverride {
                     .put("network", "udp")
                     .put("port", 443)
                     .put("domain_suffix", ConfigNormalize.cnDomainSuffixArray())
-                    .put("outbound", "direct"),
+                    .put("outbound", ConfigChinaDirect.findOrCreateDirect(ensureOutbounds(root))),
             )
         }
         injected.put(
@@ -99,8 +121,8 @@ object ConfigQuicOverride {
         route.put("rules", merged)
     }
 
-    private fun applyStrictRoute(root: JSONObject) {
-        val inbounds = root.optJSONArray("inbounds") ?: return
+    internal fun applyStrictRoute(root: JSONObject) {
+        val inbounds = root.optJSONArray("inbounds") ?: JSONArray().also { root.put("inbounds", it) }
         var touched = false
         for (i in 0 until inbounds.length()) {
             val ib = inbounds.optJSONObject(i) ?: continue
@@ -109,18 +131,18 @@ object ConfigQuicOverride {
             touched = true
         }
         if (!touched) {
-            throw IllegalStateException("当前配置没有 TUN 入站，严格路由无法生效")
+            throw IllegalStateException("当前配置没有 TUN 入站，严格路由无法写入")
         }
     }
 
-    private fun applyDnsProtect(root: JSONObject) {
+    internal fun applyDnsProtect(root: JSONObject) {
         val dns = root.optJSONObject("dns") ?: JSONObject().also { root.put("dns", it) }
-        if (!dns.has("independent_cache")) dns.put("independent_cache", true)
+        dns.put("independent_cache", true)
         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
-        if (!route.has("auto_detect_interface")) route.put("auto_detect_interface", true)
+        route.put("auto_detect_interface", true)
     }
 
-    private fun applyDisableIpv6(root: JSONObject) {
+    internal fun applyDisableIpv6(root: JSONObject) {
         val dns = root.optJSONObject("dns") ?: JSONObject().also { root.put("dns", it) }
         dns.put("strategy", "ipv4_only")
         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
@@ -128,6 +150,15 @@ object ConfigQuicOverride {
         val merged = JSONArray().put(JSONObject().put("ip_version", 6).put("action", "reject"))
         for (i in 0 until old.length()) merged.put(old.get(i))
         route.put("rules", merged)
+        val inbounds = root.optJSONArray("inbounds") ?: return
+        for (i in 0 until inbounds.length()) {
+            val ib = inbounds.optJSONObject(i) ?: continue
+            if (ib.optString("type") == "tun") ib.remove("inet6_address")
+        }
+    }
+
+    private fun ensureOutbounds(root: JSONObject): JSONArray {
+        return root.optJSONArray("outbounds") ?: JSONArray().also { root.put("outbounds", it) }
     }
 
     private fun outboundExists(content: String, tag: String): Boolean {

@@ -232,28 +232,34 @@ object BackupManager {
         }
     }
 
-    fun webdavProbe(baseUrl: String, username: String, password: String): Result<Boolean> = runCatching {
+    fun webdavProbe(baseUrl: String, username: String, password: String, remoteName: String = ""): Result<Boolean> = runCatching {
         wrapSsl {
             if (username.isBlank() || password.isBlank()) {
                 error("请填写 WebDAV 用户名和密码")
             }
-            val target = URL(requireHttps(baseUrl))
+            val base = requireHttps(baseUrl)
+            val fileUrl = if (remoteName.isNotBlank()) joinUrl(base, remoteName) else base
+            // Android HttpURLConnection only allows OPTIONS/GET/HEAD/POST/PUT/DELETE/TRACE/PATCH.
+            // PROPFIND throws ProtocolException and is NOT a real connectivity failure — never use it.
             var lastDetail = "no response"
             var sawAuthFailure = false
-            for (method in listOf("PROPFIND", "OPTIONS", "GET")) {
-                val conn = openWebDav(target.toString(), username, password).apply {
-                    requestMethod = method
-                    instanceFollowRedirects = false
-                    if (method == "PROPFIND") {
-                        setRequestProperty("Depth", "0")
-                        setRequestProperty("Content-Type", "application/xml; charset=utf-8")
-                        doOutput = true
+            val attempts = listOf(
+                fileUrl to "HEAD",
+                base to "OPTIONS",
+                base to "HEAD",
+                base to "GET",
+            )
+            for ((target, method) in attempts) {
+                val conn = try {
+                    openWebDav(target, username, password).apply {
+                        requestMethod = method
+                        instanceFollowRedirects = false
                     }
+                } catch (e: Exception) {
+                    lastDetail = friendlyProbeDetail(e)
+                    continue
                 }
                 try {
-                    if (method == "PROPFIND") {
-                        conn.outputStream.use { it.write(ByteArray(0)) }
-                    }
                     val code = conn.responseCode
                     val loc = conn.getHeaderField("Location").orEmpty()
                     lastDetail = "$method HTTP $code"
@@ -264,33 +270,27 @@ object BackupManager {
                         }
                         ProbeClass.REDIRECT -> {
                             if (loc.isNotEmpty()) {
-                                val next = try { URL(target, loc) } catch (_: Exception) { null }
-                                if (next == null || next.protocol != "https" || next.host != target.host) {
+                                val next = try { URL(target).let { URL(it, loc) } } catch (_: Exception) { null }
+                                if (next == null || next.protocol != "https" || next.host != URL(target).host) {
                                     error("连通性失败：重定向到不安全主机")
                                 }
                             }
                             lastDetail = "redirect $code"
                         }
-                        ProbeClass.MISS -> { }
-                        ProbeClass.OK -> {
-                            val dav = conn.getHeaderField("DAV").orEmpty()
-                            val allow = conn.getHeaderField("Allow").orEmpty()
-                            val davLike = dav.isNotEmpty() ||
-                                allow.contains("PROPFIND", true) ||
-                                allow.contains("PUT", true) ||
-                                code == 207 ||
-                                method == "PROPFIND" ||
-                                method == "GET"
-                            if (method == "OPTIONS" && code in 200..204 && dav.isEmpty() && allow.isEmpty()) {
-                                continue
+                        ProbeClass.OK, ProbeClass.MISS -> {
+                            if (code == 405) continue
+                            if (method == "OPTIONS" && code in 200..204) {
+                                val dav = conn.getHeaderField("DAV").orEmpty()
+                                val allow = conn.getHeaderField("Allow").orEmpty()
+                                if (dav.isEmpty() && allow.isEmpty() && code != 204) continue
                             }
-                            if (davLike || code in 200..299) return@runCatching true
+                            return@runCatching true
                         }
                         ProbeClass.OTHER -> { }
                     }
                 } catch (e: Exception) {
                     if (e is IllegalStateException && (e.message?.contains("认证") == true || e.message?.contains("重定向") == true)) throw e
-                    lastDetail = e.message ?: e.javaClass.simpleName
+                    lastDetail = friendlyProbeDetail(e)
                 } finally {
                     try { conn.disconnect() } catch (_: Exception) {}
                 }
@@ -300,13 +300,21 @@ object BackupManager {
         }
     }
 
+    internal fun friendlyProbeDetail(e: Exception): String {
+        val text = (e.message ?: e.javaClass.simpleName).trim()
+        if (text.contains("PROPFIND", true) || text.contains("Expected one of", true)) {
+            return "已跳过不受支持的检测方法"
+        }
+        return text.take(120)
+    }
+
     internal enum class ProbeClass { OK, AUTH, MISS, REDIRECT, OTHER }
 
     internal fun classifyProbe(code: Int): ProbeClass = when (code) {
         401, 403 -> ProbeClass.AUTH
-        207 -> ProbeClass.OK
+        207, 206 -> ProbeClass.OK
         in 200..299 -> ProbeClass.OK
-        404, 410 -> ProbeClass.MISS
+        404, 410, 405 -> ProbeClass.MISS
         in 300..399 -> ProbeClass.REDIRECT
         else -> ProbeClass.OTHER
     }

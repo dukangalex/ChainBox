@@ -6,8 +6,9 @@ import org.json.JSONObject
 /**
  * Runtime "China direct" overlay. Does not rewrite the subscription file.
  *
- * Packs six bypasses into one switch:
- * 1. China IPs (reuse geoip-cn / geosite-cn rule-sets already in the profile)
+ * Force-applies six bypasses whenever the switch is on, even if the
+ * profile has no matching geoip/geosite/dns/route sections:
+ * 1. China IPs (reuse geoip-cn if present, else domain/IP fallbacks)
  * 2. China domains
  * 3. China public DNS IPs
  * 4. China public DNS domains
@@ -16,7 +17,6 @@ import org.json.JSONObject
  */
 object ConfigChinaDirect {
     const val CN_DNS_TAG = "chainbox-cn-dns"
-    const val ECH_DNS_TAG = "chainbox-ech-dns"
 
     val LAN_DOMAIN_SUFFIXES: List<String> = listOf(
         "local", "lan", "localhost", "home.arpa", "localdomain",
@@ -127,93 +127,6 @@ object ConfigChinaDirect {
         return tag
     }
 
-    internal fun unblockHttpsQueries(dns: JSONObject): Int {
-        val rules = dns.optJSONArray("rules") ?: return 0
-        val kept = JSONArray()
-        var removed = 0
-        for (i in 0 until rules.length()) {
-            val r = rules.optJSONObject(i) ?: continue
-            if (rejectsHttpsQuery(r)) {
-                removed++
-                continue
-            }
-            kept.put(r)
-        }
-        if (removed > 0) dns.put("rules", kept)
-        return removed
-    }
-
-    /**
-     * Make EchConfig lookups work the way official sing-box does:
-     * HTTPS/SVCB queries must reach a DNS that actually returns those records.
-     * Strips reject rules, then prepends a dedicated DoH/UDP server.
-     * Does not rewrite tls.ech on nodes.
-     */
-    fun applyEchDns(root: JSONObject): Boolean {
-        val dns = root.optJSONObject("dns") ?: JSONObject().also { root.put("dns", it) }
-        var changed = unblockHttpsQueries(dns) > 0
-        val servers = dns.optJSONArray("servers") ?: JSONArray().also {
-            dns.put("servers", it)
-            changed = true
-        }
-        val typed = (0 until servers.length()).any { servers.optJSONObject(it)?.has("type") == true }
-        if (!serverExists(servers, ECH_DNS_TAG)) {
-            if (typed) {
-                servers.put(
-                    JSONObject()
-                        .put("type", "https")
-                        .put("tag", ECH_DNS_TAG)
-                        .put("server", "dns.google")
-                        .put("path", "/dns-query"),
-                )
-            } else {
-                servers.put(
-                    JSONObject()
-                        .put("tag", ECH_DNS_TAG)
-                        .put("address", "https://dns.google/dns-query"),
-                )
-            }
-            changed = true
-        }
-        val old = dns.optJSONArray("rules") ?: JSONArray()
-        if (!hasLeadingEchRule(old)) {
-            val echRule = JSONObject()
-                .put("query_type", JSONArray().put("HTTPS").put("SVCB"))
-                .put("server", ECH_DNS_TAG)
-            val merged = JSONArray().put(echRule)
-            for (i in 0 until old.length()) merged.put(old.get(i))
-            dns.put("rules", merged)
-            changed = true
-        }
-        return changed
-    }
-
-    internal fun rejectsHttpsQuery(rule: JSONObject): Boolean {
-        val types = queryTypes(rule)
-        if (types.none { it == "HTTPS" || it == "SVCB" || it == "65" || it == "64" }) return false
-        if (types.any { it != "HTTPS" && it != "SVCB" && it != "65" && it != "64" }) return false
-        if (rule.optBoolean("invert", false)) return false
-        val keys = rule.keys().asSequence().toSet()
-        val extras = keys - setOf(
-            "query_type", "action", "server", "outbound",
-            "disable_cache", "disable_cache_expire",
-            "invert", "clash_mode", "enabled", "network", "ip_version",
-        )
-        if (extras.isNotEmpty()) return false
-        val action = rule.optString("action").lowercase()
-        val server = rule.optString("server").lowercase()
-        return action == "reject" || action == "predefined" ||
-            server.contains("rcode") || server.contains("refused") || server.contains("nxdomain")
-    }
-
-    private fun hasLeadingEchRule(rules: JSONArray): Boolean {
-        if (rules.length() == 0) return false
-        val first = rules.optJSONObject(0) ?: return false
-        if (first.optString("server") != ECH_DNS_TAG) return false
-        val types = queryTypes(first)
-        return types.contains("HTTPS") || types.contains("SVCB")
-    }
-
     private fun applyCnDns(root: JSONObject, directTag: String) {
         val dns = root.optJSONObject("dns") ?: JSONObject().also { root.put("dns", it) }
         val servers = dns.optJSONArray("servers") ?: JSONArray().also { dns.put("servers", it) }
@@ -225,7 +138,8 @@ object ConfigChinaDirect {
                         .put("type", "udp")
                         .put("tag", CN_DNS_TAG)
                         .put("server", "223.5.5.5")
-                        .put("server_port", 53),
+                        .put("server_port", 53)
+                        .put("detour", directTag),
                 )
             } else {
                 servers.put(
@@ -269,14 +183,6 @@ object ConfigChinaDirect {
             if (o.optString("tag") == tag) return o
         }
         return null
-    }
-
-    private fun queryTypes(rule: JSONObject): List<String> {
-        val raw = rule.opt("query_type") ?: return emptyList()
-        return when (raw) {
-            is JSONArray -> (0 until raw.length()).map { raw.opt(it).toString().uppercase() }
-            else -> listOf(raw.toString().uppercase())
-        }
     }
 
     private fun toArray(items: Collection<String>): JSONArray {

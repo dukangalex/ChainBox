@@ -110,7 +110,7 @@ fun BackupRestoreScreen(navController: NavController) {
         scope.launch {
             if (!silent) busy = true
             val result = withContext(Dispatchers.IO) {
-                BackupManager.webdavProbe(webdavUrl, webdavUser, webdavPass)
+                BackupManager.webdavProbe(webdavUrl, webdavUser, webdavPass, remoteFile)
             }
             val ok = result.getOrDefault(false)
             persistProbe(ok, result.exceptionOrNull()?.message)
@@ -128,8 +128,20 @@ fun BackupRestoreScreen(navController: NavController) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (webdavUrl.isNotBlank()) runProbe(silent = true)
+    LaunchedEffect(webdavUrl, webdavUser, webdavPass, remoteFile) {
+        if (webdavUrl.isBlank()) {
+            probeState = -1
+            probeDetail = null
+            Settings.webdavProbeOk = -1
+            return@LaunchedEffect
+        }
+        while (true) {
+            val result = withContext(Dispatchers.IO) {
+                BackupManager.webdavProbe(webdavUrl, webdavUser, webdavPass, remoteFile)
+            }
+            persistProbe(result.getOrDefault(false), result.exceptionOrNull()?.message)
+            delay(20_000)
+        }
     }
 
     val createDoc = rememberLauncherForActivityResult(
@@ -189,7 +201,9 @@ fun BackupRestoreScreen(navController: NavController) {
                         "· 覆盖：停服务、关数据库后完整写回。\n" +
                         "· 兼容：尽量恢复能读的部分，跳过损坏条目，并保留当前 WebDAV 账号。\n\n" +
                         "恢复后会自动重新加载应用。\n\n" +
-                        "WebDAV 需填写可访问的 HTTPS 目录 URL 以及账号密码。连通性指示灯会在进入页面和改账号后自动检测：绿灯可写，红灯认证/网络失败。Koofr 请用应用密码。",
+                        "WebDAV 需填写可访问的 HTTPS 目录 URL 以及账号密码。" +
+                            "连通性指示灯常驻自动检测，与实际上传使用同一套 GET/HEAD 接口：" +
+                            "绿灯可写，红灯认证/网络失败。部分网盘请使用应用密码，而不是登录密码。",
                 )
             },
             confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },
@@ -372,7 +386,7 @@ fun BackupRestoreScreen(navController: NavController) {
                 )
                 ListItem(
                     headlineContent = { Text("测试连通性") },
-                    supportingContent = { Text("自动检测，绿灯正常、红灯失败") },
+                    supportingContent = { Text("自动检测（与备份同一接口），绿灯正常、红灯失败") },
                     modifier = Modifier.clickable(enabled = !busy) { runProbe(silent = false) },
                 )
             }

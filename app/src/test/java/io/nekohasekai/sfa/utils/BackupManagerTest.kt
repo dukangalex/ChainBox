@@ -43,8 +43,15 @@ class BackupManagerTest {
         assertEquals(BackupManager.ProbeClass.OK, BackupManager.classifyProbe(207))
         assertEquals(BackupManager.ProbeClass.OK, BackupManager.classifyProbe(200))
         assertEquals(BackupManager.ProbeClass.MISS, BackupManager.classifyProbe(404))
+        assertEquals(BackupManager.ProbeClass.MISS, BackupManager.classifyProbe(405))
         val msg = BackupManager.authFailedMessage("https://app.koofr.net/dav/Koofr", 401, "Unauthorized")
         assertTrue(msg.contains("认证失败"))
         assertTrue(msg.contains("Koofr"))
+        val hidden = BackupManager.friendlyProbeDetail(
+            Exception("Expected one of [OPTIONS, GET, HEAD, POST, PUT, DELETE, TRACE, PATCH] but was PROPFIND"),
+        )
+        assertFalse(hidden.contains("PROPFIND"))
+        assertTrue(hidden.contains("不受支持"))
     }
 }
+

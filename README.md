@@ -1,6 +1,6 @@
 # ChainBox
 
-ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 Android 代理客户端，在其上提供可配置的多级出站（链式代理）以及相关的运行时覆盖选项。
+ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 Android 代理客户端，面向社区用户，在其上提供可配置的多级出站（链式代理）以及相关的运行时覆盖选项。
 
 本项目与 SagerNet 及官方 sing-box 无从属或授权关系，不得使用官方名称及标志进行商业发布或应用商店上架。
 
@@ -18,13 +18,15 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 | 客户端仓库 | [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox) （分支 `dev`） |
 | 内核仓库 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) （分支 `chain-dev`） |
 | 更新检查 | 仅本仓库 GitHub Releases |
+| 应用图标 | 白色底、天蓝色礼品盒、绿色蝴蝶结 |
 
 ## 功能范围
 
-- 多级出站：在当前配置中选择入口分组/节点，再选择落地（可来自当前或其他配置）；外部访问的源地址应为落地节点地址。**每份配置独立保存链路**。
+- 多级出站：在当前配置中选择入口分组/节点，再选择落地（可来自当前或其他配置）；外部访问的源地址应为落地节点地址。**每份配置独立保存链路**。前置只作为链式入口，不会成为出口。
 - 链路保持：出口选择保存于本地；远程订阅更新后仍按已保存的出口复用，不必重配。
-- 运行时覆盖：中国直连、ECH（DNS HTTPS / EchConfig）、严格路由、DNS、IPv6、QUIC、WebRTC 防护，不修改订阅原文。
-- 备份与恢复：本地文件及 WebDAV（连通性指示灯常驻；支持覆盖/兼容恢复；VPN 开启时尽量走系统直连）。
+- 运行时覆盖：中国直连、严格路由、DNS、IPv6、QUIC、WebRTC 防护。开启后**强制覆盖**对应字段，不修改订阅原文。
+- 备份与恢复：本地文件及 WebDAV（连通性指示灯常驻，检测方法与实际上传一致；支持覆盖/兼容恢复；VPN 开启时尽量走系统直连）。备份不含账号密码。
+- 日志：内核日志等级默认 info。
 
 具体操作见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
 

@@ -240,6 +240,85 @@ class ChainRuntimeCompilerTest {
         assertEquals("cloudflare-ech.com", ech.getString("query_server_name"))
     }
 
+    @Test
+    fun crossProfileSameGroupNameDoesNotStripEntryMembers() {
+        val entry = JSONObject()
+            .put(
+                "outbounds",
+                JSONArray()
+                    .put(node("hk-1"))
+                    .put(node("jp-1"))
+                    .put(
+                        JSONObject()
+                            .put("type", "urltest")
+                            .put("tag", "自动选择")
+                            .put("outbounds", JSONArray().put("hk-1").put("jp-1")),
+                    )
+                    .put(JSONObject().put("type", "direct").put("tag", "direct")),
+            )
+            .put("route", JSONObject().put("final", "自动选择"))
+            .toString()
+        val landing = JSONObject()
+            .put(
+                "outbounds",
+                JSONArray()
+                    .put(node("us-1"))
+                    .put(
+                        JSONObject()
+                            .put("type", "urltest")
+                            .put("tag", "自动选择")
+                            .put("outbounds", JSONArray().put("us-1")),
+                    ),
+            )
+            .toString()
+        val compiled = ChainRuntimeCompiler.apply(
+            ChainRuntimeCompiler.ApplyRequest(
+                content = entry,
+                currentProfileId = 1L,
+                entryTag = "自动选择",
+                landingProfileId = 2L,
+                landingTag = "自动选择",
+                landingContent = landing,
+            ),
+        )
+        val root = JSONObject(compiled)
+        val outs = root.getJSONArray("outbounds")
+        val chain = (0 until outs.length()).map { outs.getJSONObject(it) }
+            .first { it.optString("type") == "chain" }
+        val hops = chain.getJSONArray("outbounds")
+        assertEquals("自动选择", hops.getString(0))
+        assertEquals("chainbox-landing-2-自动选择", hops.getString(1))
+        val entryGroup = (0 until outs.length()).map { outs.getJSONObject(it) }
+            .first { it.optString("tag") == "自动选择" }
+        val members = (0 until entryGroup.getJSONArray("outbounds").length()).map {
+            entryGroup.getJSONArray("outbounds").getString(it)
+        }
+        assertTrue(members.contains("hk-1"))
+        assertTrue(members.contains("jp-1"))
+        assertEquals(root.getJSONObject("route").getString("final"), chain.optString("tag"))
+        val pinned = ChainRuntimeCompiler.apply(
+            ChainRuntimeCompiler.ApplyRequest(
+                content = JSONObject(entry).put(
+                    "route",
+                    JSONObject().put("final", "自动选择").put(
+                        "rules",
+                        JSONArray().put(JSONObject().put("outbound", "自动选择")),
+                    ),
+                ).toString(),
+                currentProfileId = 1L,
+                entryTag = "自动选择",
+                landingProfileId = 2L,
+                landingTag = "自动选择",
+                landingContent = landing,
+            ),
+        )
+        val pinnedRoot = JSONObject(pinned)
+        val chainTag = pinnedRoot.getJSONObject("route").getString("final")
+        val outbound = pinnedRoot.getJSONObject("route").getJSONArray("rules").getJSONObject(0).getString("outbound")
+        assertEquals(chainTag, outbound)
+        assertFalse(outbound == "自动选择")
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun oversizedConfigIsRejected() {
         val huge = "x".repeat(ChainRuntimeCompiler.MAX_CONFIG_CHARS + 8)

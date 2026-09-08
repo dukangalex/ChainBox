@@ -73,7 +73,6 @@ fun ProfileOverrideScreen(
     var managedModeEnabled by remember { mutableStateOf(Settings.perAppProxyManagedMode) }
     var isScanning by remember { mutableStateOf(false) }
     var webrtcProtect by remember { mutableStateOf(Settings.webrtcProtect) }
-    var echDns by remember { mutableStateOf(Settings.echDns) }
     var chinaDirect by remember { mutableStateOf(Settings.chinaDirect) }
     var disableQuic by remember { mutableStateOf(Settings.disableQuic) }
     var excludeCnQuic by remember { mutableStateOf(Settings.excludeCnQuic) }
@@ -240,7 +239,7 @@ fun ProfileOverrideScreen(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             Text(
-                text = "以下为 ChainBox 运行时覆盖，不修改订阅文件。点 ⓘ 查看说明。",
+                text = "以下为运行时强制覆盖，不修改订阅文件。开启后无论订阅有没有对应字段都会写入。点 ⓘ 查看说明。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 12.dp),
@@ -267,29 +266,6 @@ fun ProfileOverrideScreen(
                         }
                     },
                 )
-                OverrideSwitch(
-                    title = "ECH（DNS HTTPS）",
-                    subtitle = "解析 EchConfig：放行 HTTPS/SVCB 并走独立 DoH",
-                    checked = echDns,
-                    onHelp = {
-                        help = SwitchHelp(
-                            "ECH（DNS HTTPS）",
-                            "官方 sing-box 在 tls.ech.enabled 且未写死 config 时，会查 HTTPS/SVCB DNS 记录拉取 EchConfig（例如 cloudflare-ech.com）。部分订阅会拦截这些查询，导致面板里开了 ECH、App 里却无效。\n\n" +
-                                "开启后：\n" +
-                                "1. 去掉拦截 HTTPS/SVCB 的 DNS 规则；\n" +
-                                "2. 注入独立 DoH（dns.google）专门解析 EchConfig；\n" +
-                                "3. 节点里已有的 tls.ech（含 query_server_name）原样交给内核。\n\n" +
-                                "不会给所有节点强开 ECH。机场面板里填的 EchConfig DNS / 解析域名写在订阅 JSON 里，ChainBox 不会删掉。",
-                        )
-                    },
-                    onCheckedChange = {
-                        echDns = it
-                        scope.launch(Dispatchers.IO) {
-                            Settings.echDns = it
-                            withContext(Dispatchers.Main) { reload() }
-                        }
-                    },
-                )
             }
             Text(
                 text = "中国直连",
@@ -303,13 +279,13 @@ fun ProfileOverrideScreen(
             ) {
                 OverrideSwitch(
                     title = "中国直连",
-                    subtitle = "绕过中国 IP/域名、公共 DNS 与局域网",
+                    subtitle = "强制绕过中国 IP/域名、公共 DNS 与局域网",
                     checked = chinaDirect,
                     onHelp = {
                         help = SwitchHelp(
                             "中国直连",
-                            "一个开关打包六项运行时绕过，不改订阅文件：\n" +
-                                "1. 绕过中国 IP（配置里若已有 geoip-cn 规则集会直接用）\n" +
+                            "开启后强制写入运行时直连规则，不改订阅文件，也不依赖订阅是否已有 geoip/geosite：\n" +
+                                "1. 绕过中国 IP（订阅若已有 geoip-cn 会优先使用）\n" +
                                 "2. 绕过中国域名（.cn 及常用国内站点）\n" +
                                 "3. 绕过中国公共 DNS IP（阿里/114/DNSPod 等）\n" +
                                 "4. 绕过中国公共 DNS 域名\n" +
@@ -337,19 +313,65 @@ fun ProfileOverrideScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             ) {
-                OverrideSwitch("严格路由", "TUN strict_route，降低绕过泄漏", strictRoute, true, { help = SwitchHelp("严格路由", "开启 TUN strict_route。") }) {
+                OverrideSwitch(
+                    title = "严格路由",
+                    subtitle = "强制开启 TUN strict_route",
+                    checked = strictRoute,
+                    onHelp = {
+                        help = SwitchHelp(
+                            "严格路由",
+                            "无论订阅是否已写 strict_route，开启后都强制写成 true。没有 TUN 入站时该开关无法生效，其它开关不受影响。",
+                        )
+                    },
+                ) {
                     strictRoute = it
-                    scope.launch(Dispatchers.IO) { Settings.strictRoute = it; withContext(Dispatchers.Main) { reload() } }
+                    scope.launch(Dispatchers.IO) {
+                        Settings.strictRoute = it
+                        withContext(Dispatchers.Main) { reload() }
+                    }
                 }
-                OverrideSwitch("DNS 防泄漏倾向", "加强 DNS 走代理栈", dnsProtect, true, { help = SwitchHelp("DNS", "加强 DNS 防护倾向。") }) {
+                OverrideSwitch(
+                    title = "DNS 防泄漏倾向",
+                    subtitle = "强制 DNS 走代理栈",
+                    checked = dnsProtect,
+                    onHelp = {
+                        help = SwitchHelp(
+                            "DNS",
+                            "强制写入 independent_cache 与 auto_detect_interface，覆盖订阅原值。",
+                        )
+                    },
+                ) {
                     dnsProtect = it
-                    scope.launch(Dispatchers.IO) { Settings.dnsProtect = it; withContext(Dispatchers.Main) { reload() } }
+                    scope.launch(Dispatchers.IO) {
+                        Settings.dnsProtect = it
+                        withContext(Dispatchers.Main) { reload() }
+                    }
                 }
-                OverrideSwitch("禁用 IPv6", "仅 IPv4，避免 IPv6 旁路", disableIpv6, true, { help = SwitchHelp("禁用 IPv6", "ipv4_only 并拦截 IPv6。") }) {
+                OverrideSwitch(
+                    title = "禁用 IPv6",
+                    subtitle = "仅 IPv4，避免 IPv6 旁路",
+                    checked = disableIpv6,
+                    onHelp = {
+                        help = SwitchHelp(
+                            "禁用 IPv6",
+                            "强制 DNS strategy=ipv4_only，拦截 IPv6，并清空 TUN 的 IPv6 地址。",
+                        )
+                    },
+                ) {
                     disableIpv6 = it
-                    scope.launch(Dispatchers.IO) { Settings.disableIpv6 = it; withContext(Dispatchers.Main) { reload() } }
+                    scope.launch(Dispatchers.IO) {
+                        Settings.disableIpv6 = it
+                        withContext(Dispatchers.Main) { reload() }
+                    }
                 }
-                OverrideSwitch("禁用 QUIC", "拦截 UDP 443", disableQuic, true, { help = SwitchHelp("禁用 QUIC", "拦截 HTTP/3。") }) {
+                OverrideSwitch(
+                    title = "禁用 QUIC",
+                    subtitle = "拦截 UDP 443",
+                    checked = disableQuic,
+                    onHelp = {
+                        help = SwitchHelp("禁用 QUIC", "强制在路由最前插入 UDP 443 拒绝规则，覆盖订阅原值。")
+                    },
+                ) {
                     disableQuic = it
                     if (!it) excludeCnQuic = false
                     scope.launch(Dispatchers.IO) {
@@ -358,9 +380,20 @@ fun ProfileOverrideScreen(
                         withContext(Dispatchers.Main) { reload() }
                     }
                 }
-                OverrideSwitch("排除国内 QUIC", "放行中国大陆 QUIC", excludeCnQuic, disableQuic, { help = SwitchHelp("排除国内 QUIC", "国内 UDP 443 放行。") }) {
+                OverrideSwitch(
+                    title = "排除国内 QUIC",
+                    subtitle = "放行中国大陆 QUIC",
+                    checked = excludeCnQuic,
+                    enabled = disableQuic,
+                    onHelp = {
+                        help = SwitchHelp("排除国内 QUIC", "国内域名 UDP 443 强制直连，其余仍拦。")
+                    },
+                ) {
                     excludeCnQuic = it
-                    scope.launch(Dispatchers.IO) { Settings.excludeCnQuic = it; withContext(Dispatchers.Main) { reload() } }
+                    scope.launch(Dispatchers.IO) {
+                        Settings.excludeCnQuic = it
+                        withContext(Dispatchers.Main) { reload() }
+                    }
                 }
             }
         }

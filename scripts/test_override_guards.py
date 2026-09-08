@@ -45,6 +45,8 @@ def main() -> int:
         errors.append("isFinalLike missing; 漏网之鱼 would be locked as entry again")
     if "landing/exit" not in chain and "public IP" not in chain:
         errors.append("chain compiler should document packet path: entry first, landing last")
+    if "if (sameProfile) add(req.landingTag)" not in chain:
+        errors.append("cross-profile landing tags must not be extraExcluded from the entry hop")
 
     bindings = read("app/src/main/java/io/nekohasekai/sfa/chain/ChainBindings.kt")
     if "per-profile" not in bindings.lower() and "Per-profile" not in bindings:
@@ -65,7 +67,7 @@ def main() -> int:
         errors.append("Chain builder UI must say the binding is current-profile only")
     if "订阅更新" not in ui:
         errors.append("Chain builder should tell users bindings survive subscription refresh")
-    for leak in ("Kitty", "MYCF", "edgetunne"):
+    for leak in ("Kitty", "MYCF", "edgetunne", "edgtgt", "longteng"):
         if leak in ui:
             errors.append(f"Chain builder UI must not hardcode airport name {leak}")
     if "validation-only" not in ui and "仅用于提前校验" not in ui and "validation-only here" not in ui:
@@ -89,8 +91,8 @@ def main() -> int:
         errors.append("Settings.configNormalize must stay removed")
     if "chinaDirect" not in settings:
         errors.append("Settings.chinaDirect missing")
-    if "echDns" not in settings:
-        errors.append("Settings.echDns missing")
+    if "echDns" in settings or "ECH_DNS" in settings:
+        errors.append("ECH overlay was removed; Settings.echDns must not return")
     if "fun closeDatabase" not in settings:
         errors.append("Settings.closeDatabase missing; restore would hit open WAL")
     if "restoreCompat" not in settings:
@@ -100,26 +102,31 @@ def main() -> int:
     for needle in ("ip_is_private", "CHINA_DNS_IPS", "CHINA_DNS_DOMAINS", "LAN_DOMAIN_SUFFIXES", "cnDomainSuffixArray"):
         if needle not in china:
             errors.append(f"China direct overlay missing {needle}")
-    if "unblockHttpsQueries" not in china:
-        errors.append("ECH DNS unblock helper missing")
-    if "applyEchDns" not in china or "ECH_DNS_TAG" not in china:
-        errors.append("ECH overlay must inject a dedicated HTTPS DNS server")
+    if "applyEchDns" in china or "ECH_DNS_TAG" in china or "unblockHttpsQueries" in china:
+        errors.append("ECH DNS overlay must stay removed from ConfigChinaDirect")
 
     override = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigQuicOverride.kt")
     if "Settings.chinaDirect" not in override:
         errors.append("ConfigQuicOverride must apply china direct")
-    if "Settings.echDns" not in override:
-        errors.append("ConfigQuicOverride must honor ECH DNS overlay")
-    if "applyEchDns" not in override:
-        errors.append("runtime overlay must call applyEchDns, not only unblock rejects")
+    if "echDns" in override or "applyEchDns" in override:
+        errors.append("ECH overlay must stay removed from ConfigQuicOverride")
+    if "applyLogLevel" not in override or '"info"' not in override:
+        errors.append("runtime overlay must force log.level=info")
+    if "applyOne" not in override:
+        errors.append("each overlay switch must apply in isolation so one failure cannot skip the rest")
     if "entryMissing" not in override:
         errors.append("subscription update should fall back when entry tag is gone")
+    if "independent_cache\", true)" not in override and "independent_cache\", true" not in override:
+        if 'dns.put("independent_cache", true)' not in override:
+            errors.append("DNS protect must force-overwrite independent_cache")
 
     ui_override = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/ProfileOverrideScreen.kt")
     if "中国直连" not in ui_override:
         errors.append("Profile override UI must expose 中国直连")
-    if "ECH" not in ui_override:
-        errors.append("Profile override UI must expose ECH")
+    if "ECH" in ui_override or "echDns" in ui_override:
+        errors.append("Profile override UI must not expose ECH")
+    if "强制" not in ui_override:
+        errors.append("Profile override UI should say overlays are forced")
 
     compiler = read("app/src/main/java/io/nekohasekai/sfa/chain/ChainRuntimeCompiler.kt")
     if "保存的入口" in compiler and "已不存在" in compiler:
@@ -128,6 +135,8 @@ def main() -> int:
         errors.append("compiler must cap JSON size before JSONObject(content)")
     if "pinTrafficToChain" not in compiler:
         errors.append("compiler must rewrite proxy routes so the entry cannot become the public exit")
+    if "ENTRY_PREFIX" not in compiler:
+        errors.append("compiler must keep generated entry hops from becoming the public exit")
 
     dav = read("app/src/main/java/io/nekohasekai/sfa/utils/BackupManager.kt")
     if "pickNonVpnNetwork" not in dav:
@@ -150,6 +159,12 @@ def main() -> int:
         errors.append("WebDAV 401 must produce a dedicated auth error")
     if "compat: Boolean" not in dav:
         errors.append("restore must support compatibility mode")
+    if 'listOf("PROPFIND"' in dav or '"PROPFIND", "OPTIONS"' in dav:
+        errors.append("WebDAV probe must not use PROPFIND; Android HttpURLConnection rejects it")
+    if "friendlyProbeDetail" not in dav:
+        errors.append("probe must hide ProtocolException / PROPFIND internals")
+    if "HEAD" not in dav:
+        errors.append("WebDAV probe should use HEAD/GET like the real backup path")
 
     dash = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardViewModel.kt")
     if "if (currentState.isLoading) return" in dash:
@@ -166,6 +181,29 @@ def main() -> int:
         errors.append("launcher background must be white, not black")
     if "#FFFFFF" not in icon_bg and "#ffffff" not in icon_bg:
         errors.append("launcher background should be #FFFFFF")
+
+    icon_fg = read("app/src/main/res/drawable/ic_launcher_foreground.xml")
+    if "#22C55E" not in icon_fg and "#16A34A" not in icon_fg and "#4ADE80" not in icon_fg:
+        errors.append("launcher foreground must use a green bow")
+    if "#DC2626" in icon_fg or "#991B1B" in icon_fg:
+        errors.append("launcher foreground must not keep the red ribbon")
+
+    logs = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/log/LogModels.kt")
+    if "filterLogLevel: LogLevel = LogLevel.INFO" not in logs:
+        errors.append("log viewer default filter must be INFO")
+
+    leaks = []
+    for rel in (
+        "app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ChainBuilderScreen.kt",
+        "app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/ProfileOverrideScreen.kt",
+        "docs/USER_GUIDE.md",
+        "README.md",
+    ):
+        text = read(rel)
+        for leak in ("Kitty", "MYCF", "edgetunne", "longteng.de5"):
+            if leak in text:
+                leaks.append(f"{rel} contains private name {leak}")
+    errors.extend(leaks)
 
     if errors:
         print("FAIL")

@@ -1,47 +1,47 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="1024"
-    android:viewportHeight="1024">
-    <group android:translateY="-25">
-        <!-- sky-blue isometric box -->
-        <path
-            android:pathData="M512,262 754.5,402 512,542 269.5,402Z"
-            android:fillColor="#7DD3FC" />
-        <path
-            android:pathData="M269.5,402 512,542 512,812 269.5,672Z"
-            android:fillColor="#0284C7" />
-        <path
-            android:pathData="M512,542 754.5,402 754.5,672 512,812Z"
-            android:fillColor="#0EA5E9" />
-        <path
-            android:pathData="M390.75,472 633.25,332"
-            android:strokeColor="#0369A1"
-            android:strokeWidth="4" />
-        <path
-            android:pathData="M512,262 754.5,402"
-            android:strokeColor="#BAE6FD"
-            android:strokeWidth="2.5" />
-        <path
-            android:pathData="M512,262 269.5,402"
-            android:strokeColor="#38BDF8"
-            android:strokeWidth="2.5" />
-        <path
-            android:pathData="M512,542 512,812"
-            android:strokeColor="#0369A1"
-            android:strokeWidth="2" />
-        <!-- red wrapping stripe -->
-        <path
-            android:pathData="M356.8,351.6 390.75,332 633.25,472 599.3,491.6Z"
-            android:fillColor="#DC2626" />
-        <path
-            android:pathData="M390.75,332 424.7,312.4 667.2,452.4 633.25,472Z"
-            android:fillColor="#F87171" />
-        <path
-            android:pathData="M599.3,491.6 633.25,472 633.25,592 599.3,611.6Z"
-            android:fillColor="#991B1B" />
-        <path
-            android:pathData="M633.25,472 667.2,452.4 667.2,572.4 633.25,592Z"
-            android:fillColor="#B91C1C" />
-    </group>
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- sky-blue gift box, content in adaptive safe zone -->
+    <path
+        android:pathData="M30,46 L78,46 L78,84 Q78,88 74,88 L34,88 Q30,88 30,84 Z"
+        android:fillColor="#38BDF8" />
+    <path
+        android:pathData="M26,40 L82,40 L82,50 L26,50 Z"
+        android:fillColor="#0EA5E9" />
+    <path
+        android:pathData="M26,40 L82,40 L80,38 L28,38 Z"
+        android:fillColor="#7DD3FC" />
+    <!-- green wrapping ribbons -->
+    <path
+        android:pathData="M50,40 L58,40 L58,88 L50,88 Z"
+        android:fillColor="#22C55E" />
+    <path
+        android:pathData="M30,62 L78,62 L78,70 L30,70 Z"
+        android:fillColor="#16A34A" />
+    <!-- green bow loops -->
+    <path
+        android:pathData="M54,40 C42,18 24,30 36,42 C42,46 50,42 54,40 Z"
+        android:fillColor="#4ADE80" />
+    <path
+        android:pathData="M54,40 C66,18 84,30 72,42 C66,46 58,42 54,40 Z"
+        android:fillColor="#4ADE80" />
+    <path
+        android:pathData="M54,40 C44,22 30,32 40,42 C46,45 52,42 54,40 Z"
+        android:fillColor="#22C55E" />
+    <path
+        android:pathData="M54,40 C64,22 78,32 68,42 C62,45 56,42 54,40 Z"
+        android:fillColor="#22C55E" />
+    <!-- knot -->
+    <path
+        android:pathData="M50,36 Q54,32 58,36 Q62,40 58,44 Q54,48 50,44 Q46,40 50,36 Z"
+        android:fillColor="#15803D" />
+    <!-- tails -->
+    <path
+        android:pathData="M50,44 L44,58 L54,48 Z"
+        android:fillColor="#16A34A" />
+    <path
+        android:pathData="M58,44 L64,58 L54,48 Z"
+        android:fillColor="#16A34A" />
 </vector>

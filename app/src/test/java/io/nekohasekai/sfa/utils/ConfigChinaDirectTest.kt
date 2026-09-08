@@ -46,79 +46,14 @@ class ConfigChinaDirectTest {
     }
 
     @Test
-    fun unblocksHttpsDnsReject() {
-        val dns = JSONObject().put(
-            "rules",
-            JSONArray()
-                .put(JSONObject().put("query_type", JSONArray().put("HTTPS").put("SVCB")).put("action", "reject"))
-                .put(JSONObject().put("domain_suffix", "cn").put("server", "local")),
-        )
-        val removed = ConfigChinaDirect.unblockHttpsQueries(dns)
-        assertEquals(1, removed)
-        assertEquals(1, dns.getJSONArray("rules").length())
-    }
-
-    @Test
-    fun keepsMixedHttpsRuleWithDomains() {
-        val dns = JSONObject().put(
-            "rules",
-            JSONArray().put(
-                JSONObject()
-                    .put("query_type", "HTTPS")
-                    .put("domain", "example.com")
-                    .put("action", "reject"),
-            ),
-        )
-        assertEquals(0, ConfigChinaDirect.unblockHttpsQueries(dns))
-        assertEquals(1, dns.getJSONArray("rules").length())
-    }
-
-    @Test
-    fun unblocksHttpsRejectEvenWithClashMode() {
-        val dns = JSONObject().put(
-            "rules",
-            JSONArray().put(
-                JSONObject()
-                    .put("query_type", JSONArray().put("HTTPS").put("SVCB"))
-                    .put("action", "reject")
-                    .put("clash_mode", "Rule"),
-            ),
-        )
-        assertEquals(1, ConfigChinaDirect.unblockHttpsQueries(dns))
-        assertEquals(0, dns.getJSONArray("rules").length())
-    }
-
-    @Test
-    fun applyEchDnsInjectsDoHAndKeepsTlsEch() {
+    fun forceAppliesEvenWhenDnsAndRouteMissing() {
         val root = JSONObject()
-            .put(
-                "dns",
-                JSONObject().put(
-                    "rules",
-                    JSONArray().put(
-                        JSONObject().put("query_type", JSONArray().put("HTTPS")).put("action", "reject"),
-                    ),
-                ),
-            )
-            .put(
-                "outbounds",
-                JSONArray().put(
-                    JSONObject()
-                        .put("type", "vless")
-                        .put("tag", "n")
-                        .put("tls", JSONObject().put("ech", JSONObject().put("enabled", true))),
-                ),
-            )
-        assertTrue(ConfigChinaDirect.applyEchDns(root))
-        val dns = root.getJSONObject("dns")
-        val first = dns.getJSONArray("rules").getJSONObject(0)
-        assertEquals(ConfigChinaDirect.ECH_DNS_TAG, first.getString("server"))
-        val servers = dns.getJSONArray("servers")
-        val tags = (0 until servers.length()).map { servers.getJSONObject(it).optString("tag") }
-        assertTrue(tags.contains(ConfigChinaDirect.ECH_DNS_TAG))
-        assertEquals(
-            true,
-            root.getJSONArray("outbounds").getJSONObject(0).getJSONObject("tls").getJSONObject("ech").getBoolean("enabled"),
-        )
+        ConfigChinaDirect.apply(root)
+        assertTrue(root.has("dns"))
+        assertTrue(root.has("route"))
+        assertTrue(root.has("outbounds"))
+        val first = root.getJSONObject("route").getJSONArray("rules").getJSONObject(0)
+        assertTrue(first.optBoolean("ip_is_private"))
+        assertEquals("direct", first.getString("outbound"))
     }
 }

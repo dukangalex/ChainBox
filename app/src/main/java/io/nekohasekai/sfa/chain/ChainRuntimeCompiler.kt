@@ -78,10 +78,14 @@ object ChainRuntimeCompiler {
             mergeLandingGraph(outs, landingOuts, req.landingProfileId, req.landingTag)
         }
 
+        val entryExclude = buildSet {
+            add(landingMergedTag)
+            if (sameProfile) add(req.landingTag)
+        }
         val entryHop = prepareGroupHop(
             outs,
             main,
-            extraExclude = setOf(req.landingTag, landingMergedTag),
+            extraExclude = entryExclude,
             tagPrefix = ENTRY_PREFIX,
         )
 
@@ -94,7 +98,7 @@ object ChainRuntimeCompiler {
         outs.put(chain)
         route.put("final", chainTag)
         root.put("outbounds", outs)
-        pinTrafficToChain(root, chainTag, landingMergedTag)
+        pinTrafficToChain(root, chainTag, landingMergedTag, setOf(main, entryHop))
         return root.toString()
     }
 
@@ -168,8 +172,14 @@ object ChainRuntimeCompiler {
      * Front airport outbounds may only appear as hop 0 of the generated chain.
      * Rewrite route.final, route.rules[].outbound and dns.servers[].detour so
      * unmatched / Global / explicit-proxy traffic cannot exit via the entry.
+     * entryTags are never treated as a valid public exit.
      */
-    internal fun pinTrafficToChain(root: JSONObject, chainTag: String, landingTag: String) {
+    internal fun pinTrafficToChain(
+        root: JSONObject,
+        chainTag: String,
+        landingTag: String,
+        entryTags: Set<String> = emptySet(),
+    ) {
         val outs = root.optJSONArray("outbounds") ?: return
         val protected = mutableSetOf(chainTag, landingTag)
         for (i in 0 until outs.length()) {
@@ -177,12 +187,13 @@ object ChainRuntimeCompiler {
             val tag = o.optString("tag").trim()
             val type = o.optString("type").trim()
             if (tag.isEmpty()) continue
+            if (tag in entryTags || tag.startsWith(ENTRY_PREFIX)) continue
             if (type in forbiddenTypes || tag.lowercase() in forbiddenTags) protected.add(tag)
             if (tag.startsWith(LANDING_PREFIX)) protected.add(tag)
         }
         val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
         val currentFinal = route.optString("final").trim()
-        if (currentFinal.isEmpty() || currentFinal !in protected) {
+        if (currentFinal.isEmpty() || currentFinal !in protected || currentFinal in entryTags) {
             route.put("final", chainTag)
         }
         rewriteRuleOutbounds(route.optJSONArray("rules"), protected, chainTag)
