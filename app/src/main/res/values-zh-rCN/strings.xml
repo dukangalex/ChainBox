@@ -641,5 +641,5 @@
     <string name="backup_and_restore">备份与恢复</string>
     <string name="chain_builder">链式代理</string>
     <string name="chain_builder_title">链式代理生成器</string>
-    <string name="chain_builder_subtitle">点选入口和落地，生成 sing-box 原生 chain 出站</string>
+    <string name="chain_builder_subtitle">为当前配置单独绑定入口和落地，其他配置互不影响</string>
 </resources>

@@ -2,7 +2,10 @@ package io.nekohasekai.sfa.utils
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Base64
+import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.constant.Path
 import io.nekohasekai.sfa.database.Settings
 import org.json.JSONObject
@@ -14,9 +17,14 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.Proxy
 import java.net.URL
+import java.security.KeyStore
+import java.security.SecureRandom
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
 
 object BackupManager {
     private const val MANIFEST = "manifest.json"
@@ -24,6 +32,12 @@ object BackupManager {
     private const val MAX_ENTRIES = 512
     private const val MAX_ENTRY_SIZE = 32L * 1024 * 1024
     private const val MAX_TOTAL_SIZE = 128L * 1024 * 1024
+
+    private val systemSslSocketFactory by lazy {
+        val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+        tmf.init(null as KeyStore?)
+        SSLContext.getInstance("TLS").also { it.init(null, tmf.trustManagers, SecureRandom()) }.socketFactory
+    }
 
     fun createBackupFile(context: Context, dest: File): Result<File> = runCatching {
         dest.parentFile?.mkdirs()
@@ -106,79 +120,168 @@ object BackupManager {
     }
 
     fun webdavUpload(baseUrl: String, username: String, password: String, remoteName: String, localFile: File): Result<Unit> = runCatching {
-        val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply {
-            requestMethod = "PUT"
-            doOutput = true
-            setRequestProperty("Content-Type", "application/zip")
-            setRequestProperty("Content-Length", localFile.length().toString())
+        wrapSsl {
+            val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply {
+                requestMethod = "PUT"
+                doOutput = true
+                setRequestProperty("Content-Type", "application/zip")
+                setRequestProperty("Content-Length", localFile.length().toString())
+            }
+            try {
+                FileInputStream(localFile).use { input -> conn.outputStream.use { output -> input.copyTo(output) } }
+                val code = conn.responseCode
+                val err = conn.errorStream?.bufferedReader()?.readText()
+                if (code !in 200..299) error("WebDAV 上传失败 HTTP $code${err?.let { ": $it" } ?: ""}")
+            } finally {
+                conn.disconnect()
+            }
         }
-        FileInputStream(localFile).use { input -> conn.outputStream.use { output -> input.copyTo(output) } }
-        val code = conn.responseCode
-        val err = conn.errorStream?.bufferedReader()?.readText()
-        conn.disconnect()
-        if (code !in 200..299) error("WebDAV 上传失败 HTTP $code${err?.let { ": $it" } ?: ""}")
     }
 
     fun webdavDownload(baseUrl: String, username: String, password: String, remoteName: String, localFile: File): Result<File> = runCatching {
-        val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply { requestMethod = "GET" }
-        val code = conn.responseCode
-        if (code !in 200..299) {
-            val err = conn.errorStream?.bufferedReader()?.readText()
-            conn.disconnect()
-            error("WebDAV 下载失败 HTTP $code${err?.let { ": $it" } ?: ""}")
+        wrapSsl {
+            val conn = openWebDav(joinUrl(baseUrl, remoteName), username, password).apply { requestMethod = "GET" }
+            try {
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    val err = conn.errorStream?.bufferedReader()?.readText()
+                    error("WebDAV 下载失败 HTTP $code${err?.let { ": $it" } ?: ""}")
+                }
+                localFile.parentFile?.mkdirs()
+                conn.inputStream.use { input -> FileOutputStream(localFile).use { output -> input.copyTo(output) } }
+                localFile
+            } finally {
+                conn.disconnect()
+            }
         }
-        localFile.parentFile?.mkdirs()
-        conn.inputStream.use { input -> FileOutputStream(localFile).use { output -> input.copyTo(output) } }
-        conn.disconnect()
-        localFile
     }
 
     fun webdavProbe(baseUrl: String, username: String, password: String): Result<Boolean> = runCatching {
-        val target = URL(requireHttps(baseUrl))
-        var lastDetail = "no response"
-        for (method in listOf("OPTIONS", "PROPFIND")) {
-            val conn = openWebDav(target.toString(), username, password).apply {
-                requestMethod = method
-                instanceFollowRedirects = false
-                if (method == "PROPFIND") {
-                    setRequestProperty("Depth", "0")
-                    setRequestProperty("Content-Type", "application/xml; charset=utf-8")
+        wrapSsl {
+            val target = URL(requireHttps(baseUrl))
+            var lastDetail = "no response"
+            for (method in listOf("OPTIONS", "PROPFIND", "GET")) {
+                val conn = openWebDav(target.toString(), username, password).apply {
+                    requestMethod = method
+                    instanceFollowRedirects = false
+                    if (method == "PROPFIND") {
+                        setRequestProperty("Depth", "0")
+                        setRequestProperty("Content-Type", "application/xml; charset=utf-8")
+                    }
+                }
+                try {
+                    val code = conn.responseCode
+                    val loc = conn.getHeaderField("Location").orEmpty()
+                    lastDetail = "HTTP $code"
+                    if (code in 300..399 && loc.isNotEmpty()) {
+                        val next = try { URL(target, loc) } catch (_: Exception) { null }
+                        if (next == null || next.protocol != "https" || next.host != target.host) {
+                            error("连通性失败：重定向到不安全主机")
+                        }
+                        lastDetail = "redirect $code"
+                    }
+                    if (code == 404 || code == 410) continue
+                    val dav = conn.getHeaderField("DAV").orEmpty()
+                    val allow = conn.getHeaderField("Allow").orEmpty()
+                    val davLike = dav.isNotEmpty() || allow.contains("PROPFIND", true) || code == 207 ||
+                        (method == "OPTIONS" && code in 200..204) ||
+                        (method == "PROPFIND" && code in 200..207) ||
+                        (method == "GET" && code in 200..299)
+                    if (code == 401 || code == 403) return@runCatching true
+                    if (davLike && code in 200..299) return@runCatching true
+                } catch (e: Exception) {
+                    lastDetail = e.message ?: e.javaClass.simpleName
+                } finally {
+                    try { conn.disconnect() } catch (_: Exception) {}
                 }
             }
-            try {
-                val code = conn.responseCode
-                val loc = conn.getHeaderField("Location").orEmpty()
-                lastDetail = "HTTP $code"
-                if (code in 300..399 && loc.isNotEmpty()) {
-                    val next = try { URL(target, loc) } catch (_: Exception) { null }
-                    if (next == null || next.protocol != "https" || next.host != target.host) error("连通性失败：重定向到不安全主机")
-                }
-                if (code == 404 || code == 410) continue
-                val dav = conn.getHeaderField("DAV").orEmpty()
-                val allow = conn.getHeaderField("Allow").orEmpty()
-                val davLike = dav.isNotEmpty() || allow.contains("PROPFIND", true) || code == 207 ||
-                    (method == "OPTIONS" && code in 200..204) || (method == "PROPFIND" && code in 200..207)
-                if (code == 401 || code == 403) return@runCatching true
-                if (davLike && code in 200..299) return@runCatching true
-            } catch (e: Exception) {
-                lastDetail = e.message ?: e.javaClass.simpleName
-            } finally {
-                try { conn.disconnect() } catch (_: Exception) {}
+            error("连通性失败：$lastDetail")
+        }
+    }
+
+    private fun <T> wrapSsl(block: () -> T): T {
+        return try {
+            block()
+        } catch (e: Exception) {
+            throw friendlySsl(e)
+        }
+    }
+
+    internal fun friendlySsl(e: Exception): Exception {
+        val text = buildString {
+            append(e.message ?: "")
+            var c = e.cause
+            var n = 0
+            while (c != null && n++ < 6) {
+                append(' ')
+                append(c.javaClass.simpleName)
+                append(':')
+                append(c.message ?: "")
+                c = c.cause
             }
         }
-        error("连通性失败：$lastDetail")
+        if (
+            text.contains("Trust anchor", true) ||
+            text.contains("CertPath", true) ||
+            text.contains("SSLHandshake", true) ||
+            text.contains("CertificateException", true)
+        ) {
+            return IllegalStateException(
+                "证书校验失败。备份已尽量绕过 VPN 走系统网络直连。请确认设备时间正确，以及 WebDAV 站点证书链完整（常见于 TeraCLOUD / 自签证书）。原始错误：${e.message}",
+                e,
+            )
+        }
+        return if (e is IllegalStateException) e else IllegalStateException(e.message ?: e.javaClass.simpleName, e)
     }
 
     private fun openWebDav(url: String, username: String, password: String): HttpURLConnection {
-        val conn = URL(requireHttps(url)).openConnection(Proxy.NO_PROXY) as HttpURLConnection
+        val conn = openConnection(URL(requireHttps(url)))
         conn.connectTimeout = 15_000
         conn.readTimeout = 30_000
         conn.instanceFollowRedirects = false
+        conn.setRequestProperty("User-Agent", "ChainBox-WebDAV")
         if (username.isNotEmpty()) {
             val token = Base64.encodeToString("$username:$password".toByteArray(), Base64.NO_WRAP)
             conn.setRequestProperty("Authorization", "Basic $token")
         }
         return conn
+    }
+
+    private fun openConnection(url: URL): HttpURLConnection {
+        val network = pickNonVpnNetwork()
+        val conn = try {
+            if (network != null) network.openConnection(url) as HttpURLConnection
+            else url.openConnection(Proxy.NO_PROXY) as HttpURLConnection
+        } catch (_: Exception) {
+            url.openConnection(Proxy.NO_PROXY) as HttpURLConnection
+        }
+        if (conn is HttpsURLConnection) {
+            conn.sslSocketFactory = systemSslSocketFactory
+            conn.hostnameVerifier = HttpsURLConnection.getDefaultHostnameVerifier()
+        }
+        return conn
+    }
+
+    private fun pickNonVpnNetwork(): Network? {
+        return try {
+            val cm = Application.connectivity
+            val candidates = mutableListOf<Pair<Int, Network>>()
+            for (n in cm.allNetworks) {
+                val caps = cm.getNetworkCapabilities(n) ?: continue
+                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
+                val score = when {
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> 3
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> 2
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 1
+                    else -> 0
+                }
+                if (score > 0) candidates.add(score to n)
+            }
+            candidates.maxByOrNull { it.first }?.second
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun requireHttps(url: String): String {

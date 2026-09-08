@@ -74,13 +74,13 @@ object Settings {
     var strictRoute by dataStore.boolean(SettingsKey.STRICT_ROUTE) { false }
     var dnsProtect by dataStore.boolean(SettingsKey.DNS_PROTECT) { false }
     var disableIpv6 by dataStore.boolean(SettingsKey.DISABLE_IPV6) { false }
-    var configNormalize by dataStore.boolean(SettingsKey.CONFIG_NORMALIZE) { false }
     var webrtcProtect by dataStore.boolean(SettingsKey.WEBRTC_PROTECT) { false }
     var chainEnabled by dataStore.boolean(SettingsKey.CHAIN_ENABLED) { false }
     var chainEntryTag by dataStore.string(SettingsKey.CHAIN_ENTRY_TAG) { "" }
     var chainLandingProfileId by dataStore.long(SettingsKey.CHAIN_LANDING_PROFILE_ID) { -1L }
     var chainLandingTag by dataStore.string(SettingsKey.CHAIN_LANDING_TAG) { "" }
     var chainBoundProfileId by dataStore.long(SettingsKey.CHAIN_BOUND_PROFILE_ID) { -1L }
+    var chainBindingsJson by dataStore.string(SettingsKey.CHAIN_BINDINGS) { "{}" }
     var webdavUrl by dataStore.string(SettingsKey.WEBDAV_URL) { "" }
     var webdavUser by dataStore.string(SettingsKey.WEBDAV_USER) { "" }
     var webdavPassword by dataStore.string(SettingsKey.WEBDAV_PASSWORD) { "" }
@@ -142,7 +142,6 @@ object Settings {
     }
 
     private suspend fun needVPNService(): Boolean {
-        if (configNormalize) return true
         val selectedProfileId = selectedProfile
         if (selectedProfileId == -1L) return false
         val profile = ProfileManager.get(selectedProfile) ?: return false

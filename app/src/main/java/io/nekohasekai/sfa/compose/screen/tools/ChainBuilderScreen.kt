@@ -45,7 +45,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import io.nekohasekai.sfa.R
+import io.nekohasekai.sfa.chain.ChainBinding
+import io.nekohasekai.sfa.chain.ChainBindings
 import io.nekohasekai.sfa.chain.ChainRuntimeCompiler
+import io.nekohasekai.sfa.compose.base.UiEvent
+import io.nekohasekai.sfa.compose.base.rememberApplyServiceChangeNotifier
+import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
@@ -75,9 +80,13 @@ private data class ProfileChoice(val id: Long, val name: String, val hops: List<
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChainBuilderScreen(navController: NavController) {
+fun ChainBuilderScreen(
+    navController: NavController,
+    serviceStatus: Status = Status.Stopped,
+) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
+    val notifyApplyChange = rememberApplyServiceChangeNotifier(serviceStatus)
     var currentProfileId by remember { mutableStateOf(-1L) }
     var currentProfileName by remember { mutableStateOf("") }
     var currentProfilePath by remember { mutableStateOf<String?>(null) }
@@ -89,6 +98,7 @@ fun ChainBuilderScreen(navController: NavController) {
     var busy by remember { mutableStateOf(false) }
     var savedHint by remember { mutableStateOf<String?>(null) }
     var chainActive by remember { mutableStateOf(false) }
+    var otherBound by remember { mutableStateOf(0) }
     var picker by remember { mutableStateOf<String?>(null) }
     var pickerQuery by remember { mutableStateOf("") }
     var showHelp by remember { mutableStateOf(false) }
@@ -117,6 +127,8 @@ fun ChainBuilderScreen(navController: NavController) {
                     val parsed = parseHopsFromProfile(p)
                     if (parsed.isEmpty()) null else ProfileChoice(p.id, p.name, parsed)
                 }
+                val binding = ChainBindings.get(current.id)
+                val othersBound = ChainBindings.all().count { it.profileId != current.id }
                 withContext(Dispatchers.Main) {
                     currentProfileId = current.id
                     currentProfileName = current.name
@@ -124,23 +136,24 @@ fun ChainBuilderScreen(navController: NavController) {
                     currentHops = hops
                     allProfiles = others
                     loadError = null
-                    chainActive = Settings.chainEnabled
-                    val savedEntry = Settings.chainEntryTag.trim()
+                    otherBound = othersBound
+                    chainActive = binding != null
+                    val savedEntry = binding?.entryTag.orEmpty()
                     entry = hops.find { it.tag == savedEntry }
                         ?: hops.find { it.tag == suggested }
                         ?: hops.firstOrNull { !ChainRuntimeCompiler.isFinalLike(it.tag) }
-                    if (chainActive && Settings.chainLandingProfileId >= 0L && Settings.chainLandingTag.isNotBlank()) {
+                    if (binding != null) {
                         val found = others.flatMap { it.hops }.find {
-                            it.profileId == Settings.chainLandingProfileId && it.tag == Settings.chainLandingTag
+                            it.profileId == binding.landingProfileId && it.tag == binding.landingTag
                         }
                         exit = found ?: HopRef(
-                            Settings.chainLandingProfileId,
-                            profiles.find { it.id == Settings.chainLandingProfileId }?.name ?: "落地",
-                            Settings.chainLandingTag,
+                            binding.landingProfileId,
+                            profiles.find { it.id == binding.landingProfileId }?.name ?: "落地",
+                            binding.landingTag,
                             "selector",
                         )
-                        savedHint = "链路：${entry?.tag ?: "?"} → ${exit?.displayLine}"
-                    } else if (!chainActive) {
+                        savedHint = "仅当前配置：${entry?.tag ?: "?"} → ${exit?.displayLine}"
+                    } else {
                         exit = null
                         savedHint = null
                     }
@@ -167,6 +180,7 @@ fun ChainBuilderScreen(navController: NavController) {
             return
         }
         val path = currentProfilePath ?: return
+        val boundId = currentProfileId
         busy = true
         scope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -176,7 +190,7 @@ fun ChainBuilderScreen(navController: NavController) {
                     val originalFinal = JSONObject(raw).optJSONObject("route")
                         ?.optString("final")
                         ?.takeIf { it.isNotBlank() && !it.startsWith(ChainRuntimeCompiler.GENERATED_PREFIX) }
-                    val landingContent = if (landing.profileId == Settings.selectedProfile) {
+                    val landingContent = if (landing.profileId == boundId) {
                         null
                     } else {
                         val landingProfile = ProfileManager.get(landing.profileId)
@@ -186,7 +200,7 @@ fun ChainBuilderScreen(navController: NavController) {
                     ChainRuntimeCompiler.apply(
                         ChainRuntimeCompiler.ApplyRequest(
                             content = raw,
-                            currentProfileId = Settings.selectedProfile,
+                            currentProfileId = boundId,
                             entryTag = main.tag,
                             landingProfileId = landing.profileId,
                             landingTag = landing.tag,
@@ -194,18 +208,22 @@ fun ChainBuilderScreen(navController: NavController) {
                         ),
                     )
                     file.writeText(ChainRuntimeCompiler.clear(raw, originalFinal))
-                    Settings.chainEnabled = true
-                    Settings.chainEntryTag = main.tag
-                    Settings.chainLandingProfileId = landing.profileId
-                    Settings.chainLandingTag = landing.tag
-                    Settings.chainBoundProfileId = Settings.selectedProfile
+                    ChainBindings.put(
+                        ChainBinding(
+                            profileId = boundId,
+                            entryTag = main.tag,
+                            landingProfileId = landing.profileId,
+                            landingTag = landing.tag,
+                        ),
+                    )
                 }
             }
             busy = false
             if (result.isSuccess) {
                 chainActive = true
-                savedHint = "链路：${main.tag} → ${landing.displayLine}"
-                snackbar.showSnackbar("已保存链式出口。启动服务时按入口→落地串联，失败不会改走 DIRECT。")
+                savedHint = "仅当前配置：${main.tag} → ${landing.displayLine}"
+                notifyApplyChange(UiEvent.ApplyServiceChange.Mode.Reload)
+                snackbar.showSnackbar("已保存「$currentProfileName」的链式出口。其他配置不受影响。启动或重载后按入口→落地串联。")
             } else {
                 snackbar.showSnackbar("保存失败：${result.exceptionOrNull()?.message}")
             }
@@ -214,6 +232,7 @@ fun ChainBuilderScreen(navController: NavController) {
 
     fun clearChain() {
         val path = currentProfilePath ?: return
+        val boundId = currentProfileId
         busy = true
         scope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -222,19 +241,16 @@ fun ChainBuilderScreen(navController: NavController) {
                     val root = JSONObject(file.readText())
                     val final = ChainRuntimeCompiler.resolveMainTag(root.optJSONArray("outbounds") ?: JSONArray(), "")
                     file.writeText(ChainRuntimeCompiler.clear(root.toString(), final))
-                    Settings.chainEnabled = false
-                    Settings.chainEntryTag = ""
-                    Settings.chainLandingProfileId = -1L
-                    Settings.chainLandingTag = ""
-                    Settings.chainBoundProfileId = -1L
+                    ChainBindings.remove(boundId)
                 }
             }
             busy = false
             if (result.isSuccess) {
                 exit = null
                 chainActive = false
-                savedHint = "已取消链式，恢复普通出口"
-                snackbar.showSnackbar("已取消链式代理")
+                savedHint = "已取消「$currentProfileName」的链式，其他配置保留各自绑定"
+                notifyApplyChange(UiEvent.ApplyServiceChange.Mode.Reload)
+                snackbar.showSnackbar("已取消当前配置的链式代理")
             } else {
                 snackbar.showSnackbar("取消失败：${result.exceptionOrNull()?.message}")
             }
@@ -262,7 +278,18 @@ fun ChainBuilderScreen(navController: NavController) {
             Text("当前配置：$currentProfileName", fontWeight = FontWeight.Medium)
             savedHint?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             Text(
-                "Chain 只负责按你选的顺序串联现有 outbound：入口 → 落地 → 目标。不绑定机场或协议。链路失败不会自动改走 DIRECT。",
+                "链路只绑定当前这一份配置。切换到 Kitty / MYCF / 其他配置时，各自使用自己保存的落地，互不影响。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (otherBound > 0) {
+                Text(
+                    "另有 $otherBound 个配置已独立绑定落地，取消当前配置不会清掉它们。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                "Chain 按你选的顺序串联现有 outbound：入口 → 落地 → 目标。不绑定机场或协议。链路失败不会自动改走 DIRECT。",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text("入口（当前配置）", fontWeight = FontWeight.Medium)
@@ -274,10 +301,10 @@ fun ChainBuilderScreen(navController: NavController) {
                 Text(exit?.displayLine ?: "选择落地")
             }
             Button(onClick = { save() }, modifier = Modifier.fillMaxWidth(), enabled = !busy && entry != null && exit != null) {
-                Text("保存并固定为链式出口")
+                Text("保存并绑定到「$currentProfileName」")
             }
             OutlinedButton(onClick = { clearChain() }, modifier = Modifier.fillMaxWidth(), enabled = !busy && chainActive) {
-                Text("取消链式（恢复普通出口）")
+                Text("取消当前配置的链式")
             }
         }
     }
@@ -293,6 +320,18 @@ fun ChainBuilderScreen(navController: NavController) {
         val q = pickerQuery.trim().lowercase()
         val filtered = if (q.isEmpty()) source else source.filter {
             it.tag.lowercase().contains(q) || it.profileName.lowercase().contains(q)
+        }
+        val grouped = if (picker == "landing") {
+            val currentFirst = filtered.filter { it.profileId == currentProfileId }
+            val rest = filtered.filter { it.profileId != currentProfileId }.groupBy { it.profileId to it.profileName }
+            buildList {
+                if (currentFirst.isNotEmpty()) add(currentProfileName to currentFirst)
+                allProfiles.filter { it.id != currentProfileId }.forEach { p ->
+                    rest[p.id to p.name]?.let { add(p.name to it) }
+                }
+            }
+        } else {
+            listOf("" to filtered)
         }
         AlertDialog(
             onDismissRequest = { picker = null },
@@ -314,15 +353,30 @@ fun ChainBuilderScreen(navController: NavController) {
                         Text("没有可选项。请先导入含节点的配置。", style = MaterialTheme.typography.bodySmall)
                     }
                     LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                        items(filtered) { hop ->
-                            Column(
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    if (picker == "entry") entry = hop else exit = hop
-                                    picker = null
-                                }.padding(vertical = 10.dp),
-                            ) {
-                                Text(if (picker == "entry") "${hop.tag} · ${hop.typeLabel}" else hop.displayLine, fontWeight = FontWeight.Medium)
-                                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                        grouped.forEach { (groupName, hops) ->
+                            if (picker == "landing" && groupName.isNotEmpty()) {
+                                item(key = "hdr-$groupName") {
+                                    Text(
+                                        groupName,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                                    )
+                                }
+                            }
+                            items(hops, key = { "${it.profileId}:${it.tag}" }) { hop ->
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        if (picker == "entry") entry = hop else exit = hop
+                                        picker = null
+                                    }.padding(vertical = 10.dp),
+                                ) {
+                                    Text(
+                                        if (picker == "entry") "${hop.tag} · ${hop.typeLabel}" else "${hop.tag} · ${hop.typeLabel}",
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                                }
                             }
                         }
                     }
@@ -339,10 +393,11 @@ fun ChainBuilderScreen(navController: NavController) {
             text = {
                 Text(
                     "1. 入口：当前配置里流量先走的分组或节点（前置机场）。不要依赖「漏网之鱼」。\n" +
-                        "2. 落地：下一跳，出口 IP 应该是落地节点，不是前置机场。\n" +
-                        "3. 保存后使用 sing-box 原生 Chain outbound：入口 → 落地 → 目标。\n" +
-                        "4. Fail Closed：链路失败会明确报错并停止启动，不会偷偷改走 DIRECT。\n" +
-                        "5. 哪些流量走 Chain 仍由路由规则决定；Chain 只提供串联能力。",
+                        "2. 落地：下一跳，出口 IP 应该是落地节点，不是前置机场。可来自当前或其他配置。\n" +
+                        "3. 保存后只绑定当前配置。Kitty、MYCF、edgetunne 可以各绑不同落地。\n" +
+                        "4. 使用 sing-box 原生 Chain outbound：入口 → 落地 → 目标。\n" +
+                        "5. Fail Closed：链路失败会明确报错并停止启动，不会偷偷改走 DIRECT。\n" +
+                        "6. 哪些流量走 Chain 仍由路由规则决定；Chain 只提供串联能力。",
                 )
             },
             confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },

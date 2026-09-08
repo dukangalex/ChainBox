@@ -87,4 +87,40 @@ class ChainRuntimeCompilerTest {
         assertTrue(ChainRuntimeCompiler.isFinalLike("漏网之鱼"))
         assertTrue(ChainRuntimeCompiler.isFinalLike("final"))
     }
+
+    @Test
+    fun crossProfileLandingKeepsSeparateTags() {
+        val landing = JSONObject()
+            .put(
+                "outbounds",
+                JSONArray()
+                    .put(node("zgo-node"))
+                    .put(
+                        JSONObject()
+                            .put("type", "urltest")
+                            .put("tag", "zgo")
+                            .put("outbounds", JSONArray().put("zgo-node")),
+                    ),
+            )
+            .toString()
+        val compiled = ChainRuntimeCompiler.apply(
+            ChainRuntimeCompiler.ApplyRequest(
+                content = profile("节点选择"),
+                currentProfileId = 11L,
+                entryTag = "节点选择",
+                landingProfileId = 99L,
+                landingTag = "zgo",
+                landingContent = landing,
+            ),
+        )
+        val root = JSONObject(compiled)
+        val outs = root.getJSONArray("outbounds")
+        val tags = (0 until outs.length()).map { outs.getJSONObject(it).optString("tag") }
+        assertTrue(tags.any { it.startsWith("chainbox-landing-99-") })
+        val chain = (0 until outs.length()).map { outs.getJSONObject(it) }
+            .first { it.optString("type") == "chain" }
+        val hops = chain.getJSONArray("outbounds")
+        assertEquals("节点选择", hops.getString(0))
+        assertEquals("chainbox-landing-99-zgo", hops.getString(1))
+    }
 }

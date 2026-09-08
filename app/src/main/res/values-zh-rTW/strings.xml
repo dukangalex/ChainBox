@@ -677,5 +677,5 @@
     <string name="backup_and_restore">備份與還原</string>
     <string name="chain_builder">鏈式代理</string>
     <string name="chain_builder_title">鏈式代理產生器</string>
-    <string name="chain_builder_subtitle">點選入口與落地，產生 sing-box 原生 chain 出站</string>
+    <string name="chain_builder_subtitle">只綁定目前設定的入口與落地，其他設定互不影響</string>
 </resources>

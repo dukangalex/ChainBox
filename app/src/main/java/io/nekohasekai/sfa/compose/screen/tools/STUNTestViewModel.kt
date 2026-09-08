@@ -105,7 +105,7 @@ class STUNTestViewModel : BaseViewModel<STUNTestState, Nothing>() {
     private fun friendlyStunError(message: String): String {
         val m = message.lowercase()
         if (m.contains("eof") || m.contains("3478") || m.contains("timeout") || m.contains("refused") || m.contains("reject")) {
-            return "$message\n\n若已开启「配置规范化」或「防 WebRTC 泄露」，STUN 端口会被拦截，这是预期行为（说明真实 IP 不会经 WebRTC 漏出）。需要测 NAT 时请临时关闭这两个开关。"
+            return "$message\n\n若已开启「防 WebRTC 泄露」，STUN 端口会被拦截，这是预期行为（说明真实 IP 不会经 WebRTC 漏出）。需要测 NAT 时请临时关闭该开关。"
         }
         return message
     }

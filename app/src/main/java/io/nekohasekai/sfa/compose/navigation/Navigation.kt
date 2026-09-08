@@ -225,7 +225,7 @@ fun NavHost(
             )
         }
         composable(route = "tools/chain_builder", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
-            ChainBuilderScreen(navController = navController)
+            ChainBuilderScreen(navController = navController, serviceStatus = serviceStatus)
         }
         composable(route = "tools/network_quality", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             NetworkQualityScreen(navController = navController, serviceStatus = serviceStatus)

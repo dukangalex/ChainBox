@@ -747,5 +747,5 @@
     <string name="backup_and_restore">Backup and Restore</string>
     <string name="chain_builder">Chain Proxy</string>
     <string name="chain_builder_title">Chain proxy builder</string>
-    <string name="chain_builder_subtitle">Pick entry then landing; builds a native sing-box chain outbound</string>
+    <string name="chain_builder_subtitle">Bind entry and landing to the current profile only; other profiles stay independent</string>
 </resources>

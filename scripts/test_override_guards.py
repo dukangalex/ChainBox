@@ -13,23 +13,22 @@ def read(rel: str) -> str:
 def main() -> int:
     errors: list[str] = []
     normalize = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigNormalize.kt")
-    if 'put("sniff"' in normalize or "put(\"sniff\"" in normalize:
-        errors.append("ConfigNormalize must not write inbound sniff fields")
-    if 'put("action", "sniff")' not in normalize:
-        errors.append("ConfigNormalize must sniff via route action")
-    if "legacyInboundFields" not in normalize:
-        errors.append("ConfigNormalize should list legacy inbound fields to strip")
-
-    if 'dnsServer("dns-local", "223.5.5.5", "direct")' in normalize:
-        errors.append("dns-local must not detour to empty direct (sing-box 1.12+ rejects it)")
-    if 'put("download_detour", "direct")' in normalize:
-        errors.append("rule_set download_detour=direct is rejected by sing-box 1.12+")
-    if "raw.githubusercontent.com" in normalize:
-        errors.append("ConfigNormalize must not fetch GitHub rule-sets at startup")
-    if 'put("type", "udp")' not in normalize:
-        errors.append("dns-local should be UDP bootstrap without DoH/detour")
+    if "fun apply(" in normalize:
+        errors.append("ConfigNormalize rewriter was removed; do not add apply()")
     if "webrtcRejectRules" not in normalize:
-        errors.append("overwrite template should reject STUN ports")
+        errors.append("WebRTC STUN reject helper missing")
+    if "cnDomainSuffixArray" not in normalize:
+        errors.append("CN domain helper missing")
+
+    override = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigQuicOverride.kt")
+    if "Settings.configNormalize" in override:
+        errors.append("ConfigQuicOverride must not call config normalize")
+    if "ChainBindings.get" not in override:
+        errors.append("runtime chain must look up the current profile binding")
+
+    ui_override = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/ProfileOverrideScreen.kt")
+    if "配置规范化" in ui_override or "configNormalize" in ui_override:
+        errors.append("Profile override UI must not expose config normalize")
 
     compat = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigCompat.kt")
     if "plugin_opts" not in compat or "objectToPluginOpts" not in compat:
@@ -40,8 +39,6 @@ def main() -> int:
         errors.append("Chain compiler must not emit fail_closed; kernel ChainOutboundOptions only has outbounds")
     if "不可作为前置代理" in chain:
         errors.append("Chain compiler must not fail closed just because a selector contains DIRECT")
-    if "chainEntryTag" not in read("app/src/main/java/io/nekohasekai/sfa/database/Settings.kt"):
-        errors.append("Settings.chainEntryTag missing")
     if "fun resolveMainTag" not in chain:
         errors.append("resolveMainTag should be reusable by the UI")
     if "isFinalLike" not in chain:
@@ -49,9 +46,23 @@ def main() -> int:
     if "landing/exit" not in chain and "public IP" not in chain:
         errors.append("chain compiler should document packet path: entry first, landing last")
 
+    bindings = read("app/src/main/java/io/nekohasekai/sfa/chain/ChainBindings.kt")
+    if "per-profile" not in bindings.lower() and "Per-profile" not in bindings:
+        errors.append("ChainBindings must document per-profile isolation")
+    if "chainBindingsJson" not in read("app/src/main/java/io/nekohasekai/sfa/database/Settings.kt"):
+        errors.append("Settings.chainBindingsJson missing")
+
+    reapply = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigChainReapply.kt")
+    if "ChainBindings.get(currentProfileId)" not in reapply:
+        errors.append("runtime reapply must only chain the selected profile")
+
     ui = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ChainBuilderScreen.kt")
     if 'picker == "entry"' not in ui:
         errors.append("Chain builder must let the user pick the entry hop")
+    if "ChainBindings.put" not in ui:
+        errors.append("Chain builder must save a per-profile binding")
+    if "仅绑定当前" not in ui and "只绑定当前" not in ui:
+        errors.append("Chain builder UI must say the binding is current-profile only")
 
     locales = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/AppSettingsScreen.kt")
     if "locales_config" not in locales:
@@ -65,6 +76,20 @@ def main() -> int:
     settings = read("app/src/main/java/io/nekohasekai/sfa/database/Settings.kt")
     if "webrtcProtect" not in settings:
         errors.append("Settings.webrtcProtect missing")
+    if "configNormalize" in settings:
+        errors.append("Settings.configNormalize must stay removed")
+
+    icon_bg = read("app/src/main/res/values/ic_launcher_background.xml")
+    if "#000000" in icon_bg or "#000" in icon_bg:
+        errors.append("launcher background must be white, not black")
+    if "#FFFFFF" not in icon_bg and "#ffffff" not in icon_bg:
+        errors.append("launcher background should be #FFFFFF")
+
+    dav = read("app/src/main/java/io/nekohasekai/sfa/utils/BackupManager.kt")
+    if "pickNonVpnNetwork" not in dav:
+        errors.append("WebDAV should bypass VPN using the underlying network")
+    if "TrustManagerFactory" not in dav:
+        errors.append("WebDAV should use the system TrustManager explicitly")
 
     if errors:
         print("FAIL")

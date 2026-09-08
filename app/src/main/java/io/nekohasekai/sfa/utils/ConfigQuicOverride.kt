@@ -1,5 +1,6 @@
 package io.nekohasekai.sfa.utils
 
+import io.nekohasekai.sfa.chain.ChainBindings
 import io.nekohasekai.sfa.database.Settings
 import org.json.JSONArray
 import org.json.JSONObject
@@ -13,28 +14,14 @@ object ConfigQuicOverride {
         val warnings = mutableListOf<OverrideNotice>()
         var out = ConfigCompat.sanitize(content)
 
-        if (Settings.configNormalize) {
-            try {
-                out = ConfigNormalize.apply(out)
-            } catch (e: Exception) {
-                warnings += OverrideNotice(
-                    title = "配置规范化未生效",
-                    reason = e.message ?: "JSON 无法解析",
-                    hint = "请打开「设置 → 配置覆盖」关闭后重试，或检查订阅是否为合法 sing-box JSON。规范化是覆写：保留节点，DNS/路由/TUN 换成内置分流模板，不访问 GitHub。",
-                )
-            }
-        }
-
-        val chainNeeded = Settings.chainEnabled &&
-            (Settings.chainBoundProfileId < 0L || Settings.chainBoundProfileId == Settings.selectedProfile)
-        if (chainNeeded) {
+        if (ChainBindings.get(Settings.selectedProfile) != null) {
             try {
                 out = ConfigChainReapply.apply(out)
             } catch (e: Exception) {
                 val notice = OverrideNotice(
                     title = "链式代理未生效，已停止启动",
                     reason = e.message ?: "无法串联出站",
-                    hint = "请到「工具 → 链式代理」重新选择入口和落地并保存。链路为入口→落地，出口 IP 应是落地。不会自动改走 DIRECT。",
+                    hint = "链路只绑定当前配置。请到「工具 → 链式代理」为这个配置重新选择入口和落地并保存。失败不会自动改走 DIRECT。",
                 )
                 OverrideStatus.set(warnings + notice)
                 throw ChainApplyException(notice.reason)
@@ -46,7 +33,7 @@ object ConfigQuicOverride {
         if (extras) {
             try {
                 val root = JSONObject(out)
-                if (Settings.webrtcProtect && !Settings.configNormalize) applyWebrtc(root)
+                if (Settings.webrtcProtect) applyWebrtc(root)
                 if (Settings.disableQuic) applyQuic(root)
                 if (Settings.strictRoute) applyStrictRoute(root)
                 if (Settings.dnsProtect) applyDnsProtect(root)
