@@ -5,8 +5,10 @@ import org.json.JSONObject
 
 /**
  * Clash/mihomo → sing-box field coercion applied on import, remote refresh
- * and runtime overlay. Keeps user nodes; only rewrites fields the kernel
- * cannot decode.
+ * and runtime overlay. This is a compatibility shim, not a second kernel:
+ * user nodes stay intact; only fields the current libbox cannot decode
+ * are rewritten. ChainBox overlays (chain / China direct / WebRTC) run
+ * after this step.
  *
  * sing-box `ShadowsocksOutboundOptions.plugin_opts` is a string. Clash writes
  * an object (`plugin-opts: { mode, host }`), which makes libbox fail with
@@ -18,11 +20,18 @@ import org.json.JSONObject
  *
  * sing-box 1.14 removes `dns.fakeip` and legacy `servers[].address`. Import
  * and startup migrate them to typed servers so old subscriptions still load.
+ *
+ * DNS `type: rcode` / `type: predefined` as *servers* are not registered
+ * transports ("unknown transport type: rcode"). They become DNS *rule*
+ * actions (`action: predefined`) matching the 1.12 migration guide.
  */
 object ConfigCompat {
+    const val MAX_CONFIG_CHARS = 8 * 1024 * 1024
+
     fun sanitize(content: String): String {
         val trimmed = content.trim()
         if (trimmed.isEmpty() || trimmed[0] != '{') return content
+        if (trimmed.length > MAX_CONFIG_CHARS) return content
         val root = try {
             JSONObject(trimmed)
         } catch (_: Exception) {
@@ -110,6 +119,7 @@ object ConfigCompat {
             changed = true
         }
         if (hasFakeipServer && fakeipEnabled) ensureFakeipRule(dns)
+        if (migrateRcodeServers(dns)) changed = true
         return changed
     }
 
@@ -183,6 +193,95 @@ object ConfigCompat {
             else -> applyHost(server, "udp", address)
         }
         return true
+    }
+
+    /**
+     * `type: rcode` / `type: predefined` are not DNS *transports* in
+     * sing-box 1.12+. Drop those servers and rewrite rules that pointed
+     * at them to `action: predefined` (same RCODE).
+     */
+    internal fun migrateRcodeServers(dns: JSONObject): Boolean {
+        val servers = dns.optJSONArray("servers") ?: return false
+        val rcodeByTag = linkedMapOf<String, String>()
+        val keep = JSONArray()
+        var changed = false
+        for (i in 0 until servers.length()) {
+            val server = servers.optJSONObject(i) ?: continue
+            val rcode = extractRcode(server)
+            if (rcode == null) {
+                keep.put(server)
+                continue
+            }
+            changed = true
+            val tag = server.optString("tag").trim()
+            if (tag.isNotEmpty()) rcodeByTag[tag] = rcode
+        }
+        if (!changed) return false
+        if (keep.length() == 0) {
+            keep.put(JSONObject().put("type", "local").put("tag", "chainbox-dns-local"))
+        }
+        replaceArray(servers, keep)
+
+        val rules = dns.optJSONArray("rules") ?: JSONArray().also { dns.put("rules", it) }
+        val rewritten = JSONArray()
+        for (i in 0 until rules.length()) {
+            val rule = rules.optJSONObject(i) ?: continue
+            val mapped = rcodeByTag[rule.optString("server").trim()]
+            if (mapped != null) {
+                rule.remove("server")
+                rule.put("action", "predefined")
+                rule.put("rcode", mapped)
+            }
+            rewritten.put(rule)
+        }
+        val finalTag = dns.optString("final").trim()
+        val mappedFinal = rcodeByTag[finalTag]
+        if (mappedFinal != null) {
+            dns.remove("final")
+            rewritten.put(
+                JSONObject().put("action", "predefined").put("rcode", mappedFinal),
+            )
+            val fallback = keep.optJSONObject(0)?.optString("tag").orEmpty()
+            if (fallback.isNotEmpty()) dns.put("final", fallback)
+        }
+        dns.put("rules", rewritten)
+        return true
+    }
+
+    internal fun extractRcode(server: JSONObject): String? {
+        val type = server.optString("type").trim().lowercase()
+        val address = server.optString("address").trim()
+        if (type == "rcode" || address.startsWith("rcode://", true)) {
+            val raw = when {
+                server.optString("rcode").isNotBlank() -> server.optString("rcode")
+                address.startsWith("rcode://", true) -> address.substring(8)
+                else -> "success"
+            }
+            return canonicalizeRcode(raw)
+        }
+        if (type != "predefined") return null
+        val direct = server.optString("rcode").trim()
+        if (direct.isNotBlank()) return canonicalizeRcode(direct)
+        val responses = server.optJSONArray("responses")
+        val first = responses?.optJSONObject(0)?.optString("rcode").orEmpty()
+        return canonicalizeRcode(first.ifBlank { "NOERROR" })
+    }
+
+    internal fun canonicalizeRcode(raw: String): String {
+        return when (raw.trim().lowercase().replace("-", "_")) {
+            "", "success", "noerror", "no_error", "0" -> "NOERROR"
+            "format_error", "formerr", "form_err", "1" -> "FORMERR"
+            "server_failure", "servfail", "serv_fail", "2" -> "SERVFAIL"
+            "name_error", "nxdomain", "nx_domain", "3" -> "NXDOMAIN"
+            "not_implemented", "notimp", "not_imp", "4" -> "NOTIMP"
+            "refused", "5" -> "REFUSED"
+            else -> raw.trim().uppercase()
+        }
+    }
+
+    private fun replaceArray(target: JSONArray, keep: JSONArray) {
+        while (target.length() > 0) target.remove(0)
+        for (i in 0 until keep.length()) target.put(keep.get(i))
     }
 
     private fun applyUrl(server: JSONObject, type: String, restRaw: String) {

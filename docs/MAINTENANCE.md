@@ -3,7 +3,24 @@
 ChainBox 是**独立 App**，不是官方 sing-box / SFA 的分支产品名。
 维护目标：**内核可长期跟随官方 sing-box；App 只维护组链体验与发布。**
 
-后期同步上游与发版由维护者发起，不要点仓库首页 **Sync fork**。
+## 产品边界（必须遵守）
+
+ChainBox = Fork 官方 sing-box + **模块化 Chain 扩展** + 普通用户操作层。
+
+- 不重新设计 sing-box，不替换内核，不另做代理协议栈。
+- 组链、中国直连、WebRTC、DNS 兼容、备份等全部是 **运行时/导入外挂**：只改内存中的 JSON 覆盖层，不改订阅原文，不改 libbox 架构。
+- 冲突即停：与官方配置模型无法兼容时停止发版，而不是在内核里开特例。
+
+仓库首页若已 **Detach fork / 分离分叉**，不影响发版。GitHub 只是不再显示 fork 网络、也没有 Sync fork 按钮。同步上游继续用 git remote：
+
+```bash
+git remote add upstream https://github.com/SagerNet/sing-box-for-android.git   # 若尚未添加
+git fetch upstream
+git checkout dev
+git merge upstream/dev
+```
+
+后期同步上游与发版由维护者发起，不要依赖仓库首页 **Sync fork**。
 
 ## 仓库分工
 
@@ -48,6 +65,7 @@ git push origin chain-dev
 1. **Fail Closed**：链路失败不得静默落到 DIRECT。
 2. **低耦合**：Chain 尽量只挂在 outbound 注册与 dial 链路上。
 3. **冲突即停**：与官方架构无法兼容时停止发版。
+4. **不必为跟版而跟版**：官方 sing-box 1.14 已发布，但 `chain-dev` 已带 1.14 依赖。App 侧先把 DNS 兼容（fakeip / rcode）与 Chain 外挂做稳，再考虑合入更新的官方提交。不要在未验证 Chain outbound 的情况下整包快进。
 
 ## App 同步
 

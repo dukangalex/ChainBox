@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sandbox replica of ConfigCompat.migrateLegacyDns."""
+"""Sandbox replica of ConfigCompat.migrateLegacyDns + migrateRcodeServers."""
 from __future__ import annotations
 
 import json
@@ -45,6 +45,56 @@ def apply_url(server: dict, typ: str, rest: str) -> None:
         server["path"] = path
 
 
+def canonicalize_rcode(raw: str) -> str:
+    key = raw.strip().lower().replace("-", "_")
+    return {
+        "": "NOERROR",
+        "success": "NOERROR",
+        "noerror": "NOERROR",
+        "no_error": "NOERROR",
+        "0": "NOERROR",
+        "format_error": "FORMERR",
+        "formerr": "FORMERR",
+        "form_err": "FORMERR",
+        "1": "FORMERR",
+        "server_failure": "SERVFAIL",
+        "servfail": "SERVFAIL",
+        "serv_fail": "SERVFAIL",
+        "2": "SERVFAIL",
+        "name_error": "NXDOMAIN",
+        "nxdomain": "NXDOMAIN",
+        "nx_domain": "NXDOMAIN",
+        "3": "NXDOMAIN",
+        "not_implemented": "NOTIMP",
+        "notimp": "NOTIMP",
+        "not_imp": "NOTIMP",
+        "4": "NOTIMP",
+        "refused": "REFUSED",
+        "5": "REFUSED",
+    }.get(key, raw.strip().upper())
+
+
+def extract_rcode(server: dict) -> str | None:
+    typ = str(server.get("type") or "").strip().lower()
+    address = str(server.get("address") or "").strip()
+    if typ == "rcode" or address.lower().startswith("rcode://"):
+        if server.get("rcode"):
+            raw = str(server["rcode"])
+        elif address.lower().startswith("rcode://"):
+            raw = address[8:]
+        else:
+            raw = "success"
+        return canonicalize_rcode(raw)
+    if typ != "predefined":
+        return None
+    if server.get("rcode"):
+        return canonicalize_rcode(str(server["rcode"]))
+    responses = server.get("responses") or []
+    if responses and isinstance(responses[0], dict) and responses[0].get("rcode"):
+        return canonicalize_rcode(str(responses[0]["rcode"]))
+    return "NOERROR"
+
+
 def migrate_server(server: dict, inet4, inet6) -> None:
     if "address_resolver" in server:
         server.setdefault("domain_resolver", server.pop("address_resolver"))
@@ -77,8 +127,48 @@ def migrate_server(server: dict, inet4, inet6) -> None:
         iface = address[7:].strip()
         if iface and iface.lower() != "auto":
             server["interface"] = iface
+    elif low.startswith("rcode://"):
+        server["type"] = "rcode"
+        server["rcode"] = address[8:].strip()
     else:
         apply_host(server, "udp", address)
+
+
+def migrate_rcode(dns: dict) -> None:
+    servers = dns.get("servers") or []
+    rcode_by_tag: dict[str, str] = {}
+    keep = []
+    for s in servers:
+        mapped = extract_rcode(s)
+        if mapped is None:
+            keep.append(s)
+            continue
+        tag = str(s.get("tag") or "").strip()
+        if tag:
+            rcode_by_tag[tag] = mapped
+    if not rcode_by_tag:
+        return
+    if not keep:
+        keep = [{"type": "local", "tag": "chainbox-dns-local"}]
+    dns["servers"] = keep
+    rules = dns.get("rules") or []
+    rewritten = []
+    for rule in rules:
+        tag = str(rule.get("server") or "").strip()
+        if tag in rcode_by_tag:
+            rule = dict(rule)
+            rule.pop("server", None)
+            rule["action"] = "predefined"
+            rule["rcode"] = rcode_by_tag[tag]
+        rewritten.append(rule)
+    final_tag = str(dns.get("final") or "").strip()
+    if final_tag in rcode_by_tag:
+        dns.pop("final", None)
+        rewritten.append({"action": "predefined", "rcode": rcode_by_tag[final_tag]})
+        fallback = str(keep[0].get("tag") or "")
+        if fallback:
+            dns["final"] = fallback
+    dns["rules"] = rewritten
 
 
 def migrate(root: dict) -> dict:
@@ -117,6 +207,7 @@ def migrate(root: dict) -> dict:
         rules = dns.setdefault("rules", [])
         if not any(r.get("server") == "fakeip" for r in rules):
             dns["rules"] = [{"query_type": ["A", "AAAA"], "server": "fakeip"}] + rules
+    migrate_rcode(dns)
     return root
 
 
@@ -127,6 +218,8 @@ def main() -> int:
         errors.append("migrateLegacyDns missing")
     if "legacy DNS fakeip" not in src:
         errors.append("must document 1.14 fakeip removal")
+    if "migrateRcodeServers" not in src:
+        errors.append("migrateRcodeServers missing")
 
     crash = {
         "dns": {
@@ -181,12 +274,50 @@ def main() -> int:
             }
         }
     )
-    tags = [x.get("tag") for x in only["dns"]["servers"]]
     types = [x.get("type") for x in only["dns"]["servers"]]
     if "fakeip" not in types:
         errors.append("did not inject typed fakeip server")
     if only["dns"]["rules"][0].get("server") != "fakeip":
         errors.append("missing A/AAAA fakeip rule")
+
+    rcode = migrate(
+        {
+            "dns": {
+                "servers": [
+                    {"type": "udp", "tag": "remote", "server": "8.8.8.8"},
+                    {"type": "rcode", "tag": "dns-block", "rcode": "success"},
+                ],
+                "rules": [{"domain_suffix": ["ads.example"], "server": "dns-block"}],
+            }
+        }
+    )
+    tags = [x.get("tag") for x in rcode["dns"]["servers"]]
+    if "dns-block" in tags:
+        errors.append("typed rcode server was not dropped")
+    rule = rcode["dns"]["rules"][0]
+    if rule.get("action") != "predefined" or rule.get("rcode") != "NOERROR":
+        errors.append(f"rcode rule rewrite failed: {rule}")
+    if "server" in rule:
+        errors.append("rcode rule still has server field")
+
+    addr = migrate(
+        {
+            "dns": {
+                "servers": [
+                    {"tag": "remote", "address": "1.1.1.1"},
+                    {"tag": "block", "address": "rcode://refused"},
+                ],
+                "final": "block",
+            }
+        }
+    )
+    if any(x.get("type") == "rcode" for x in addr["dns"]["servers"]):
+        errors.append("rcode:// leftover as type=rcode")
+    last = addr["dns"]["rules"][-1]
+    if last.get("action") != "predefined" or last.get("rcode") != "REFUSED":
+        errors.append(f"rcode:// final rewrite failed: {last}")
+    if addr["dns"].get("final") != "remote":
+        errors.append(f"dns.final not remapped: {addr['dns'].get('final')}")
 
     if errors:
         print("FAIL")

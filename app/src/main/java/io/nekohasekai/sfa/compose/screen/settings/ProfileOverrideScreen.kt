@@ -250,12 +250,12 @@ fun ProfileOverrideScreen(
             ) {
                 OverrideSwitch(
                     title = "防 WebRTC 泄露",
-                    subtitle = "拦截 STUN/TURN（UDP 3478/19302/5349）",
+                    subtitle = "优先拦截 STUN/TURN（含国内 STUN），避免真实 IP 漏出",
                     checked = webrtcProtect,
                     onHelp = {
                         help = SwitchHelp(
                             "防 WebRTC 泄露",
-                            "拦截浏览器/应用的 STUN 探测，避免真实 IP 从 WebRTC 漏出。开启后「工具 → STUN 测试」会失败，这是预期行为。",
+                            "在所有路由（含中国直连）之前拒绝 STUN/TURN：UDP 3478-3481 / 5349-5351 / 19302-19310，TCP 3478/5349，以及主机名含 stun./turn. 的请求。国内 STUN（如 bilibili、小米）同样拦截，不会因为中国直连而放过。开启后「工具 → STUN 测试」失败是预期。",
                         )
                     },
                     onCheckedChange = {

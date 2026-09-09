@@ -9,6 +9,7 @@ import io.nekohasekai.sfa.compat.ProfileEditorColors
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.ktx.unwrap
+import io.nekohasekai.sfa.utils.ConfigCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -126,7 +127,7 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
                 _uiState.update { it.copy(isCheckingConfig = true) }
 
                 // Check configuration
-                Libbox.checkConfig(content)
+                Libbox.checkConfig(ConfigCompat.sanitize(content))
 
                 // Configuration is valid, clear any error
                 _uiState.update {

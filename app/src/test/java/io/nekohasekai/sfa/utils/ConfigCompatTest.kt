@@ -220,4 +220,90 @@ class ConfigCompatTest {
         val rule = out.getJSONObject("dns").getJSONArray("rules").getJSONObject(0)
         assertEquals("fakeip", rule.getString("server"))
     }
+
+    @Test
+    fun migratesTypedRcodeServerToRuleAction() {
+        val src = JSONObject().put(
+            "dns",
+            JSONObject()
+                .put(
+                    "servers",
+                    JSONArray()
+                        .put(JSONObject().put("type", "udp").put("tag", "remote").put("server", "8.8.8.8"))
+                        .put(
+                            JSONObject()
+                                .put("type", "rcode")
+                                .put("tag", "dns-block")
+                                .put("rcode", "success"),
+                        ),
+                )
+                .put(
+                    "rules",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("domain_suffix", JSONArray().put("ads.example"))
+                            .put("server", "dns-block"),
+                    ),
+                ),
+        )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val dns = out.getJSONObject("dns")
+        val servers = dns.getJSONArray("servers")
+        assertEquals(1, servers.length())
+        assertEquals("remote", servers.getJSONObject(0).getString("tag"))
+        val rule = dns.getJSONArray("rules").getJSONObject(0)
+        assertEquals("predefined", rule.getString("action"))
+        assertEquals("NOERROR", rule.getString("rcode"))
+        assertEquals(false, rule.has("server"))
+    }
+
+    @Test
+    fun migratesLegacyRcodeAddress() {
+        val src = JSONObject().put(
+            "dns",
+            JSONObject()
+                .put(
+                    "servers",
+                    JSONArray()
+                        .put(JSONObject().put("tag", "remote").put("address", "1.1.1.1"))
+                        .put(JSONObject().put("tag", "block").put("address", "rcode://refused")),
+                )
+                .put("final", "block"),
+        )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val dns = out.getJSONObject("dns")
+        assertEquals(1, dns.getJSONArray("servers").length())
+        assertEquals("remote", dns.getString("final"))
+        val last = dns.getJSONArray("rules").getJSONObject(dns.getJSONArray("rules").length() - 1)
+        assertEquals("predefined", last.getString("action"))
+        assertEquals("REFUSED", last.getString("rcode"))
+    }
+
+    @Test
+    fun migratesPredefinedServerType() {
+        val src = JSONObject().put(
+            "dns",
+            JSONObject().put(
+                "servers",
+                JSONArray()
+                    .put(JSONObject().put("type", "https").put("tag", "doh").put("server", "dns.google"))
+                    .put(
+                        JSONObject()
+                            .put("type", "predefined")
+                            .put("tag", "nx")
+                            .put("responses", JSONArray().put(JSONObject().put("rcode", "NXDOMAIN"))),
+                    ),
+            ).put(
+                "rules",
+                JSONArray().put(JSONObject().put("domain", JSONArray().put("blocked.test")).put("server", "nx")),
+            ),
+        )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val servers = out.getJSONObject("dns").getJSONArray("servers")
+        assertEquals(1, servers.length())
+        assertEquals("doh", servers.getJSONObject(0).getString("tag"))
+        val rule = out.getJSONObject("dns").getJSONArray("rules").getJSONObject(0)
+        assertEquals("predefined", rule.getString("action"))
+        assertEquals("NXDOMAIN", rule.getString("rcode"))
+    }
 }

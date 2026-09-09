@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Generate a centered isometric Rubik's cube launcher icon."""
+"""Generate a centered isometric Rubik's cube launcher icon.
+
+Visible faces (corner toward viewer):
+  正面 left  = x=0  sky-blue  #0EA5E9
+  顶   top   = y=3  amber     #FBBF24
+  侧面 right = x=3  rose      #F43F5E
+
+Earlier builds drew z=0 as "front", which sits on the RIGHT half of the
+icon; the left vertical face was never painted, so the 正面 looked like
+the yellow top. Always draw x=0 as 正面.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "app/src/main/res"
 
 PLASTIC = (17, 24, 39, 255)
-SKY = (56, 189, 248, 255)       # #38BDF8 天蓝正面
+SKY = (14, 165, 233, 255)       # #0EA5E9 天蓝正面（比 sky-400 更深，小图标可辨）
 AMBER = (251, 191, 36, 255)     # #FBBF24 橙黄顶
 ROSE = (244, 63, 94, 255)       # #F43F5E 玫红侧面
 
@@ -38,7 +48,8 @@ def sticker_quad(face: str, i: int, j: int) -> list[tuple[float, float]]:
     a, b = i + g, j + g
     c, d = i + 1 - g, j + 1 - g
     if face == "front":
-        return [iso(a, b, 0), iso(c, b, 0), iso(c, d, 0), iso(a, d, 0)]
+        # x=0 left vertical: i → z, j → y
+        return [iso(0, b, a), iso(0, b, c), iso(0, d, c), iso(0, d, a)]
     if face == "top":
         return [iso(a, 3, b), iso(c, 3, b), iso(c, 3, d), iso(a, 3, d)]
     return [iso(3, b, a), iso(3, b, c), iso(3, d, c), iso(3, d, a)]
@@ -46,7 +57,7 @@ def sticker_quad(face: str, i: int, j: int) -> list[tuple[float, float]]:
 
 def face_outline(face: str) -> list[tuple[float, float]]:
     if face == "front":
-        return [iso(0, 0, 0), iso(3, 0, 0), iso(3, 3, 0), iso(0, 3, 0)]
+        return [iso(0, 0, 0), iso(0, 0, 3), iso(0, 3, 3), iso(0, 3, 0)]
     if face == "top":
         return [iso(0, 3, 0), iso(3, 3, 0), iso(3, 3, 3), iso(0, 3, 3)]
     return [iso(3, 0, 0), iso(3, 0, 3), iso(3, 3, 3), iso(3, 3, 0)]
@@ -59,13 +70,13 @@ def write_vector() -> None:
         '    android:height="108dp"',
         '    android:viewportWidth="108"',
         '    android:viewportHeight="108">',
-        "    <!-- centered isometric Rubik cube, adaptive safe zone -->",
+        "    <!-- left=sky 正面, top=amber, right=rose; adaptive safe zone -->",
     ]
     for face, color in (("front", "#111827"), ("right", "#020617"), ("top", "#1F2937")):
         parts.append(
             f'    <path android:fillColor="{color}" android:pathData="{path(face_outline(face))}" />'
         )
-    colors = {"front": "#38BDF8", "top": "#FBBF24", "right": "#F43F5E"}
+    colors = {"front": "#0EA5E9", "top": "#FBBF24", "right": "#F43F5E"}
     for face in ("front", "top", "right"):
         for i in range(3):
             for j in range(3):
@@ -101,7 +112,7 @@ def write_qs_tile() -> None:
     """White cube silhouette for QS tile + notification small icons."""
     def face(f: str) -> list[tuple[float, float]]:
         if f == "front":
-            return [qs_iso(0, 0, 0), qs_iso(3, 0, 0), qs_iso(3, 3, 0), qs_iso(0, 3, 0)]
+            return [qs_iso(0, 0, 0), qs_iso(0, 0, 3), qs_iso(0, 3, 3), qs_iso(0, 3, 0)]
         if f == "top":
             return [qs_iso(0, 3, 0), qs_iso(3, 3, 0), qs_iso(3, 3, 3), qs_iso(0, 3, 3)]
         return [qs_iso(3, 0, 0), qs_iso(3, 0, 3), qs_iso(3, 3, 3), qs_iso(3, 3, 0)]
@@ -144,14 +155,14 @@ def draw_cube(size: int) -> Image.Image:
         a, b = i + g, j + g
         c, d = i + 1 - g, j + 1 - g
         if face == "front":
-            pts = [p(a, b, 0), p(c, b, 0), p(c, d, 0), p(a, d, 0)]
+            pts = [p(0, b, a), p(0, b, c), p(0, d, c), p(0, d, a)]
         elif face == "top":
             pts = [p(a, 3, b), p(c, 3, b), p(c, 3, d), p(a, 3, d)]
         else:
             pts = [p(3, b, a), p(3, b, c), p(3, d, c), p(3, d, a)]
         poly(pts, fill)
 
-    poly([p(0, 0, 0), p(3, 0, 0), p(3, 3, 0), p(0, 3, 0)], PLASTIC)
+    poly([p(0, 0, 0), p(0, 0, 3), p(0, 3, 3), p(0, 3, 0)], PLASTIC)
     poly([p(3, 0, 0), p(3, 0, 3), p(3, 3, 3), p(3, 3, 0)], (2, 6, 23, 255))
     poly([p(0, 3, 0), p(3, 3, 0), p(3, 3, 3), p(0, 3, 3)], (31, 41, 55, 255))
 
@@ -200,7 +211,10 @@ def main() -> None:
     other = ROOT / "app/src/other/play/listings/en-US/graphics/icon/ic_launcher-playstore.png"
     other.parent.mkdir(parents=True, exist_ok=True)
     play.save(other, "PNG")
-    bbox_pts = [iso(0, 0, 0), iso(3, 0, 0), iso(3, 0, 3), iso(0, 0, 3), iso(0, 3, 0), iso(3, 3, 3)]
+    bbox_pts = [
+        iso(0, 0, 0), iso(0, 0, 3), iso(3, 0, 0), iso(3, 0, 3),
+        iso(0, 3, 0), iso(3, 3, 3),
+    ]
     xs = [p[0] for p in bbox_pts]
     ys = [p[1] for p in bbox_pts]
     print(

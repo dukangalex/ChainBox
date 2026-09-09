@@ -7,15 +7,23 @@ import org.junit.Test
 class ConfigNormalizeTest {
 
     @Test
-    fun webrtcRejectsStunPorts() {
+    fun webrtcRejectsStunPortsAndHostnames() {
         val rules = ConfigNormalize.webrtcRejectRules()
-        val ports = (0 until rules.length()).map { rules.getJSONObject(it).optInt("port") }.toSet()
-        assertEquals(setOf(3478, 19302, 5349), ports)
-        for (i in 0 until rules.length()) {
-            val r = rules.getJSONObject(i)
-            assertEquals("udp", r.getString("network"))
-            assertEquals("reject", r.getString("action"))
-        }
+        assertEquals(3, rules.length())
+        val udp = rules.getJSONObject(0)
+        assertEquals("udp", udp.getString("network"))
+        assertEquals("reject", udp.getString("action"))
+        val udpPorts = (0 until udp.getJSONArray("port").length())
+            .map { udp.getJSONArray("port").getInt(it) }
+            .toSet()
+        assertTrue(udpPorts.containsAll(setOf(3478, 19302, 5349)))
+        val tcp = rules.getJSONObject(1)
+        assertEquals("tcp", tcp.getString("network"))
+        assertEquals("reject", tcp.getString("action"))
+        val keywords = rules.getJSONObject(2).getJSONArray("domain_keyword")
+        val keys = (0 until keywords.length()).map { keywords.getString(it) }.toSet()
+        assertTrue(keys.contains("stun."))
+        assertTrue(keys.contains("turn."))
     }
 
     @Test

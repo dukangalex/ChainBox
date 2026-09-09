@@ -41,9 +41,6 @@ object ConfigQuicOverride {
         try {
             val root = JSONObject(out)
             applyLogLevel(root)
-            applyOne(warnings, "防 WebRTC 泄露") {
-                if (Settings.webrtcProtect) applyWebrtc(root)
-            }
             applyOne(warnings, "中国直连") {
                 if (Settings.chinaDirect) ConfigChinaDirect.apply(root)
             }
@@ -58,6 +55,10 @@ object ConfigQuicOverride {
             }
             applyOne(warnings, "禁用 IPv6") {
                 if (Settings.disableIpv6) applyDisableIpv6(root)
+            }
+            // WebRTC last so reject rules prepend in front of China Direct.
+            applyOne(warnings, "防 WebRTC 泄露") {
+                if (Settings.webrtcProtect) applyWebrtc(root)
             }
             ConfigCompat.stripBrokenDnsDetours(root)
             out = root.toString()
@@ -163,6 +164,7 @@ object ConfigQuicOverride {
     }
 
     private fun outboundExists(content: String, tag: String): Boolean {
+        if (content.length > ConfigCompat.MAX_CONFIG_CHARS) return false
         return try {
             val outs = JSONObject(content).optJSONArray("outbounds") ?: return false
             for (i in 0 until outs.length()) {

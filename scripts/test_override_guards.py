@@ -17,6 +17,8 @@ def main() -> int:
         errors.append("ConfigNormalize rewriter was removed; do not add apply()")
     if "webrtcRejectRules" not in normalize:
         errors.append("WebRTC STUN reject helper missing")
+    if "STUN_UDP_PORTS" not in normalize or "domain_keyword" not in normalize:
+        errors.append("WebRTC overlay must cover extra STUN ports and stun./turn. hostnames")
     if "cnDomainSuffixArray" not in normalize:
         errors.append("CN domain helper missing")
 
@@ -93,6 +95,8 @@ def main() -> int:
     settings = read("app/src/main/java/io/nekohasekai/sfa/database/Settings.kt")
     if "webrtcProtect" not in settings:
         errors.append("Settings.webrtcProtect missing")
+    if 'WEBRTC_PROTECT) { false }' in settings or 'WEBRTC_PROTECT) {false}' in settings:
+        errors.append("WebRTC protect should default on so Chinese STUN cannot leak by default")
     if "configNormalize" in settings:
         errors.append("Settings.configNormalize must stay removed")
     if "chinaDirect" not in settings:
@@ -130,6 +134,12 @@ def main() -> int:
         errors.append("ConfigCompat must migrate dns.fakeip / legacy address servers")
     if 'put("type", "fakeip")' not in compat:
         errors.append("legacy fakeip object must become type=fakeip server")
+    if "migrateRcodeServers" not in compat:
+        errors.append("ConfigCompat must convert type:rcode DNS servers to rule actions")
+    if "unknown transport type: rcode" not in compat:
+        errors.append("ConfigCompat must document rcode transport removal")
+    if "MAX_CONFIG_CHARS" not in compat:
+        errors.append("ConfigCompat.sanitize must cap JSON size")
 
     override = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigQuicOverride.kt")
     if "Settings.chinaDirect" not in override:
@@ -147,6 +157,16 @@ def main() -> int:
             errors.append("DNS protect must force-overwrite independent_cache")
     if "stripBrokenDnsDetours" not in override:
         errors.append("runtime overlay must strip empty-direct DNS detours after other switches")
+    webrtc_call = override.find('applyOne(warnings, "防 WebRTC 泄露")')
+    china_call = override.find('applyOne(warnings, "中国直连")')
+    if webrtc_call < 0 or china_call < 0:
+        errors.append("WebRTC and China Direct overlays must both apply")
+    elif webrtc_call < china_call:
+        errors.append("WebRTC reject must apply after China Direct so STUN ports win over CN bypass")
+    if "launchVisibleInstaller" not in read(
+        "app/src/github/java/io/nekohasekai/sfa/vendor/SystemPackageInstaller.kt",
+    ):
+        errors.append("in-app update must show the system package installer UI")
 
     ui_override = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/ProfileOverrideScreen.kt")
     if "中国直连" not in ui_override:
@@ -213,8 +233,10 @@ def main() -> int:
     icon_fg = read("app/src/main/res/drawable/ic_launcher_foreground.xml")
     if "#FBBF24" not in icon_fg and "#F59E0B" not in icon_fg:
         errors.append("launcher foreground must be a Rubik cube (orange-yellow top missing)")
-    if "#38BDF8" not in icon_fg and "#0EA5E9" not in icon_fg:
-        errors.append("launcher foreground must be a Rubik cube (sky-blue face missing)")
+    if "#0EA5E9" not in icon_fg:
+        errors.append("launcher foreground 正面 must be saturated sky-blue #0EA5E9")
+    if "iso(0," not in read("scripts/gen_cube_icon.py") and "x=0" not in read("scripts/gen_cube_icon.py"):
+        errors.append("cube 正面 must be the left x=0 face, not z=0")
     if "#F43F5E" not in icon_fg and "#E11D48" not in icon_fg:
         errors.append("launcher foreground must be a Rubik cube (rose face missing)")
     if "gift" in icon_fg.lower() and "cube" not in icon_fg.lower():

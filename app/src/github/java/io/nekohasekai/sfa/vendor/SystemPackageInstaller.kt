@@ -7,8 +7,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
+import android.provider.Settings as AndroidSettings
 import androidx.core.content.FileProvider
+import io.nekohasekai.sfa.database.Settings
 import java.io.File
 import java.io.FileInputStream
 import android.content.pm.PackageInstaller as AndroidPackageInstaller
@@ -34,28 +35,41 @@ object SystemPackageInstaller {
             !context.packageManager.canRequestPackageInstalls()
         ) {
             val settings = Intent(
-                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                AndroidSettings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Uri.parse("package:${context.packageName}"),
             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(settings)
             throw IllegalStateException("请先允许 ChainBox 安装未知应用，返回后再点一次更新")
         }
-        try {
-            commitSession(context, apkFile)
-        } catch (_: Exception) {
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.cache",
-                apkFile,
-            )
-            val view = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-                putExtra(Intent.EXTRA_RETURN_RESULT, true)
+        if (Settings.silentInstallEnabled) {
+            try {
+                commitSession(context, apkFile)
+                return
+            } catch (_: Exception) {
+                // Visible installer is the guaranteed confirmation UI.
             }
-            context.startActivity(view)
         }
+        launchVisibleInstaller(context, apkFile)
+    }
+
+    private fun launchVisibleInstaller(context: Context, apkFile: File) {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.cache",
+            apkFile,
+        )
+        val view = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP,
+            )
+            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+            putExtra(Intent.EXTRA_RETURN_RESULT, true)
+            putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, context.packageName)
+        }
+        context.startActivity(view)
     }
 
     private fun commitSession(context: Context, apkFile: File) {

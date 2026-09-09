@@ -74,7 +74,7 @@ object Settings {
     var strictRoute by dataStore.boolean(SettingsKey.STRICT_ROUTE) { false }
     var dnsProtect by dataStore.boolean(SettingsKey.DNS_PROTECT) { false }
     var disableIpv6 by dataStore.boolean(SettingsKey.DISABLE_IPV6) { false }
-    var webrtcProtect by dataStore.boolean(SettingsKey.WEBRTC_PROTECT) { false }
+    var webrtcProtect by dataStore.boolean(SettingsKey.WEBRTC_PROTECT) { true }
     var chinaDirect by dataStore.boolean(SettingsKey.CHINA_DIRECT) { false }
     var chainEnabled by dataStore.boolean(SettingsKey.CHAIN_ENABLED) { false }
     var chainEntryTag by dataStore.string(SettingsKey.CHAIN_ENTRY_TAG) { "" }

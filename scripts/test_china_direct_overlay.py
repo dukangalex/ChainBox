@@ -184,6 +184,18 @@ def main() -> int:
     assert_true("dns" not in out4, "must not create dns section", errors)
     assert_true(out4["route"]["rules"][0]["ip_is_private"] is True, "force overlay missing", errors)
 
+    webrtc = [
+        {"network": "udp", "port": [3478, 19302, 5349], "action": "reject"},
+        {"domain_keyword": ["stun.", "turn."], "action": "reject"},
+    ]
+    merged_rules = webrtc + out["route"]["rules"]
+    assert_true(merged_rules[0].get("action") == "reject", "STUN reject must sit in front of China Direct", errors)
+    assert_true(
+        3478 in merged_rules[0].get("port", []),
+        "UDP 3478 (bilibili/miwifi STUN) must be rejected before CN domain bypass",
+        errors,
+    )
+
     if errors:
         print("FAIL")
         for e in errors:

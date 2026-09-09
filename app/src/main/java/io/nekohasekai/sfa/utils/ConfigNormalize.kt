@@ -43,17 +43,55 @@ object ConfigNormalize {
         "coolapk.com", "thepaper.cn",
     )
 
+    val STUN_UDP_PORTS: IntArray = intArrayOf(
+        3478, 3479, 3480, 3481,
+        5349, 5350, 5351,
+        19302, 19303, 19304, 19305, 19306, 19307, 19308, 19309, 19310,
+    )
+
+    val STUN_TCP_PORTS: IntArray = intArrayOf(
+        3478, 3479, 3480, 3481,
+        5349, 5350, 5351,
+    )
+
     fun cnDomainSuffixArray(): JSONArray {
         val a = JSONArray()
         CN_DOMAIN_SUFFIXES.forEach { a.put(it) }
         return a
     }
 
+    /**
+     * Highest-priority leak shield. Must be prepended *after* China Direct
+     * so these reject rules sit in front of geo/domain bypasses. Otherwise
+     * Chinese STUN (bilibili/hitv/miwifi:3478) matches 中国直连 → DIRECT
+     * and the real ISP IP leaks, while global STUN on 19302 is still
+     * rejected — exactly the IPPure split we saw.
+     */
     fun webrtcRejectRules(): JSONArray {
         val rules = JSONArray()
-        for (p in intArrayOf(3478, 19302, 5349)) {
-            rules.put(JSONObject().put("network", "udp").put("port", p).put("action", "reject"))
-        }
+        rules.put(
+            JSONObject()
+                .put("network", "udp")
+                .put("port", toArray(STUN_UDP_PORTS))
+                .put("action", "reject"),
+        )
+        rules.put(
+            JSONObject()
+                .put("network", "tcp")
+                .put("port", toArray(STUN_TCP_PORTS))
+                .put("action", "reject"),
+        )
+        rules.put(
+            JSONObject()
+                .put("domain_keyword", JSONArray().put("stun.").put("turn.").put("stuns.").put("turns."))
+                .put("action", "reject"),
+        )
         return rules
+    }
+
+    private fun toArray(ports: IntArray): JSONArray {
+        val a = JSONArray()
+        ports.forEach { a.put(it) }
+        return a
     }
 }
