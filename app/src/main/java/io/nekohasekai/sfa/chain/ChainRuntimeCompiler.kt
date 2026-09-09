@@ -20,10 +20,11 @@ import org.json.JSONObject
  * generated chain never includes an unauthorized DIRECT/block/dns hop.
  * Connection failure is fail-closed (no silent DIRECT fallback).
  *
- * After the chain outbound is created, every route/DNS detour that would have
- * used the front airport as an exit is rewritten to the chain tag. The entry
- * outbound is only referenced as hop 0 of the chain — it must never become
- * the public exit.
+ * After the chain outbound is created, route rules that would have used the
+ * front airport as an exit are rewritten to the chain tag. DNS detours are
+ * only rewritten when they pointed at the entry hop — leaving landing /
+ * dedicated DNS alone avoids an extra chain RTT versus Clash Meta. The entry
+ * outbound is only hop 0 and must never become the public exit.
  */
 object ChainRuntimeCompiler {
     const val NATIVE_CHAIN_TYPE = "chain"
@@ -172,6 +173,8 @@ object ChainRuntimeCompiler {
      * Front airport outbounds may only appear as hop 0 of the generated chain.
      * Rewrite route.final, route.rules[].outbound and dns.servers[].detour so
      * unmatched / Global / explicit-proxy traffic cannot exit via the entry.
+     * DNS is only rewritten when it would have used the front hop; leaving
+     * landing / dedicated DNS detours alone avoids an extra chain RTT.
      * entryTags are never treated as a valid public exit.
      */
     internal fun pinTrafficToChain(
@@ -197,7 +200,7 @@ object ChainRuntimeCompiler {
             route.put("final", chainTag)
         }
         rewriteRuleOutbounds(route.optJSONArray("rules"), protected, chainTag)
-        rewriteDnsDetours(root.optJSONObject("dns"), protected, chainTag)
+        rewriteDnsDetours(root.optJSONObject("dns"), entryTags, chainTag)
     }
 
     private fun rewriteRuleOutbounds(rules: JSONArray?, protected: Set<String>, chainTag: String) {
@@ -212,13 +215,13 @@ object ChainRuntimeCompiler {
         }
     }
 
-    private fun rewriteDnsDetours(dns: JSONObject?, protected: Set<String>, chainTag: String) {
+    private fun rewriteDnsDetours(dns: JSONObject?, entryTags: Set<String>, chainTag: String) {
         if (dns == null) return
         val servers = dns.optJSONArray("servers") ?: return
         for (i in 0 until servers.length()) {
             val server = servers.optJSONObject(i) ?: continue
             val detour = server.optString("detour").trim()
-            if (detour.isNotEmpty() && detour !in protected) {
+            if (detour.isNotEmpty() && (detour in entryTags || detour.startsWith(ENTRY_PREFIX))) {
                 server.put("detour", chainTag)
             }
         }

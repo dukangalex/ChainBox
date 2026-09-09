@@ -47,6 +47,8 @@ def main() -> int:
         errors.append("chain compiler should document packet path: entry first, landing last")
     if "if (sameProfile) add(req.landingTag)" not in chain:
         errors.append("cross-profile landing tags must not be extraExcluded from the entry hop")
+    if "detour in entryTags" not in chain:
+        errors.append("DNS detours should only rewrite entry hops, not every proxy")
 
     bindings = read("app/src/main/java/io/nekohasekai/sfa/chain/ChainBindings.kt")
     if "per-profile" not in bindings.lower() and "Per-profile" not in bindings:
@@ -124,6 +126,10 @@ def main() -> int:
         errors.append("ConfigCompat must strip DNS detours to empty/missing direct")
     if "isEmptyDirect" not in compat:
         errors.append("ConfigCompat must detect empty direct outbounds")
+    if "migrateLegacyDns" not in compat:
+        errors.append("ConfigCompat must migrate dns.fakeip / legacy address servers")
+    if 'put("type", "fakeip")' not in compat:
+        errors.append("legacy fakeip object must become type=fakeip server")
 
     override = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigQuicOverride.kt")
     if "Settings.chinaDirect" not in override:
@@ -205,10 +211,12 @@ def main() -> int:
         errors.append("launcher background should be #FFFFFF")
 
     icon_fg = read("app/src/main/res/drawable/ic_launcher_foreground.xml")
-    if "#FACC15" not in icon_fg and "#FDE047" not in icon_fg and "#EAB308" not in icon_fg:
-        errors.append("launcher foreground must be a Rubik cube (yellow face missing)")
-    if "#EF4444" not in icon_fg and "#DC2626" not in icon_fg and "#E11D48" not in icon_fg:
-        errors.append("launcher foreground must be a Rubik cube (red face missing)")
+    if "#FBBF24" not in icon_fg and "#F59E0B" not in icon_fg:
+        errors.append("launcher foreground must be a Rubik cube (orange-yellow top missing)")
+    if "#38BDF8" not in icon_fg and "#0EA5E9" not in icon_fg:
+        errors.append("launcher foreground must be a Rubik cube (sky-blue face missing)")
+    if "#F43F5E" not in icon_fg and "#E11D48" not in icon_fg:
+        errors.append("launcher foreground must be a Rubik cube (rose face missing)")
     if "gift" in icon_fg.lower() and "cube" not in icon_fg.lower():
         errors.append("launcher foreground should be a cube, not a gift box")
 
@@ -228,6 +236,25 @@ def main() -> int:
             if leak in text:
                 leaks.append(f"{rel} contains private name {leak}")
     errors.extend(leaks)
+
+    manifest = read("app/src/main/AndroidManifest.xml")
+    if 'android:icon="@drawable/ic_menu"' in manifest:
+        errors.append("QS tile must not use the upstream sing-box Z icon")
+    if "ic_qs_tile" not in manifest:
+        errors.append("QS tile should use ic_qs_tile")
+    notif = read("app/src/main/java/io/nekohasekai/sfa/bg/ServiceNotification.kt")
+    if 'setContentTitle("sing-box")' in notif or '?: "sing-box"' in notif:
+        errors.append("service notification must not title itself sing-box")
+    if "ic_qs_tile" not in notif:
+        errors.append("service notification small icon should be ic_qs_tile")
+    vpn = read("app/src/main/java/io/nekohasekai/sfa/bg/VPNService.kt")
+    if '.setSession("sing-box")' in vpn:
+        errors.append("VPN session name must match the app, not sing-box")
+    importer = read(
+        "app/src/main/java/io/nekohasekai/sfa/compose/screen/configuration/ProfileImportHandler.kt",
+    )
+    if "ConfigCompat.sanitize" not in importer:
+        errors.append("JSON import must sanitize (legacy fakeip) before checkConfig")
 
     if errors:
         print("FAIL")

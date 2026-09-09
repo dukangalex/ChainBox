@@ -18,7 +18,7 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 | 客户端仓库 | [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox) （分支 `dev`） |
 | 内核仓库 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) （分支 `chain-dev`） |
 | 更新检查 | 仅本仓库 GitHub Releases |
-| 应用图标 | 白色底、居中魔方 |
+| 应用图标 | 白色底、居中魔方（橙黄顶 / 天蓝正面 / 玫红侧面） |
 
 ## 功能范围
 

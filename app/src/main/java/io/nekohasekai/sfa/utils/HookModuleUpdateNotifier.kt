@@ -48,7 +48,7 @@ object HookModuleUpdateNotifier {
             )
         val builder =
             NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_menu)
+                .setSmallIcon(R.drawable.ic_qs_tile)
                 .setContentTitle(context.getString(R.string.privilege_module_restart_notification_title))
                 .setContentText(context.getString(R.string.privilege_module_restart_notification_message))
                 .setContentIntent(pendingIntent)

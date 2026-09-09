@@ -10,9 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "app/src/main/res"
 
 PLASTIC = (17, 24, 39, 255)
-WHITE = (248, 250, 252, 255)
-YELLOW = (250, 204, 21, 255)
-RED = (239, 68, 68, 255)
+SKY = (56, 189, 248, 255)       # #38BDF8 天蓝正面
+AMBER = (251, 191, 36, 255)     # #FBBF24 橙黄顶
+ROSE = (244, 63, 94, 255)       # #F43F5E 玫红侧面
 
 # Adaptive-icon viewport 108dp, safe zone ~21-87. Scale 10 keeps the
 # cube inside that box and centered at (54, 54).
@@ -65,7 +65,7 @@ def write_vector() -> None:
         parts.append(
             f'    <path android:fillColor="{color}" android:pathData="{path(face_outline(face))}" />'
         )
-    colors = {"front": "#F8FAFC", "top": "#FACC15", "right": "#EF4444"}
+    colors = {"front": "#38BDF8", "top": "#FBBF24", "right": "#F43F5E"}
     for face in ("front", "top", "right"):
         for i in range(3):
             for j in range(3):
@@ -90,6 +90,36 @@ def write_vector() -> None:
         )
     mono.append("</vector>")
     (RES / "drawable/ic_launcher_monochrome.xml").write_text("\n".join(mono) + "\n", encoding="utf-8")
+    write_qs_tile()
+
+
+def qs_iso(x: float, y: float, z: float) -> tuple[float, float]:
+    return 12.0 + (x - z) * 2.4, 12.0 + (x + z) * 1.2 - y * 2.4
+
+
+def write_qs_tile() -> None:
+    """White cube silhouette for QS tile + notification small icons."""
+    def face(f: str) -> list[tuple[float, float]]:
+        if f == "front":
+            return [qs_iso(0, 0, 0), qs_iso(3, 0, 0), qs_iso(3, 3, 0), qs_iso(0, 3, 0)]
+        if f == "top":
+            return [qs_iso(0, 3, 0), qs_iso(3, 3, 0), qs_iso(3, 3, 3), qs_iso(0, 3, 3)]
+        return [qs_iso(3, 0, 0), qs_iso(3, 0, 3), qs_iso(3, 3, 3), qs_iso(3, 3, 0)]
+
+    parts = [
+        '<vector xmlns:android="http://schemas.android.com/apk/res/android"',
+        '    android:width="24dp"',
+        '    android:height="24dp"',
+        '    android:viewportWidth="24"',
+        '    android:viewportHeight="24">',
+        "    <!-- ChainBox cube, tinted by the system -->",
+    ]
+    for f in ("front", "right", "top"):
+        parts.append(
+            f'    <path android:fillColor="#FFFFFFFF" android:pathData="{path(face(f))}" />'
+        )
+    parts.append("</vector>")
+    (RES / "drawable/ic_qs_tile.xml").write_text("\n".join(parts) + "\n", encoding="utf-8")
 
 
 def project_px(x: float, y: float, z: float, cx: float, cy: float, s: float) -> tuple[float, float]:
@@ -127,9 +157,9 @@ def draw_cube(size: int) -> Image.Image:
 
     for i in range(3):
         for j in range(3):
-            sticker("front", i, j, WHITE)
-            sticker("top", i, j, YELLOW)
-            sticker("right", i, j, RED)
+            sticker("front", i, j, SKY)
+            sticker("top", i, j, AMBER)
+            sticker("right", i, j, ROSE)
     return img
 
 

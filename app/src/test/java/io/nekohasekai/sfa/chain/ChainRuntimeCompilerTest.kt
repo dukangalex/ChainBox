@@ -190,6 +190,34 @@ class ChainRuntimeCompilerTest {
     }
 
     @Test
+    fun pinTrafficKeepsNonEntryDnsDetour() {
+        val src = JSONObject(profile("节点选择"))
+        src.put(
+            "dns",
+            JSONObject().put(
+                "servers",
+                JSONArray()
+                    .put(JSONObject().put("tag", "via-entry").put("address", "8.8.8.8").put("detour", "节点选择"))
+                    .put(JSONObject().put("tag", "via-land").put("address", "1.1.1.1").put("detour", "jp-1")),
+            ),
+        )
+        val compiled = ChainRuntimeCompiler.apply(
+            ChainRuntimeCompiler.ApplyRequest(
+                content = src.toString(),
+                currentProfileId = 1L,
+                entryTag = "节点选择",
+                landingProfileId = 1L,
+                landingTag = "jp-1",
+                landingContent = null,
+            ),
+        )
+        val servers = JSONObject(compiled).getJSONObject("dns").getJSONArray("servers")
+        val chainTag = JSONObject(compiled).getJSONObject("route").getString("final")
+        assertEquals(chainTag, servers.getJSONObject(0).getString("detour"))
+        assertEquals("jp-1", servers.getJSONObject(1).getString("detour"))
+    }
+
+    @Test
     fun chainClonePreservesTlsEch() {
         val src = JSONObject()
             .put(

@@ -138,4 +138,86 @@ class ConfigCompatTest {
             out.getJSONObject("dns").getJSONArray("servers").getJSONObject(0).getString("detour"),
         )
     }
+
+    @Test
+    fun migratesLegacyFakeipObject() {
+        val src = JSONObject()
+            .put("outbounds", JSONArray().put(JSONObject().put("type", "direct").put("tag", "direct")))
+            .put(
+                "dns",
+                JSONObject()
+                    .put(
+                        "servers",
+                        JSONArray()
+                            .put(JSONObject().put("tag", "remote").put("address", "8.8.8.8"))
+                            .put(JSONObject().put("tag", "fakeip").put("address", "fakeip")),
+                    )
+                    .put(
+                        "rules",
+                        JSONArray().put(
+                            JSONObject().put("query_type", JSONArray().put("A").put("AAAA"))
+                                .put("server", "fakeip"),
+                        ),
+                    )
+                    .put(
+                        "fakeip",
+                        JSONObject().put("enabled", true)
+                            .put("inet4_range", "198.18.0.0/15")
+                            .put("inet6_range", "fc00::/18"),
+                    ),
+            )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val dns = out.getJSONObject("dns")
+        assertEquals(false, dns.has("fakeip"))
+        val servers = dns.getJSONArray("servers")
+        assertEquals("udp", servers.getJSONObject(0).getString("type"))
+        assertEquals("8.8.8.8", servers.getJSONObject(0).getString("server"))
+        val fake = servers.getJSONObject(1)
+        assertEquals("fakeip", fake.getString("type"))
+        assertEquals("fakeip", fake.getString("tag"))
+        assertEquals("198.18.0.0/15", fake.getString("inet4_range"))
+        assertEquals("fc00::/18", fake.getString("inet6_range"))
+        assertEquals(false, fake.has("address"))
+    }
+
+    @Test
+    fun migratesHttpsDoHAddress() {
+        val src = JSONObject().put(
+            "dns",
+            JSONObject().put(
+                "servers",
+                JSONArray().put(
+                    JSONObject()
+                        .put("tag", "doh")
+                        .put("address", "https://dns.google/dns-query")
+                        .put("address_resolver", "bootstrap"),
+                ),
+            ),
+        )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val s = out.getJSONObject("dns").getJSONArray("servers").getJSONObject(0)
+        assertEquals("https", s.getString("type"))
+        assertEquals("dns.google", s.getString("server"))
+        assertEquals("bootstrap", s.getString("domain_resolver"))
+        assertEquals(false, s.has("address"))
+        assertEquals(false, s.has("path"))
+    }
+
+    @Test
+    fun injectsFakeipServerWhenOnlyTopLevelObjectExists() {
+        val src = JSONObject().put(
+            "dns",
+            JSONObject()
+                .put("servers", JSONArray().put(JSONObject().put("address", "1.1.1.1")))
+                .put("fakeip", JSONObject().put("enabled", true).put("inet4_range", "198.18.0.0/15")),
+        )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val servers = out.getJSONObject("dns").getJSONArray("servers")
+        assertEquals(2, servers.length())
+        val fake = servers.getJSONObject(1)
+        assertEquals("fakeip", fake.getString("type"))
+        assertEquals("fakeip", fake.getString("tag"))
+        val rule = out.getJSONObject("dns").getJSONArray("rules").getJSONObject(0)
+        assertEquals("fakeip", rule.getString("server"))
+    }
 }

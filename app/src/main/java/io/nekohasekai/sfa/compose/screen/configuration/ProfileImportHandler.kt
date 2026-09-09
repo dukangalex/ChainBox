@@ -9,6 +9,7 @@ import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
+import io.nekohasekai.sfa.utils.ConfigCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -347,11 +348,10 @@ class ProfileImportHandler(private val context: Context) {
     private suspend fun importJsonConfiguration(jsonContent: String, profileName: String): ImportResult {
         return try {
             // Validate the JSON configuration using sing-box
+            val sanitized = ConfigCompat.sanitize(jsonContent)
             try {
-                // Try to check the configuration
-                Libbox.checkConfig(jsonContent)
+                Libbox.checkConfig(sanitized)
             } catch (e: Exception) {
-                // Configuration validation failed
                 return ImportResult.Error(
                     context.getString(R.string.error_invalid_configuration, e.message),
                 )
@@ -375,7 +375,7 @@ class ProfileImportHandler(private val context: Context) {
             val fileID = ProfileManager.nextFileID()
             val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
             val configFile = File(configDirectory, "$fileID.json")
-            configFile.writeText(jsonContent)
+            configFile.writeText(sanitized)
             typedProfile.path = configFile.path
 
             // Create profile in database and select it

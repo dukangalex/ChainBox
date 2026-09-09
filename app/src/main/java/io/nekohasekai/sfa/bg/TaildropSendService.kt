@@ -70,7 +70,7 @@ class TaildropSendService : Service() {
         .setShowWhen(false)
         .setOngoing(true)
         .setOnlyAlertOnce(true)
-        .setSmallIcon(R.drawable.ic_menu)
+        .setSmallIcon(R.drawable.ic_qs_tile)
         .setCategory(NotificationCompat.CATEGORY_SERVICE)
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setContentTitle(getString(R.string.taildrop_notification_title))

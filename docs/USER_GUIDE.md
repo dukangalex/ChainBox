@@ -20,7 +20,7 @@ ChainBox 是面向社区用户的 Android 代理客户端，基于开源 sing-bo
 2. 导入订阅或本地 JSON，设为当前配置。
 3. 如需跨配置串联，再导入另一份落地配置。落地不必设为当前配置。
 
-远程订阅若含 Clash 风格 `plugin_opts` 对象，导入/刷新时会自动转成 sing-box 字符串。
+远程订阅若含 Clash 风格 `plugin_opts` 对象，或仍使用 sing-box 1.11 的 `dns.fakeip` / `servers[].address`，导入和启动时会自动转成 1.12+ 的 typed DNS，避免内核拒绝。
 
 ## 链式代理
 

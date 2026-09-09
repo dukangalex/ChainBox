@@ -34,7 +34,7 @@ object TerminalNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or ServiceNotification.flags,
         )
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_menu)
+            .setSmallIcon(R.drawable.ic_qs_tile)
             .setContentTitle(title.ifEmpty { sessionTitle ?: "" })
             .setContentText(body.ifEmpty { title })
             .setSubText(sessionTitle)
