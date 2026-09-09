@@ -59,6 +59,7 @@ object ConfigQuicOverride {
             applyOne(warnings, "禁用 IPv6") {
                 if (Settings.disableIpv6) applyDisableIpv6(root)
             }
+            ConfigCompat.stripBrokenDnsDetours(root)
             out = root.toString()
         } catch (e: Exception) {
             warnings += OverrideNotice(

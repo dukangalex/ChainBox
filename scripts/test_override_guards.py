@@ -74,6 +74,10 @@ def main() -> int:
         errors.append("save() must comment that apply() is validation-only")
     if 'popBackStack("dashboard"' not in ui:
         errors.append("saving a chain should return to the dashboard")
+    if "showOtherBound" not in ui or "otherBoundLines" not in ui:
+        errors.append("chain builder must let the user tap to see which other profiles are bound")
+    if "点此查看" not in ui and "点这里查看" not in ui:
+        errors.append("other-binding hint should be tappable")
 
     locales = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/AppSettingsScreen.kt")
     if "locales_config" not in locales:
@@ -104,6 +108,22 @@ def main() -> int:
             errors.append(f"China direct overlay missing {needle}")
     if "applyEchDns" in china or "ECH_DNS_TAG" in china or "unblockHttpsQueries" in china:
         errors.append("ECH DNS overlay must stay removed from ConfigChinaDirect")
+    if "applyCnDns" in china or '.put("server", "223.5.5.5")' in china:
+        errors.append("China direct must not inject a DNS server (empty-direct detour crash)")
+    if '.put("detour", directTag)' in china or 'put("detour", direct' in china:
+        errors.append("China DNS must not set detour to empty direct (sing-box 1.12 rejects it)")
+    if "dropLegacyChinaDns" not in china:
+        errors.append("China direct must drop leftover chainbox-cn-dns from older overlays")
+    if "DIRECT_FALLBACK_TAG" not in china:
+        errors.append("findOrCreateDirect must not reuse a non-direct tag named direct")
+    if "stripBrokenDnsDetours" not in china:
+        errors.append("China direct should strip leftover empty-direct DNS detours")
+
+    compat = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigCompat.kt")
+    if "stripBrokenDnsDetours" not in compat:
+        errors.append("ConfigCompat must strip DNS detours to empty/missing direct")
+    if "isEmptyDirect" not in compat:
+        errors.append("ConfigCompat must detect empty direct outbounds")
 
     override = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigQuicOverride.kt")
     if "Settings.chinaDirect" not in override:
@@ -119,6 +139,8 @@ def main() -> int:
     if "independent_cache\", true)" not in override and "independent_cache\", true" not in override:
         if 'dns.put("independent_cache", true)' not in override:
             errors.append("DNS protect must force-overwrite independent_cache")
+    if "stripBrokenDnsDetours" not in override:
+        errors.append("runtime overlay must strip empty-direct DNS detours after other switches")
 
     ui_override = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/ProfileOverrideScreen.kt")
     if "中国直连" not in ui_override:
@@ -183,10 +205,12 @@ def main() -> int:
         errors.append("launcher background should be #FFFFFF")
 
     icon_fg = read("app/src/main/res/drawable/ic_launcher_foreground.xml")
-    if "#22C55E" not in icon_fg and "#16A34A" not in icon_fg and "#4ADE80" not in icon_fg:
-        errors.append("launcher foreground must use a green bow")
-    if "#DC2626" in icon_fg or "#991B1B" in icon_fg:
-        errors.append("launcher foreground must not keep the red ribbon")
+    if "#FACC15" not in icon_fg and "#FDE047" not in icon_fg and "#EAB308" not in icon_fg:
+        errors.append("launcher foreground must be a Rubik cube (yellow face missing)")
+    if "#EF4444" not in icon_fg and "#DC2626" not in icon_fg and "#E11D48" not in icon_fg:
+        errors.append("launcher foreground must be a Rubik cube (red face missing)")
+    if "gift" in icon_fg.lower() and "cube" not in icon_fg.lower():
+        errors.append("launcher foreground should be a cube, not a gift box")
 
     logs = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/log/LogModels.kt")
     if "filterLogLevel: LogLevel = LogLevel.INFO" not in logs:

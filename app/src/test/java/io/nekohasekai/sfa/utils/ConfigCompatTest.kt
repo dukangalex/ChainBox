@@ -45,4 +45,97 @@ class ConfigCompatTest {
         assertEquals(true, kept.getBoolean("enabled"))
         assertEquals("cover.example.com", kept.getString("query_server_name"))
     }
+
+    @Test
+    fun stripsDnsDetourToEmptyDirect() {
+        val src = JSONObject()
+            .put("outbounds", JSONArray().put(JSONObject().put("type", "direct").put("tag", "direct")))
+            .put(
+                "dns",
+                JSONObject().put(
+                    "servers",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("type", "udp")
+                            .put("tag", "alidns")
+                            .put("server", "223.5.5.5")
+                            .put("detour", "direct"),
+                    ),
+                ),
+            )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val server = out.getJSONObject("dns").getJSONArray("servers").getJSONObject(0)
+        assertEquals(false, server.has("detour"))
+        assertEquals("223.5.5.5", server.getString("server"))
+    }
+
+    @Test
+    fun keepsDnsDetourToProxy() {
+        val src = JSONObject()
+            .put(
+                "outbounds",
+                JSONArray()
+                    .put(JSONObject().put("type", "direct").put("tag", "direct"))
+                    .put(JSONObject().put("type", "vless").put("tag", "proxy")),
+            )
+            .put(
+                "dns",
+                JSONObject().put(
+                    "servers",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("type", "https")
+                            .put("tag", "remote")
+                            .put("server", "8.8.8.8")
+                            .put("detour", "proxy"),
+                    ),
+                ),
+            )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val server = out.getJSONObject("dns").getJSONArray("servers").getJSONObject(0)
+        assertEquals("proxy", server.getString("detour"))
+    }
+
+    @Test
+    fun stripsDnsDetourWhenOutboundMissing() {
+        val src = JSONObject()
+            .put("outbounds", JSONArray().put(JSONObject().put("type", "vless").put("tag", "node")))
+            .put(
+                "dns",
+                JSONObject().put(
+                    "servers",
+                    JSONArray().put(
+                        JSONObject().put("tag", "local").put("address", "223.5.5.5").put("detour", "direct"),
+                    ),
+                ),
+            )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        assertEquals(false, out.getJSONObject("dns").getJSONArray("servers").getJSONObject(0).has("detour"))
+    }
+
+    @Test
+    fun keepsDetourToBoundDirect() {
+        val src = JSONObject()
+            .put(
+                "outbounds",
+                JSONArray().put(
+                    JSONObject().put("type", "direct").put("tag", "wlan").put("bind_interface", "wlan0"),
+                ),
+            )
+            .put(
+                "dns",
+                JSONObject().put(
+                    "servers",
+                    JSONArray().put(
+                        JSONObject().put("type", "udp").put("tag", "local").put("server", "1.1.1.1")
+                            .put("detour", "wlan"),
+                    ),
+                ),
+            )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        assertEquals(
+            "wlan",
+            out.getJSONObject("dns").getJSONArray("servers").getJSONObject(0).getString("detour"),
+        )
+    }
 }

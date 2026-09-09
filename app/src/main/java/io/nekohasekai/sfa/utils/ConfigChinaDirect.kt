@@ -6,17 +6,26 @@ import org.json.JSONObject
 /**
  * Runtime "China direct" overlay. Does not rewrite the subscription file.
  *
- * Force-applies six bypasses whenever the switch is on, even if the
+ * Force-applies six **route** bypasses whenever the switch is on, even if the
  * profile has no matching geoip/geosite/dns/route sections:
- * 1. China IPs (reuse geoip-cn if present, else domain/IP fallbacks)
+ * 1. China IPs (reuse geoip-cn if present)
  * 2. China domains
  * 3. China public DNS IPs
  * 4. China public DNS domains
  * 5. LAN IPs
  * 6. LAN domains
+ *
+ * Does **not** inject a DNS server. Earlier builds added
+ * `chainbox-cn-dns` with `detour: "direct"`, which sing-box 1.12+ rejects
+ * ("detour to an empty direct outbound makes no sense") and kills reload
+ * with RPC EOF. Omitting detour still uses the default outbound — often the
+ * proxy or a generated chain — so China DNS would go through the tunnel and
+ * fight the bypass. The six items above are "绕过" (route direct), not
+ * "改用国内 DNS".
  */
 object ConfigChinaDirect {
     const val CN_DNS_TAG = "chainbox-cn-dns"
+    const val DIRECT_FALLBACK_TAG = "chainbox-direct"
 
     val LAN_DOMAIN_SUFFIXES: List<String> = listOf(
         "local", "lan", "localhost", "home.arpa", "localdomain",
@@ -56,7 +65,8 @@ object ConfigChinaDirect {
         for (i in 0 until injected.length()) merged.put(injected.get(i))
         for (i in 0 until old.length()) merged.put(old.get(i))
         route.put("rules", merged)
-        applyCnDns(root, direct)
+        dropLegacyChinaDns(root)
+        ConfigCompat.stripBrokenDnsDetours(root)
     }
 
     fun chinaRouteRules(directTag: String, existingRuleSets: Set<String>): JSONArray {
@@ -120,43 +130,29 @@ object ConfigChinaDirect {
             if (lower == "dns" || lower == "block" || lower == "reject") continue
             return tag
         }
-        val tag = "direct"
+        val tag = if (find(outs, "direct") == null) "direct" else DIRECT_FALLBACK_TAG
         if (find(outs, tag) == null) {
             outs.put(JSONObject().put("type", "direct").put("tag", tag))
         }
         return tag
     }
 
-    private fun applyCnDns(root: JSONObject, directTag: String) {
-        val dns = root.optJSONObject("dns") ?: JSONObject().also { root.put("dns", it) }
-        val servers = dns.optJSONArray("servers") ?: JSONArray().also { dns.put("servers", it) }
-        if (!serverExists(servers, CN_DNS_TAG)) {
-            val typed = (0 until servers.length()).any { servers.optJSONObject(it)?.has("type") == true }
-            if (typed) {
-                servers.put(
-                    JSONObject()
-                        .put("type", "udp")
-                        .put("tag", CN_DNS_TAG)
-                        .put("server", "223.5.5.5")
-                        .put("server_port", 53)
-                        .put("detour", directTag),
-                )
-            } else {
-                servers.put(
-                    JSONObject()
-                        .put("tag", CN_DNS_TAG)
-                        .put("address", "223.5.5.5")
-                        .put("detour", directTag),
-                )
-            }
+    /**
+     * Older overlays injected `chainbox-cn-dns`. Drop it so a leftover
+     * server cannot crash the kernel on reload.
+     */
+    internal fun dropLegacyChinaDns(root: JSONObject) {
+        val dns = root.optJSONObject("dns") ?: return
+        val servers = dns.optJSONArray("servers")
+        if (servers != null) removeServer(servers, CN_DNS_TAG)
+        val rules = dns.optJSONArray("rules") ?: return
+        val keep = JSONArray()
+        for (i in 0 until rules.length()) {
+            val rule = rules.optJSONObject(i) ?: continue
+            if (rule.optString("server") == CN_DNS_TAG) continue
+            keep.put(rule)
         }
-        val old = dns.optJSONArray("rules") ?: JSONArray()
-        val dnsRule = JSONObject()
-            .put("domain_suffix", ConfigNormalize.cnDomainSuffixArray())
-            .put("server", CN_DNS_TAG)
-        val merged = JSONArray().put(dnsRule)
-        for (i in 0 until old.length()) merged.put(old.get(i))
-        dns.put("rules", merged)
+        dns.put("rules", keep)
     }
 
     private fun existingRuleSetTags(route: JSONObject): Set<String> {
@@ -170,11 +166,15 @@ object ConfigChinaDirect {
         return out
     }
 
-    private fun serverExists(servers: JSONArray, tag: String): Boolean {
+    private fun removeServer(servers: JSONArray, tag: String) {
+        val keep = JSONArray()
         for (i in 0 until servers.length()) {
-            if (servers.optJSONObject(i)?.optString("tag") == tag) return true
+            val item = servers.optJSONObject(i) ?: continue
+            if (item.optString("tag") == tag) continue
+            keep.put(item)
         }
-        return false
+        while (servers.length() > 0) servers.remove(0)
+        for (i in 0 until keep.length()) servers.put(keep.get(i))
     }
 
     private fun find(outs: JSONArray, tag: String): JSONObject? {

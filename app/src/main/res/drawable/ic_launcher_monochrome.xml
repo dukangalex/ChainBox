@@ -3,7 +3,8 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,46 L78,46 L78,84 Q78,88 74,88 L34,88 Q30,88 30,84 Z M26,40 L82,40 L82,50 L26,50 Z M50,40 L58,40 L58,88 L50,88 Z M30,62 L78,62 L78,70 L30,70 Z M54,40 C42,18 24,30 36,42 C42,46 50,42 54,40 C66,18 84,30 72,42 C66,46 58,42 54,40 Z M50,36 Q54,32 58,36 Q62,40 58,44 Q54,48 50,44 Q46,40 50,36 Z M50,44 L44,58 L54,48 Z M58,44 L64,58 L54,48 Z" />
+    <!-- cube silhouette -->
+    <path android:fillColor="#FFFFFF" android:pathData="M54.0,54.0 L84.0,69.0 L84.0,39.0 L54.0,24.0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M84.0,69.0 L54.0,84.0 L54.0,54.0 L84.0,39.0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M54.0,24.0 L84.0,39.0 L54.0,54.0 L24.0,39.0 Z" />
 </vector>

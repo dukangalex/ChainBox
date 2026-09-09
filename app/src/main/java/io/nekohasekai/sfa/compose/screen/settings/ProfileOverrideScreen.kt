@@ -291,7 +291,8 @@ fun ProfileOverrideScreen(
                                 "4. 绕过中国公共 DNS 域名\n" +
                                 "5. 绕过局域网 IP（ip_is_private）\n" +
                                 "6. 绕过局域网域名（.local / .lan 等）\n\n" +
-                                "国内域名解析走 223.5.5.5，流量走 direct。",
+                                "只改路由：匹配到的流量走 direct。不注入 DNS 服务器，" +
+                                "避免 sing-box 因 detour 指向空 direct 而无法启动。",
                         )
                     },
                     onCheckedChange = {

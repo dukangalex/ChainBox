@@ -98,6 +98,8 @@ fun ChainBuilderScreen(
     var savedHint by remember { mutableStateOf<String?>(null) }
     var chainActive by remember { mutableStateOf(false) }
     var otherBound by remember { mutableStateOf(0) }
+    var otherBoundLines by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showOtherBound by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf<String?>(null) }
     var pickerQuery by remember { mutableStateOf("") }
     var showHelp by remember { mutableStateOf(false) }
@@ -127,7 +129,15 @@ fun ChainBuilderScreen(
                     if (parsed.isEmpty()) null else ProfileChoice(p.id, p.name, parsed)
                 }
                 val binding = ChainBindings.get(current.id)
-                val othersBound = ChainBindings.all().count { it.profileId != current.id }
+                val othersBound = ChainBindings.all().filter { it.profileId != current.id }
+                val othersBoundLines = othersBound.map { b ->
+                    val src = profiles.find { it.id == b.profileId }?.name
+                        ?.ifBlank { null } ?: "配置 ${b.profileId}"
+                    val dstName = profiles.find { it.id == b.landingProfileId }?.name
+                        ?.ifBlank { null }
+                    val land = if (dstName != null) "$dstName / ${b.landingTag}" else b.landingTag
+                    "$src  →  $land"
+                }
                 withContext(Dispatchers.Main) {
                     currentProfileId = current.id
                     currentProfileName = current.name
@@ -135,7 +145,8 @@ fun ChainBuilderScreen(
                     currentHops = hops
                     allProfiles = others
                     loadError = null
-                    otherBound = othersBound
+                    otherBound = othersBound.size
+                    otherBoundLines = othersBoundLines
                     chainActive = binding != null
                     val savedEntry = binding?.entryTag.orEmpty()
                     entry = hops.find { it.tag == savedEntry }
@@ -286,11 +297,13 @@ fun ChainBuilderScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
             if (otherBound > 0) {
-                Text(
-                    "另有 $otherBound 个配置已独立绑定落地，取消当前配置不会清掉它们。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                OutlinedButton(
+                    onClick = { showOtherBound = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy,
+                ) {
+                    Text("另有 $otherBound 个配置已绑定落地，点此查看是哪几个")
+                }
             }
             Text(
                 "Chain 按你选的顺序串联现有 outbound：入口 → 落地 → 目标。不绑定机场或协议。链路失败不会自动改走 DIRECT。",
@@ -387,6 +400,28 @@ fun ChainBuilderScreen(
                 }
             },
             confirmButton = { TextButton(onClick = { picker = null }) { Text("关闭") } },
+        )
+    }
+
+    if (showOtherBound) {
+        AlertDialog(
+            onDismissRequest = { showOtherBound = false },
+            title = { Text("其他配置的链式绑定") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "每份配置独立保存落地，互不影响。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    otherBoundLines.forEach { line ->
+                        Text(line, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showOtherBound = false }) { Text("关闭") }
+            },
         )
     }
 
