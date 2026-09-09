@@ -4,13 +4,14 @@ import androidx.room.Room
 import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.chain.ChainBindings
 import io.nekohasekai.sfa.constant.Path
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 
 @Suppress("RedundantSuspendModifier")
 object ProfileManager {
     private val callbacks = mutableListOf<() -> Unit>()
+    private val dbLock = Any()
+
+    @Volatile
+    private var db: ProfileDatabase? = null
 
     fun registerCallback(callback: () -> Unit) {
         callbacks.add(callback)
@@ -20,30 +21,34 @@ object ProfileManager {
         callbacks.remove(callback)
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
-    private val instance by lazy {
-        Application.application.getDatabasePath(Path.PROFILES_DATABASE_PATH).parentFile?.mkdirs()
-        Room
-            .databaseBuilder(
-                Application.application,
-                ProfileDatabase::class.java,
-                Path.PROFILES_DATABASE_PATH,
-            )
-            .addMigrations(ProfileDatabase.MIGRATION_1_2, ProfileDatabase.MIGRATION_2_3)
-            .fallbackToDestructiveMigrationOnDowngrade()
-            .enableMultiInstanceInvalidation()
-            .setQueryExecutor { GlobalScope.launch { it.run() } }
-            .build()
+    private fun database(): ProfileDatabase {
+        db?.takeIf { it.isOpen }?.let { return it }
+        synchronized(dbLock) {
+            db?.takeIf { it.isOpen }?.let { return it }
+            Application.application.getDatabasePath(Path.PROFILES_DATABASE_PATH).parentFile?.mkdirs()
+            val built = Room
+                .databaseBuilder(
+                    Application.application,
+                    ProfileDatabase::class.java,
+                    Path.PROFILES_DATABASE_PATH,
+                )
+                .addMigrations(ProfileDatabase.MIGRATION_1_2, ProfileDatabase.MIGRATION_2_3)
+                .fallbackToDestructiveMigrationOnDowngrade()
+                .enableMultiInstanceInvalidation()
+                .build()
+            db = built
+            return built
+        }
     }
 
-    suspend fun nextOrder(): Long = instance.profileDao().nextOrder() ?: 0
+    suspend fun nextOrder(): Long = database().profileDao().nextOrder() ?: 0
 
-    suspend fun nextFileID(): Long = instance.profileDao().nextFileID() ?: 1
+    suspend fun nextFileID(): Long = database().profileDao().nextFileID() ?: 1
 
-    suspend fun get(id: Long): Profile? = instance.profileDao().get(id)
+    suspend fun get(id: Long): Profile? = database().profileDao().get(id)
 
     suspend fun create(profile: Profile, andSelect: Boolean = false): Profile {
-        profile.id = instance.profileDao().insert(profile)
+        profile.id = database().profileDao().insert(profile)
         if (andSelect) {
             Settings.selectedProfile = profile.id
         }
@@ -55,7 +60,7 @@ object ProfileManager {
 
     suspend fun update(profile: Profile): Int {
         try {
-            return instance.profileDao().update(profile)
+            return database().profileDao().update(profile)
         } finally {
             for (callback in callbacks.toList()) {
                 callback()
@@ -65,7 +70,7 @@ object ProfileManager {
 
     suspend fun update(profiles: List<Profile>): Int {
         try {
-            return instance.profileDao().update(profiles)
+            return database().profileDao().update(profiles)
         } finally {
             for (callback in callbacks.toList()) {
                 callback()
@@ -76,7 +81,7 @@ object ProfileManager {
     suspend fun delete(profile: Profile): Int {
         try {
             runCatching { ChainBindings.removeProfile(profile.id) }
-            return instance.profileDao().delete(profile)
+            return database().profileDao().delete(profile)
         } finally {
             for (callback in callbacks.toList()) {
                 callback()
@@ -89,7 +94,7 @@ object ProfileManager {
             profiles.forEach { p ->
                 runCatching { ChainBindings.removeProfile(p.id) }
             }
-            return instance.profileDao().delete(profiles)
+            return database().profileDao().delete(profiles)
         } finally {
             for (callback in callbacks.toList()) {
                 callback()
@@ -97,11 +102,14 @@ object ProfileManager {
         }
     }
 
-    suspend fun list(): List<Profile> = instance.profileDao().list()
+    suspend fun list(): List<Profile> = database().profileDao().list()
 
-    fun remoteServerDao(): RemoteServer.Dao = instance.remoteServerDao()
+    fun remoteServerDao(): RemoteServer.Dao = database().remoteServerDao()
 
     fun closeDatabase() {
-        runCatching { instance.close() }
+        synchronized(dbLock) {
+            runCatching { db?.close() }
+            db = null
+        }
     }
 }

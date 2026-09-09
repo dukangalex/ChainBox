@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings as AndroidSettings
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import io.nekohasekai.sfa.database.Settings
 import java.io.File
@@ -39,7 +40,12 @@ object SystemPackageInstaller {
                 Uri.parse("package:${context.packageName}"),
             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(settings)
-            throw IllegalStateException("请先允许 ChainBox 安装未知应用，返回后再点一次更新")
+            Toast.makeText(
+                context,
+                "请先允许 ChainBox 安装未知应用，返回后再点一次更新",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
         }
         if (Settings.silentInstallEnabled) {
             try {
