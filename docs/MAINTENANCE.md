@@ -65,7 +65,7 @@ git push origin chain-dev
 1. **Fail Closed**：链路失败不得静默落到 DIRECT。
 2. **低耦合**：Chain 尽量只挂在 outbound 注册与 dial 链路上。
 3. **冲突即停**：与官方架构无法兼容时停止发版。
-4. **不必为跟版而跟版**：官方 sing-box 1.14 已发布，但 `chain-dev` 已带 1.14 依赖。App 侧先把 DNS 兼容（fakeip / rcode）与 Chain 外挂做稳，再考虑合入更新的官方提交。不要在未验证 Chain outbound 的情况下整包快进。
+4. **不必为跟版而跟版**：官方 sing-box 1.14 已发布，但 `chain-dev` 已带 1.14 依赖。App 侧先把兼容层（fakeip / rcode / inbound sniff / rule-set URL）与 Chain 外挂做稳，再考虑合入更新的官方提交。不要在未验证 Chain outbound 的情况下整包快进。
 
 ## App 同步
 

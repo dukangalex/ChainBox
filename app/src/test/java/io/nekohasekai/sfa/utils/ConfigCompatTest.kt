@@ -306,4 +306,150 @@ class ConfigCompatTest {
         assertEquals("predefined", rule.getString("action"))
         assertEquals("NXDOMAIN", rule.getString("rcode"))
     }
+
+    @Test
+    fun migratesLegacyInboundSniffAndStrategy() {
+        val src = JSONObject()
+            .put(
+                "inbounds",
+                JSONArray().put(
+                    JSONObject()
+                        .put("type", "tun")
+                        .put("sniff", true)
+                        .put("sniff_timeout", "1s")
+                        .put("sniff_override_destination", true)
+                        .put("domain_strategy", "prefer_ipv4"),
+                ),
+            )
+            .put(
+                "route",
+                JSONObject().put(
+                    "rules",
+                    JSONArray().put(JSONObject().put("protocol", "dns").put("action", "hijack-dns")),
+                ),
+            )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val inbound = out.getJSONArray("inbounds").getJSONObject(0)
+        assertEquals("tun-in", inbound.getString("tag"))
+        assertEquals(false, inbound.has("sniff"))
+        assertEquals(false, inbound.has("sniff_timeout"))
+        assertEquals(false, inbound.has("sniff_override_destination"))
+        assertEquals(false, inbound.has("domain_strategy"))
+        val rules = out.getJSONObject("route").getJSONArray("rules")
+        val resolve = rules.getJSONObject(0)
+        assertEquals("resolve", resolve.getString("action"))
+        assertEquals("prefer_ipv4", resolve.getString("strategy"))
+        assertEquals("tun-in", resolve.getString("inbound"))
+        val sniff = rules.getJSONObject(1)
+        assertEquals("sniff", sniff.getString("action"))
+        assertEquals("1s", sniff.getString("timeout"))
+        assertEquals(true, sniff.getBoolean("override_destination"))
+        assertEquals("hijack-dns", rules.getJSONObject(2).getString("action"))
+    }
+
+    @Test
+    fun migratesDnsAndBlockOutbounds() {
+        val src = JSONObject()
+            .put(
+                "outbounds",
+                JSONArray()
+                    .put(JSONObject().put("type", "direct").put("tag", "direct"))
+                    .put(JSONObject().put("type", "dns").put("tag", "dns-out"))
+                    .put(JSONObject().put("type", "block").put("tag", "block"))
+                    .put(
+                        JSONObject()
+                            .put("type", "selector")
+                            .put("tag", "proxy")
+                            .put("outbounds", JSONArray().put("direct").put("block")),
+                    ),
+            )
+            .put(
+                "route",
+                JSONObject()
+                    .put(
+                        "rules",
+                        JSONArray()
+                            .put(JSONObject().put("protocol", "dns").put("outbound", "dns-out"))
+                            .put(JSONObject().put("domain_suffix", ".ads").put("outbound", "block")),
+                    )
+                    .put("final", "proxy"),
+            )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val tags = mutableListOf<String>()
+        val outs = out.getJSONArray("outbounds")
+        for (i in 0 until outs.length()) tags.add(outs.getJSONObject(i).getString("tag"))
+        assertEquals(false, tags.contains("dns-out"))
+        assertEquals(false, tags.contains("block"))
+        val selector = outs.getJSONObject(1)
+        assertEquals("proxy", selector.getString("tag"))
+        assertEquals(1, selector.getJSONArray("outbounds").length())
+        assertEquals("direct", selector.getJSONArray("outbounds").getString(0))
+        val rules = out.getJSONObject("route").getJSONArray("rules")
+        assertEquals("hijack-dns", rules.getJSONObject(0).getString("action"))
+        assertEquals(false, rules.getJSONObject(0).has("outbound"))
+        assertEquals("reject", rules.getJSONObject(1).getString("action"))
+    }
+
+    @Test
+    fun rewritesGithubRawRuleSetUrls() {
+        val src = JSONObject().put(
+            "route",
+            JSONObject().put(
+                "rule_set",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put("tag", "geoip-cn")
+                            .put("type", "remote")
+                            .put("format", "binary")
+                            .put(
+                                "url",
+                                "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/srs/cn.srs",
+                            ),
+                    )
+                    .put(
+                        JSONObject()
+                            .put("tag", "geosite-cn")
+                            .put(
+                                "url",
+                                "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+                            ),
+                    )
+                    .put(
+                        JSONObject()
+                            .put("tag", "category-ads-all")
+                            .put(
+                                "url",
+                                "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
+                            ),
+                    )
+                    .put(
+                        JSONObject()
+                            .put("tag", "already-jsd")
+                            .put(
+                                "url",
+                                "https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs",
+                            ),
+                    ),
+            ),
+        )
+        val out = JSONObject(ConfigCompat.sanitize(src.toString()))
+        val sets = out.getJSONObject("route").getJSONArray("rule_set")
+        assertEquals(
+            "https://testingcf.jsdelivr.net/gh/Loyalsoldier/geoip@release/srs/cn.srs",
+            sets.getJSONObject(0).getString("url"),
+        )
+        assertEquals(
+            "https://testingcf.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs",
+            sets.getJSONObject(1).getString("url"),
+        )
+        assertEquals(
+            "https://testingcf.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs",
+            sets.getJSONObject(2).getString("url"),
+        )
+        assertEquals(
+            "https://testingcf.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs",
+            sets.getJSONObject(3).getString("url"),
+        )
+    }
 }

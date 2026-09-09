@@ -20,7 +20,7 @@ ChainBox 是面向社区用户的 Android 代理客户端，基于开源 sing-bo
 2. 导入订阅或本地 JSON，设为当前配置。
 3. 如需跨配置串联，再导入另一份落地配置。落地不必设为当前配置。
 
-远程订阅若含 Clash 风格 `plugin_opts` 对象，或仍使用 sing-box 1.11 的 `dns.fakeip` / `servers[].address` / `rcode://` / `type: rcode`，导入和启动时会自动转成 1.12+ 的 typed DNS 与 `action: predefined` 规则，避免内核拒绝。
+远程订阅若含 Clash 风格 `plugin_opts` 对象，或仍使用 sing-box 1.11 的 `dns.fakeip` / `servers[].address` / `rcode://` / `type: rcode`，或入站仍写 `sniff` / `domain_strategy`、出站仍用 `type: dns` / `type: block`，导入和启动时会自动转成 1.12+ 的 typed DNS 与路由动作，避免内核拒绝。GitHub `raw.githubusercontent.com` 规则集地址会改写到 jsDelivr testingcf 镜像，避免 raw/LFS 404 导致无法启动。
 
 ## 链式代理
 
@@ -100,8 +100,17 @@ debug 与正式签名混过。卸载后装正式 `ChainBox-android.apk`，以后
 **能备份但不能恢复**  
 可在恢复策略里切「兼容」。请用当前版本重新备份后再恢复。
 
-**导入报 unknown transport type: rcode / legacy DNS fakeip**  
-机场配置仍用 1.11 写法。当前版本导入时会自动迁移：`dns.fakeip` → `type: fakeip`，`rcode://` 与 `type: rcode` → DNS 规则 `action: predefined`。请用当前发行版重新导入。官方客户端同样会拒绝这些字段。
+**导入报 unknown transport type: rcode / legacy DNS fakeip / legacy inbound fields**  
+订阅仍用 1.11 写法。当前版本导入和启动时会自动迁移：`dns.fakeip` → `type: fakeip`，`rcode://` 与 `type: rcode` → DNS 规则 `action: predefined`，入站 `sniff` / `domain_strategy` → 路由动作，`type: dns` / `type: block` 出站 → `hijack-dns` / `reject`。请用当前发行版重新导入或直接启动（启动时也会迁移）。官方客户端同样会拒绝这些字段。
+
+**启动报 rule-set HTTP 404（geoip-cn / geosite-cn 等）**  
+订阅把规则集指到 `raw.githubusercontent.com`，Git LFS 或线路会返回 404。当前版本会改写到 jsDelivr testingcf 镜像。重新导入或重载即可。
+
+**检查更新闪退 / 崩溃报告写「请先允许安装未知应用」**  
+旧版把权限提示当成未捕获异常。当前版本会打开系统「安装未知应用」页并提示，不会崩溃。允许后请再点一次更新，应出现系统安装界面。
+
+**恢复备份后闪退 settings.db already-closed**  
+旧版关闭 Room 后仍用已关闭的实例。当前版本会在恢复后重新打开数据库，并继续热重启 App。
 
 **WebRTC 测出国内 STUN 泄露真实 IP**  
 旧版把中国直连规则写在 STUN 拦截前面，bilibili/小米等国内 STUN 被直连放行。当前版本会先拒绝 STUN/TURN。请打开「配置覆盖 → 防 WebRTC 泄露」后重载。

@@ -220,6 +220,15 @@ def main() -> int:
         errors.append("must document 1.14 fakeip removal")
     if "migrateRcodeServers" not in src:
         errors.append("migrateRcodeServers missing")
+    inbound = (ROOT / "app/src/main/java/io/nekohasekai/sfa/utils/ConfigInboundCompat.kt").read_text()
+    if "ConfigInboundCompat.apply" not in src:
+        errors.append("ConfigCompat.sanitize must call ConfigInboundCompat.apply")
+    if "migrateLegacyInbounds" not in inbound:
+        errors.append("migrateLegacyInbounds missing")
+    if "rewriteRuleSetUrls" not in inbound:
+        errors.append("rewriteRuleSetUrls missing")
+    if "migrateSpecialOutbounds" not in inbound:
+        errors.append("migrateSpecialOutbounds missing")
 
     crash = {
         "dns": {

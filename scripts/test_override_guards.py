@@ -105,8 +105,18 @@ def main() -> int:
         errors.append("ECH overlay was removed; Settings.echDns must not return")
     if "fun closeDatabase" not in settings:
         errors.append("Settings.closeDatabase missing; restore would hit open WAL")
+    if "db?.close()" not in settings and "db = null" not in settings:
+        errors.append("Settings.closeDatabase must drop the Room instance so restore can reopen")
+    if "setQueryExecutor { GlobalScope.launch" in settings:
+        errors.append("Settings must not queue Room queries on GlobalScope after close")
     if "restoreCompat" not in settings:
         errors.append("Settings.restoreCompat missing")
+
+    profiles = read("app/src/main/java/io/nekohasekai/sfa/database/ProfileManager.kt")
+    if "db = null" not in profiles:
+        errors.append("ProfileManager.closeDatabase must drop the Room instance so restore can reopen")
+    if "setQueryExecutor { GlobalScope.launch" in profiles:
+        errors.append("ProfileManager must not queue Room queries on GlobalScope after close")
 
     china = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigChinaDirect.kt")
     for needle in ("ip_is_private", "CHINA_DNS_IPS", "CHINA_DNS_DOMAINS", "LAN_DOMAIN_SUFFIXES", "cnDomainSuffixArray"):
@@ -140,6 +150,18 @@ def main() -> int:
         errors.append("ConfigCompat must document rcode transport removal")
     if "MAX_CONFIG_CHARS" not in compat:
         errors.append("ConfigCompat.sanitize must cap JSON size")
+    inbound = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigInboundCompat.kt")
+    overlay = compat + inbound
+    if "ConfigInboundCompat.apply" not in compat:
+        errors.append("ConfigCompat.sanitize must call ConfigInboundCompat.apply")
+    if "migrateLegacyInbounds" not in inbound:
+        errors.append("ConfigInboundCompat must migrate inbound sniff/domain_strategy to route actions")
+    if "rewriteGithubRawUrl" not in inbound or "testingcf.jsdelivr.net" not in inbound:
+        errors.append("ConfigInboundCompat must rewrite GitHub raw rule-set URLs to testingcf jsDelivr")
+    if "migrateSpecialOutbounds" not in inbound:
+        errors.append("ConfigInboundCompat must convert type:dns / type:block outbounds")
+    if "legacy inbound fields" not in overlay:
+        errors.append("compat overlay must document 1.13 inbound field removal")
 
     override = read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigQuicOverride.kt")
     if "Settings.chinaDirect" not in override:
@@ -163,10 +185,13 @@ def main() -> int:
         errors.append("WebRTC and China Direct overlays must both apply")
     elif webrtc_call < china_call:
         errors.append("WebRTC reject must apply after China Direct so STUN ports win over CN bypass")
-    if "launchVisibleInstaller" not in read(
-        "app/src/github/java/io/nekohasekai/sfa/vendor/SystemPackageInstaller.kt",
-    ):
+    installer = read("app/src/github/java/io/nekohasekai/sfa/vendor/SystemPackageInstaller.kt")
+    if "launchVisibleInstaller" not in installer:
         errors.append("in-app update must show the system package installer UI")
+    if 'throw IllegalStateException("请先允许' in installer:
+        errors.append("unknown-app-sources prompt must not crash the UI thread")
+    if "Toast.makeText" not in installer:
+        errors.append("unknown-app-sources should toast instead of throwing")
 
     ui_override = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/ProfileOverrideScreen.kt")
     if "中国直连" not in ui_override:

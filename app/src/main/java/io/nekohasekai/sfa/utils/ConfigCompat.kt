@@ -24,6 +24,13 @@ import org.json.JSONObject
  * DNS `type: rcode` / `type: predefined` as *servers* are not registered
  * transports ("unknown transport type: rcode"). They become DNS *rule*
  * actions (`action: predefined`) matching the 1.12 migration guide.
+ *
+ * sing-box 1.11 deprecated inbound sniff/domain_strategy and special
+ * outbounds (`type: dns` / `type: block`); 1.13 rejects leftover
+ * legacy inbound fields. Import and startup rewrite those fields into
+ * route actions so older subscriptions still load. GitHub
+ * `raw.githubusercontent.com` rule-set URLs are rewritten to the jsDelivr
+ * testingcf mirror so LFS/raw 404s and GitHub unavailability do not block start.
  */
 object ConfigCompat {
     const val MAX_CONFIG_CHARS = 8 * 1024 * 1024
@@ -46,6 +53,7 @@ object ConfigCompat {
             }
         }
         if (migrateLegacyDns(root)) changed = true
+        if (ConfigInboundCompat.apply(root)) changed = true
         if (stripBrokenDnsDetours(root)) changed = true
         return if (changed) root.toString() else content
     }

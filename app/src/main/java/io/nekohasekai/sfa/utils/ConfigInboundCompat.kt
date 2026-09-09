@@ -1,0 +1,256 @@
+package io.nekohasekai.sfa.utils
+
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Import/startup shim for sing-box 1.11–1.13 field removals. Not a kernel
+ * change: leftover inbound sniff/domain_strategy and type:dns/block
+ * outbounds become route actions. sing-box 1.13 rejects leftover
+ * legacy inbound fields; this overlay strips them before libbox decode.
+ * GitHub raw rule-set URLs become the jsDelivr testingcf mirror
+ * (reachable when raw.githubusercontent.com returns 404).
+ */
+object ConfigInboundCompat {
+    fun apply(root: JSONObject): Boolean {
+        var changed = false
+        if (migrateLegacyInbounds(root)) changed = true
+        if (migrateSpecialOutbounds(root)) changed = true
+        if (rewriteRuleSetUrls(root)) changed = true
+        return changed
+    }
+
+    internal fun migrateLegacyInbounds(root: JSONObject): Boolean {
+        val inbounds = root.optJSONArray("inbounds") ?: return false
+        val usedTags = mutableSetOf<String>()
+        for (i in 0 until inbounds.length()) {
+            val tag = inbounds.optJSONObject(i)?.optString("tag")?.trim().orEmpty()
+            if (tag.isNotEmpty()) usedTags.add(tag)
+        }
+        val extra = JSONArray()
+        var changed = false
+        for (i in 0 until inbounds.length()) {
+            val ib = inbounds.optJSONObject(i) ?: continue
+            val hadSniff = ib.has("sniff") || ib.has("sniff_timeout") || ib.has("sniff_override_destination")
+            val strategy = ib.optString("domain_strategy").trim()
+            val hadUdpDisable = ib.has("udp_disable_domain_unmapping")
+            val hadUdpConnect = ib.has("udp_connect")
+            val hadUdpTimeout = ib.has("udp_timeout")
+            if (!hadSniff && strategy.isEmpty() && !hadUdpDisable && !hadUdpConnect && !hadUdpTimeout) {
+                continue
+            }
+            var tag = ib.optString("tag").trim()
+            if (tag.isEmpty()) {
+                val base = ib.optString("type").ifBlank { "in" } + "-in"
+                tag = uniqueTag(base, usedTags)
+                ib.put("tag", tag)
+                usedTags.add(tag)
+            }
+            if (strategy.isNotEmpty()) {
+                extra.put(
+                    JSONObject()
+                        .put("inbound", tag)
+                        .put("action", "resolve")
+                        .put("strategy", strategy),
+                )
+                ib.remove("domain_strategy")
+            }
+            val sniffOn = ib.optBoolean("sniff") ||
+                ib.has("sniff_timeout") ||
+                ib.optBoolean("sniff_override_destination")
+            if (sniffOn) {
+                val rule = JSONObject().put("inbound", tag).put("action", "sniff")
+                val timeout = ib.optString("sniff_timeout").trim()
+                if (timeout.isNotEmpty()) rule.put("timeout", timeout)
+                if (ib.optBoolean("sniff_override_destination")) {
+                    rule.put("override_destination", true)
+                }
+                extra.put(rule)
+            }
+            ib.remove("sniff")
+            ib.remove("sniff_timeout")
+            ib.remove("sniff_override_destination")
+            if (hadUdpDisable || hadUdpConnect || hadUdpTimeout) {
+                val rule = JSONObject().put("inbound", tag).put("action", "route-options")
+                if (hadUdpDisable) {
+                    rule.put("udp_disable_domain_unmapping", ib.optBoolean("udp_disable_domain_unmapping"))
+                    ib.remove("udp_disable_domain_unmapping")
+                }
+                if (hadUdpConnect) {
+                    rule.put("udp_connect", ib.optBoolean("udp_connect"))
+                    ib.remove("udp_connect")
+                }
+                if (hadUdpTimeout) {
+                    rule.put("udp_timeout", ib.get("udp_timeout"))
+                    ib.remove("udp_timeout")
+                }
+                extra.put(rule)
+            }
+            changed = true
+        }
+        if (!changed) return false
+        prependRouteRules(root, extra)
+        return true
+    }
+
+    internal fun migrateSpecialOutbounds(root: JSONObject): Boolean {
+        val outs = root.optJSONArray("outbounds") ?: return false
+        val dnsTags = mutableSetOf<String>()
+        val blockTags = mutableSetOf<String>()
+        val keep = JSONArray()
+        var changed = false
+        for (i in 0 until outs.length()) {
+            val o = outs.optJSONObject(i) ?: continue
+            val type = o.optString("type").trim().lowercase()
+            val tag = o.optString("tag").trim()
+            when (type) {
+                "dns" -> {
+                    if (tag.isNotEmpty()) dnsTags.add(tag)
+                    changed = true
+                }
+                "block" -> {
+                    if (tag.isNotEmpty()) blockTags.add(tag)
+                    changed = true
+                }
+                else -> keep.put(o)
+            }
+        }
+        if (!changed) return false
+        replaceArray(outs, keep)
+        for (i in 0 until outs.length()) {
+            val o = outs.optJSONObject(i) ?: continue
+            val list = o.optJSONArray("outbounds") ?: continue
+            val filtered = JSONArray()
+            var listChanged = false
+            for (j in 0 until list.length()) {
+                val item = list.opt(j)
+                val t = when (item) {
+                    is String -> item
+                    is JSONObject -> item.optString("tag")
+                    else -> ""
+                }.trim()
+                if (t in dnsTags || t in blockTags) {
+                    listChanged = true
+                    continue
+                }
+                filtered.put(list.get(j))
+            }
+            if (listChanged) o.put("outbounds", filtered)
+        }
+        val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
+        rewriteSpecialOutboundRules(route.optJSONArray("rules"), dnsTags, blockTags)
+        val finalTag = route.optString("final").trim()
+        when {
+            finalTag in blockTags -> {
+                route.remove("final")
+                val rules = route.optJSONArray("rules") ?: JSONArray().also { route.put("rules", it) }
+                rules.put(JSONObject().put("action", "reject"))
+            }
+            finalTag in dnsTags -> route.remove("final")
+        }
+        return true
+    }
+
+    private fun rewriteSpecialOutboundRules(
+        rules: JSONArray?,
+        dnsTags: Set<String>,
+        blockTags: Set<String>,
+    ) {
+        if (rules == null) return
+        for (i in 0 until rules.length()) {
+            val rule = rules.optJSONObject(i) ?: continue
+            val nested = rule.optJSONArray("rules")
+            if (nested != null) rewriteSpecialOutboundRules(nested, dnsTags, blockTags)
+            val ob = rule.optString("outbound").trim()
+            when {
+                ob in dnsTags -> {
+                    rule.remove("outbound")
+                    if (rule.optString("action").isBlank()) rule.put("action", "hijack-dns")
+                }
+                ob in blockTags -> {
+                    rule.remove("outbound")
+                    if (rule.optString("action").isBlank()) rule.put("action", "reject")
+                }
+            }
+        }
+    }
+
+    internal fun rewriteRuleSetUrls(root: JSONObject): Boolean {
+        val route = root.optJSONObject("route") ?: return false
+        val sets = route.optJSONArray("rule_set") ?: return false
+        var changed = false
+        for (i in 0 until sets.length()) {
+            val item = sets.optJSONObject(i) ?: continue
+            for (key in listOf("url", "download_url")) {
+                val current = item.optString(key).trim()
+                if (current.isEmpty()) continue
+                val rewritten = rewriteGithubRawUrl(current)
+                if (rewritten != current) {
+                    item.put(key, rewritten)
+                    changed = true
+                }
+            }
+        }
+        return changed
+    }
+
+    internal fun rewriteGithubRawUrl(url: String): String {
+        val trimmed = url.trim()
+        val jsd = JSDELIVR.matchEntire(trimmed)
+        if (jsd != null) {
+            if (jsd.groupValues[1].equals(JSDELIVR_HOST, true)) return trimmed
+            return "https://$JSDELIVR_HOST/gh/${jsd.groupValues[2]}"
+        }
+        val raw = RAW_GITHUB.matchEntire(trimmed)
+        if (raw != null) {
+            val owner = raw.groupValues[1]
+            val repo = raw.groupValues[2]
+            val ref = raw.groupValues[3]
+            val path = raw.groupValues[4]
+            return "https://$JSDELIVR_HOST/gh/$owner/$repo@$ref/$path"
+        }
+        val gh = GITHUB_RAW.matchEntire(trimmed)
+        if (gh != null) {
+            val owner = gh.groupValues[1]
+            val repo = gh.groupValues[2]
+            val rest = gh.groupValues[3]
+            val slash = rest.indexOf('/')
+            if (slash > 0) {
+                val ref = rest.substring(0, slash)
+                val path = rest.substring(slash + 1)
+                return "https://$JSDELIVR_HOST/gh/$owner/$repo@$ref/$path"
+            }
+        }
+        return trimmed
+    }
+
+    private fun prependRouteRules(root: JSONObject, extra: JSONArray) {
+        if (extra.length() == 0) return
+        val route = root.optJSONObject("route") ?: JSONObject().also { root.put("route", it) }
+        val old = route.optJSONArray("rules") ?: JSONArray()
+        val merged = JSONArray()
+        for (i in 0 until extra.length()) merged.put(extra.get(i))
+        for (i in 0 until old.length()) merged.put(old.get(i))
+        route.put("rules", merged)
+    }
+
+    private fun uniqueTag(base: String, used: Set<String>): String {
+        if (base !in used) return base
+        var n = 1
+        while ("$base-$n" in used) n++
+        return "$base-$n"
+    }
+
+    private fun replaceArray(target: JSONArray, keep: JSONArray) {
+        while (target.length() > 0) target.remove(0)
+        for (i in 0 until keep.length()) target.put(keep.get(i))
+    }
+
+    private const val JSDELIVR_HOST = "testingcf.jsdelivr.net"
+    private val JSDELIVR =
+        Regex("^https?://([^/]*jsdelivr\\.net)/gh/(.+)$")
+    private val RAW_GITHUB =
+        Regex("^https?://raw\\.githubusercontent\\.com/([^/]+)/([^/]+)/([^/]+)/(.+)$")
+    private val GITHUB_RAW =
+        Regex("^https?://github\\.com/([^/]+)/([^/]+)/raw/(.+)$")
+}

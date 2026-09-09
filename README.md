@@ -22,7 +22,7 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 
 ## 架构
 
-官方 sing-box 内核保持完整。Chain、中国直连、WebRTC、DNS 兼容等都是 **模块化外挂**：只在导入/启动时改运行时 JSON，不改订阅文件，不替换内核。
+官方 sing-box 内核保持完整。Chain、中国直连、WebRTC、DNS/入站兼容等都是 **模块化外挂**：只在导入/启动时改运行时 JSON，不改订阅文件，不替换内核。产品面向社区通用场景，不为单一订阅商或个人配置定制。
 
 ## 功能范围
 

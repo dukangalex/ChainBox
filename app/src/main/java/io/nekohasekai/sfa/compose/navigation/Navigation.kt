@@ -2,7 +2,10 @@ package io.nekohasekai.sfa.compose.navigation
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -63,17 +66,32 @@ import io.nekohasekai.sfa.compose.screen.tools.ToolsScreen
 import io.nekohasekai.sfa.compose.screen.usbip.USBIPStatusViewModel
 import io.nekohasekai.sfa.constant.Status
 
+private val nestedTween = tween<androidx.compose.ui.unit.IntOffset>(
+    durationMillis = 180,
+    easing = FastOutSlowInEasing,
+)
+private val nestedFadeIn = tween<Float>(durationMillis = 140, easing = FastOutSlowInEasing)
+private val nestedFadeOut = tween<Float>(durationMillis = 110, easing = FastOutSlowInEasing)
+private val fadeTween = tween<Float>(durationMillis = 90, easing = FastOutSlowInEasing)
+private val fadeOutTween = tween<Float>(durationMillis = 70, easing = FastOutSlowInEasing)
+
 private val slideInFromRight: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
-    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300))
+    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = nestedTween) + fadeIn(nestedFadeIn)
 }
 private val slideOutToRight: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.ExitTransition = {
-    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300))
+    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = nestedTween) + fadeOut(nestedFadeOut)
 }
 private val slideInFromLeft: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
-    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = tween(300))
+    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, animationSpec = nestedTween) + fadeIn(nestedFadeIn)
 }
 private val slideOutToLeft: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.ExitTransition = {
-    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300))
+    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = nestedTween) + fadeOut(nestedFadeOut)
+}
+private val tabEnter: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.EnterTransition = {
+    fadeIn(fadeTween)
+}
+private val tabExit: AnimatedContentTransitionScope<*>.() -> androidx.compose.animation.ExitTransition = {
+    fadeOut(fadeOutTween)
 }
 
 @Composable
@@ -100,8 +118,18 @@ fun NavHost(
         navController = navController,
         startDestination = Screen.Dashboard.route,
         modifier = modifier,
+        enterTransition = slideInFromRight,
+        exitTransition = slideOutToLeft,
+        popEnterTransition = slideInFromLeft,
+        popExitTransition = slideOutToRight,
     ) {
-        composable(Screen.Dashboard.route) {
+        composable(
+            Screen.Dashboard.route,
+            enterTransition = tabEnter,
+            exitTransition = tabExit,
+            popEnterTransition = tabEnter,
+            popExitTransition = tabExit,
+        ) {
             if (dashboardViewModel != null) {
                 DashboardScreen(
                     serviceStatus = serviceStatus,
@@ -119,10 +147,22 @@ fun NavHost(
                 )
             }
         }
-        composable(Screen.Log.route) {
+        composable(
+            Screen.Log.route,
+            enterTransition = tabEnter,
+            exitTransition = tabExit,
+            popEnterTransition = tabEnter,
+            popExitTransition = tabExit,
+        ) {
             LogScreen(serviceStatus = serviceStatus, showStartFab = showStartFab, showStatusBar = showStatusBar)
         }
-        composable(Screen.Groups.route) {
+        composable(
+            Screen.Groups.route,
+            enterTransition = tabEnter,
+            exitTransition = tabExit,
+            popEnterTransition = tabEnter,
+            popExitTransition = tabExit,
+        ) {
             if (groupsViewModel != null) {
                 GroupsCard(
                     serviceStatus = serviceStatus,
@@ -134,7 +174,13 @@ fun NavHost(
                 GroupsCard(serviceStatus = serviceStatus, showTopBar = true, modifier = Modifier.fillMaxSize())
             }
         }
-        composable(Screen.Connections.route) {
+        composable(
+            Screen.Connections.route,
+            enterTransition = tabEnter,
+            exitTransition = tabExit,
+            popEnterTransition = tabEnter,
+            popExitTransition = tabExit,
+        ) {
             if (connectionsViewModel != null) {
                 ConnectionsPage(
                     serviceStatus = serviceStatus,
@@ -208,7 +254,13 @@ fun NavHost(
                 }
             }
         }
-        composable(Screen.Tools.route) {
+        composable(
+            Screen.Tools.route,
+            enterTransition = tabEnter,
+            exitTransition = tabExit,
+            popEnterTransition = tabEnter,
+            popExitTransition = tabExit,
+        ) {
             val tailscaleViewModel: TailscaleStatusViewModel = tailscaleStatusViewModel ?: viewModel()
             val sshSharedViewModel: TailscaleSSHSharedViewModel = tailscaleSSHSharedViewModel ?: viewModel()
             val usbIPViewModel: USBIPStatusViewModel = usbIPStatusViewModel ?: viewModel()
@@ -247,7 +299,13 @@ fun NavHost(
             val selected = Uri.decode(be.arguments?.getString("selectedOutbound").orEmpty())
             OutboundPickerScreen(navController = navController, selectedOutbound = selected)
         }
-        composable(route = "settings", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
+        composable(
+            route = "settings",
+            enterTransition = tabEnter,
+            exitTransition = tabExit,
+            popEnterTransition = tabEnter,
+            popExitTransition = tabExit,
+        ) {
             SettingsScreen(navController = navController)
         }
         composable(route = "settings/app", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
