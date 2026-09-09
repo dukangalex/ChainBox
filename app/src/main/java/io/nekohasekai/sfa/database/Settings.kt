@@ -17,27 +17,34 @@ import io.nekohasekai.sfa.ktx.long
 import io.nekohasekai.sfa.ktx.map
 import io.nekohasekai.sfa.ktx.string
 import io.nekohasekai.sfa.ktx.stringSet
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 
 object Settings {
-    @OptIn(DelicateCoroutinesApi::class)
-    private val instance by lazy {
-        Application.application.getDatabasePath(Path.SETTINGS_DATABASE_PATH).parentFile?.mkdirs()
-        Room.databaseBuilder(
-            Application.application,
-            KeyValueDatabase::class.java,
-            Path.SETTINGS_DATABASE_PATH,
-        ).allowMainThreadQueries()
-            .fallbackToDestructiveMigration()
-            .enableMultiInstanceInvalidation()
-            .setQueryExecutor { GlobalScope.launch { it.run() } }
-            .build()
+    private val dbLock = Any()
+
+    @Volatile
+    private var db: KeyValueDatabase? = null
+
+    private fun database(): KeyValueDatabase {
+        db?.takeIf { it.isOpen }?.let { return it }
+        synchronized(dbLock) {
+            db?.takeIf { it.isOpen }?.let { return it }
+            Application.application.getDatabasePath(Path.SETTINGS_DATABASE_PATH).parentFile?.mkdirs()
+            val built = Room.databaseBuilder(
+                Application.application,
+                KeyValueDatabase::class.java,
+                Path.SETTINGS_DATABASE_PATH,
+            ).allowMainThreadQueries()
+                .fallbackToDestructiveMigration()
+                .enableMultiInstanceInvalidation()
+                .build()
+            db = built
+            return built
+        }
     }
-    val dataStore = RoomPreferenceDataStore(instance.keyValuePairDao())
+
+    val dataStore = RoomPreferenceDataStore { database().keyValuePairDao() }
     var selectedProfile by dataStore.long(SettingsKey.SELECTED_PROFILE) { -1L }
     var serviceMode by dataStore.string(SettingsKey.SERVICE_MODE) { ServiceMode.NORMAL }
     var startedByUser by dataStore.boolean(SettingsKey.STARTED_BY_USER)
@@ -158,6 +165,9 @@ object Settings {
     }
 
     fun closeDatabase() {
-        runCatching { instance.close() }
+        synchronized(dbLock) {
+            runCatching { db?.close() }
+            db = null
+        }
     }
 }
