@@ -3,7 +3,14 @@ package io.nekohasekai.sfa.database.preference
 import androidx.preference.PreferenceDataStore
 
 @Suppress("MemberVisibilityCanBePrivate", "unused")
-open class RoomPreferenceDataStore(private val kvPairDao: KeyValueEntity.Dao) : PreferenceDataStore() {
+open class RoomPreferenceDataStore(
+    private val daoProvider: () -> KeyValueEntity.Dao,
+) : PreferenceDataStore() {
+    constructor(dao: KeyValueEntity.Dao) : this({ dao })
+
+    private val kvPairDao: KeyValueEntity.Dao
+        get() = daoProvider()
+
     fun getBoolean(key: String) = kvPairDao[key]?.boolean
 
     fun getFloat(key: String) = kvPairDao[key]?.float
