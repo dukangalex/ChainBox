@@ -232,6 +232,25 @@ def main() -> int:
         errors.append("WebDAV 401 must produce a dedicated auth error")
     if "compat: Boolean" not in dav:
         errors.append("restore must support compatibility mode")
+    if "mergeProfilesFromBackup" not in dav:
+        errors.append("compat restore must merge profiles so backup data coexists with current data")
+    if "andSelect = false" not in dav:
+        errors.append("compat restore must not replace the currently selected profile")
+    if "keepUrl" in dav and "putSettingString(liveSettings, SettingsKey.WEBDAV_URL, keepUrl)" in dav:
+        errors.append("overwrite restore should take WebDAV URL from the backup, not keep the live URL")
+    main = read("app/src/main/java/io/nekohasekai/sfa/compose/MainActivity.kt")
+    rec = main[main.find("RequestReconnectService") :]
+    if "restartServiceForApplyChange" not in rec[:500]:
+        errors.append("RequestReconnectService must stop/start the running service, not only rebind")
+    box = read("app/src/main/java/io/nekohasekai/sfa/bg/BoxService.kt")
+    reload = box[box.find("suspend fun serviceReload0") : box.find("fun getSystemProxyStatus")]
+    if "notification.show" not in reload:
+        errors.append("serviceReload must refresh the notification title to the new profile")
+    backup_ui = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/BackupRestoreScreen.kt")
+    if "共存" not in backup_ui:
+        errors.append("compat restore copy must say backup data coexists with current data")
+    if "完全替换" not in backup_ui:
+        errors.append("overwrite restore copy must say backup fully replaces current data")
     if 'listOf("PROPFIND"' in dav or '"PROPFIND", "OPTIONS"' in dav:
         errors.append("WebDAV probe must not use PROPFIND; Android HttpURLConnection rejects it")
     if "friendlyProbeDetail" not in dav:
@@ -244,6 +263,11 @@ def main() -> int:
         errors.append("profile switch must not block on isLoading")
     if "selectedProfileId = profileId" not in dash:
         errors.append("profile switch must update UI immediately")
+    dash_sel = dash[dash.find("fun selectProfile") : dash.find("fun editProfile")]
+    if "RequestReconnectService" not in dash_sel:
+        errors.append("switching profile while running must restart the service")
+    if "serviceReload()" in dash_sel:
+        errors.append("profile switch must restart the service so the notification follows the new profile")
 
     boot = read("app/src/main/java/io/nekohasekai/sfa/bg/BootReceiver.kt")
     if "ACTION_MY_PACKAGE_REPLACED" not in boot or "launchApp" not in boot:

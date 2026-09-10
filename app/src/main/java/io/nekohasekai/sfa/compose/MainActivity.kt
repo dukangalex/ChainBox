@@ -1000,6 +1000,7 @@ class MainActivity :
                     }
 
                     is UiEvent.RequestReconnectService -> {
+                        restartServiceForApplyChange()
                         connection.reconnect()
                     }
 

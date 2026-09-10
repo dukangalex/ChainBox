@@ -11,8 +11,11 @@ import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.bg.BoxService
 import io.nekohasekai.sfa.constant.Path
 import io.nekohasekai.sfa.constant.SettingsKey
+import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
+import io.nekohasekai.sfa.database.TypedProfile
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -89,9 +92,6 @@ object BackupManager {
         }
         val keepDav = Settings.webdavPassword
         val keepTok = Settings.githubToken
-        val keepUrl = Settings.webdavUrl
-        val keepUser = Settings.webdavUser
-        val keepRemote = Settings.webdavRemoteFile
         val staging = File(context.cacheDir, "restore-staging").also {
             it.deleteRecursively()
             it.mkdirs()
@@ -149,6 +149,16 @@ object BackupManager {
         }
         if (!hasData) error("备份里没有配置或数据库，无法恢复")
 
+        if (compat) {
+            mergeProfilesFromBackup(
+                context,
+                File(staging, Path.PROFILES_DATABASE_PATH),
+                File(staging, "configs"),
+            )
+            staging.deleteRecursively()
+            return@runCatching
+        }
+
         runCatching { BoxService.stop() }
         Thread.sleep(350)
         Settings.closeDatabase()
@@ -171,8 +181,12 @@ object BackupManager {
             deleteSidecars(dest)
         }
         val stagedConfigs = File(staging, "configs")
+        val live = File(context.filesDir, "configs").also { it.mkdirs() }
         if (stagedConfigs.isDirectory) {
-            val live = File(context.filesDir, "configs").also { it.mkdirs() }
+            val incoming = stagedConfigs.listFiles()?.filter { it.isFile }?.map { it.name }?.toSet() ?: emptySet()
+            live.listFiles()?.forEach { f ->
+                if (f.isFile && f.name !in incoming) f.delete()
+            }
             stagedConfigs.listFiles()?.forEach { f ->
                 if (f.isFile) runCatching { f.copyTo(File(live, f.name), overwrite = true) }
             }
@@ -181,10 +195,70 @@ object BackupManager {
         val liveSettings = context.getDatabasePath(Path.SETTINGS_DATABASE_PATH)
         if (keepDav.isNotEmpty()) putSettingString(liveSettings, SettingsKey.WEBDAV_PASSWORD, keepDav)
         if (keepTok.isNotEmpty()) putSettingString(liveSettings, SettingsKey.GITHUB_TOKEN, keepTok)
-        if (keepUrl.isNotEmpty()) putSettingString(liveSettings, SettingsKey.WEBDAV_URL, keepUrl)
-        if (keepUser.isNotEmpty()) putSettingString(liveSettings, SettingsKey.WEBDAV_USER, keepUser)
-        if (keepRemote.isNotEmpty()) putSettingString(liveSettings, SettingsKey.WEBDAV_REMOTE_FILE, keepRemote)
         staging.deleteRecursively()
+    }
+
+    /**
+     * 兼容模式：把备份里的配置追加到当前列表。同名或同一远程 URL 的现有配置保留，
+     * 不替换 settings / 不覆盖已有 JSON。
+     */
+    internal fun mergeProfilesFromBackup(context: Context, backupProfilesDb: File, backupConfigs: File) {
+        if (!backupProfilesDb.isFile) return
+        val liveConfigs = File(context.filesDir, "configs").also { it.mkdirs() }
+        val convertor = TypedProfile.Convertor()
+        SQLiteDatabase.openDatabase(backupProfilesDb.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+            val cursor = try {
+                db.rawQuery("SELECT name, icon, typed FROM profiles", null)
+            } catch (_: Exception) {
+                db.rawQuery("SELECT name, typed FROM profiles", null)
+            }
+            cursor.use { c ->
+                val nameIdx = c.getColumnIndex("name")
+                val iconIdx = c.getColumnIndex("icon")
+                val typedIdx = c.getColumnIndex("typed")
+                if (nameIdx < 0 || typedIdx < 0) return
+                runBlocking {
+                    val existing = ProfileManager.list()
+                    val names = existing.map { it.name.trim() }.filter { it.isNotEmpty() }.toMutableSet()
+                    val urls = existing.map { it.typed.remoteURL.trim() }.filter { it.isNotEmpty() }.toMutableSet()
+                    while (c.moveToNext()) {
+                        val name = c.getString(nameIdx)?.trim().orEmpty()
+                        if (name.isEmpty() || name in names) continue
+                        val typedBytes = c.getBlob(typedIdx) ?: continue
+                        val typed = try {
+                            convertor.unmarshall(typedBytes)
+                        } catch (_: Exception) {
+                            continue
+                        }
+                        val url = typed.remoteURL.trim()
+                        if (url.isNotEmpty() && url in urls) continue
+                        val srcName = File(typed.path).name
+                        if (srcName.isBlank() || srcName.contains("..")) continue
+                        val staged = File(backupConfigs, srcName)
+                        if (!staged.isFile) continue
+                        val fileId = ProfileManager.nextFileID()
+                        val dest = File(liveConfigs, "$fileId.json")
+                        val copied = runCatching { staged.copyTo(dest, overwrite = true) }.isSuccess
+                        if (!copied || !dest.isFile) continue
+                        val imported = TypedProfile().apply {
+                            path = dest.path
+                            type = typed.type
+                            remoteURL = typed.remoteURL
+                            lastUpdated = typed.lastUpdated
+                            autoUpdate = typed.autoUpdate
+                            autoUpdateInterval = typed.autoUpdateInterval
+                        }
+                        val icon = if (iconIdx >= 0 && !c.isNull(iconIdx)) c.getString(iconIdx) else null
+                        ProfileManager.create(
+                            Profile(name = name, icon = icon, typed = imported),
+                            andSelect = false,
+                        )
+                        names.add(name)
+                        if (url.isNotEmpty()) urls.add(url)
+                    }
+                }
+            }
+        }
     }
 
     fun webdavUpload(baseUrl: String, username: String, password: String, remoteName: String, localFile: File): Result<Unit> = runCatching {

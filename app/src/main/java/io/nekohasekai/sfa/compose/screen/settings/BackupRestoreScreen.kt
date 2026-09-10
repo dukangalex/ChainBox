@@ -198,8 +198,8 @@ fun BackupRestoreScreen(navController: NavController) {
                 Text(
                     "备份内容包括：设置、配置列表、各订阅/配置 JSON。\n\n" +
                         "恢复策略：\n" +
-                        "· 覆盖：停服务、关数据库后完整写回。\n" +
-                        "· 兼容：尽量恢复能读的部分，跳过损坏条目，并保留当前 WebDAV 账号。\n\n" +
+                        "· 覆盖：用备份完全替换当前配置、设置和订阅文件。\n" +
+                        "· 兼容：备份里的配置与当前已有数据共存，不覆盖已有配置和设置。\n\n" +
                         "恢复后会自动重新加载应用。\n\n" +
                         "WebDAV 需填写可访问的 HTTPS 目录 URL 以及账号密码。" +
                             "连通性指示灯常驻自动检测，与实际上传使用同一套 GET/HEAD 接口：" +
@@ -438,9 +438,9 @@ fun BackupRestoreScreen(navController: NavController) {
                     supportingContent = {
                         Text(
                             if (restoreCompat) {
-                                "兼容模式：尽量恢复能读的部分，跳过损坏条目，保留当前 WebDAV 账号"
+                                "兼容模式：备份里的配置与当前已有数据共存，不覆盖已有配置和设置"
                             } else {
-                                "覆盖写入全部数据。点此切换为兼容模式"
+                                "覆盖模式：用备份完全替换当前配置、设置和订阅文件"
                             },
                         )
                     },

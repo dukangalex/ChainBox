@@ -249,6 +249,10 @@ class BoxService(private val service: Service, private val platformInterface: Pl
                 return
             }
         }
+
+        withContext(Dispatchers.Main) {
+            notification.show(lastProfileName, R.string.status_started)
+        }
     }
 
     override fun getSystemProxyStatus(): SystemProxyStatus? {
