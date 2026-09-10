@@ -20,6 +20,29 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 | 更新检查 | 仅本仓库 GitHub Releases |
 | 应用图标 | 白色底、居中魔方（橙黄顶 / 天蓝正面 / 玫红侧面） |
 
+## 上游内核
+
+当前发版对齐的内核型号写在 `version.properties`（`KERNEL_*`），随每次跟版更新。
+
+| 项目 | 值 |
+|------|-----|
+| 官方上游 | [SagerNet/sing-box](https://github.com/SagerNet/sing-box) **v1.14.0** |
+| 本项目内核 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) 分支 **`chain-dev`** |
+| 已同步基线 | 官方 **sing-box 1.14** 系（Go 1.25.5；OpenConnect / Snell / USB/IP 等 1.14 能力已在依赖中） |
+| 内核型号 / tag | `v1.12.0-chain.4`（`chain-dev` 当前 git tag；App 内 `Libbox.version()` 读取此值） |
+| 客户端版本 | 见 `version.properties` 的 `VERSION_NAME` |
+
+### 同步更新策略
+
+1. **跟随官方，不替换内核。** ChainBox = 官方 sing-box + 模块化 Chain 外挂 + 普通用户界面。不另做协议栈，不为跟版而改内核架构。
+2. **内核：** `git fetch` 官方 `SagerNet/sing-box`，merge 进 `chain-dev`，只解决与 Chain outbound 相关的冲突。
+3. **App：** `git fetch` 官方 `SagerNet/sing-box-for-android`，merge 进本仓库 `dev`。冲突以 ChainBox 为准（包名、组链、覆盖层、备份、更新检查、发版工作流）。
+4. **Fail Closed：** 链路失败必须报错并停止启动，不得静默落到 DIRECT。
+5. **不必为跟版而跟版。** 官方新版本发布后，先把 App 兼容层（DNS / inbound / rule-set）和 Chain 外挂做稳，**验证 Chain outbound 之后**再合入更新的官方提交。不要在未验证时整包快进。
+6. **发版：** 改 `version.properties` 后走 `.github/workflows/build-chainbox.yml`，`publish_release=true` 并指定 `version_tag`。
+
+细节与命令见 [docs/MAINTENANCE.md](docs/MAINTENANCE.md)。
+
 ## 架构
 
 官方 sing-box 内核保持完整。Chain、中国直连、WebRTC、DNS/入站兼容等都是 **模块化外挂**：只在导入/启动时改运行时 JSON，不改订阅文件，不替换内核。产品面向社区通用场景，不为单一订阅商或个人配置定制。
@@ -39,6 +62,8 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 ```
 设备 → 入口节点 → 出口节点 → 目的站
 ```
+
+仪表页有链路图：未绑定显示常规路径（设备 → 当前出口 → 目标）；绑定链式后高亮入口 → 落地。
 
 1. 导入并启用配置，确认基础连通。
 2. 在「工具 → 链式代理」中为**当前配置**选择入口与落地并保存。其他配置可各自绑定不同落地。
@@ -66,8 +91,6 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 3. 若 `publish_release=true` 并指定 `version_tag`，则发布至 GitHub Releases
 
 客户端版本号以 `version.properties` 为准。
-
-上游内核的跟进与发布节奏见 [docs/MAINTENANCE.md](docs/MAINTENANCE.md)。
 
 ## 致谢
 

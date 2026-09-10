@@ -31,7 +31,7 @@ fun SystemProxyCard(enabled: Boolean, isSwitching: Boolean, onToggle: (Boolean) 
             modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -42,13 +42,13 @@ fun SystemProxyCard(enabled: Boolean, isSwitching: Boolean, onToggle: (Boolean) 
                 Icon(
                     imageVector = Icons.Outlined.SettingsEthernet,
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.system_http_proxy),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                 )
             }

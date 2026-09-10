@@ -136,6 +136,7 @@ fun NavHost(
                     showStartFab = showStartFab,
                     showStatusBar = showStatusBar,
                     onOpenNewProfile = onOpenNewProfile,
+                    onOpenChainBuilder = { navController.navigate("tools/chain_builder") },
                     viewModel = dashboardViewModel,
                 )
             } else {
@@ -144,6 +145,7 @@ fun NavHost(
                     showStartFab = showStartFab,
                     showStatusBar = showStatusBar,
                     onOpenNewProfile = onOpenNewProfile,
+                    onOpenChainBuilder = { navController.navigate("tools/chain_builder") },
                 )
             }
         }

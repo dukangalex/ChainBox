@@ -642,4 +642,15 @@
     <string name="chain_builder">链式代理</string>
     <string name="chain_builder_title">链式代理生成器</string>
     <string name="chain_builder_subtitle">为当前配置单独绑定入口和落地，其他配置互不影响</string>
+    <string name="chain_path_title">链路</string>
+    <string name="chain_path_chained">链式代理</string>
+    <string name="chain_path_regular">常规链路</string>
+    <string name="chain_path_device">设备</string>
+    <string name="chain_path_entry">入口</string>
+    <string name="chain_path_exit">出口</string>
+    <string name="chain_path_landing">落地</string>
+    <string name="chain_path_destination">目标</string>
+    <string name="chain_path_expand">展开链路</string>
+    <string name="chain_path_hint_chained">出站公网地址是落地节点。入口只作为第一跳，不会成为出口。</string>
+    <string name="chain_path_hint_regular">当前配置未绑定链式代理，走该配置的默认出口。</string>
 </resources>

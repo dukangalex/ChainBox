@@ -33,7 +33,7 @@ import io.nekohasekai.sfa.database.Profile
 fun ProfileSelectorButton(selectedProfile: Profile?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(48.dp),
+        modifier = modifier.fillMaxWidth().height(40.dp),
         shape = RoundedCornerShape(12.dp),
         color = if (isSystemInDarkTheme()) {
             lerp(

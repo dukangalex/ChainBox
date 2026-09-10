@@ -327,6 +327,29 @@ def main() -> int:
     if "ConfigCompat.sanitize" not in importer:
         errors.append("JSON import must sanitize (legacy fakeip) before checkConfig")
 
+    readme = read("README.md")
+    if "1.14.0" not in readme:
+        errors.append("README must state the synced upstream kernel version (1.14.0)")
+    if "同步更新策略" not in readme:
+        errors.append("README must include the kernel/app sync strategy section")
+    if "chain-dev" not in readme:
+        errors.append("README must name the kernel branch chain-dev")
+    if "不必为跟版而跟版" not in readme:
+        errors.append("README sync strategy must keep 不必为跟版而跟版")
+    props = read("version.properties")
+    if "KERNEL_UPSTREAM=1.14.0" not in props:
+        errors.append("version.properties must record KERNEL_UPSTREAM")
+    if "KERNEL_BRANCH=chain-dev" not in props:
+        errors.append("version.properties must record KERNEL_BRANCH")
+    dash = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardViewModel.kt")
+    if "ChainPath" not in dash:
+        errors.append("dashboard must expose a ChainPath card")
+    path_card = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/ChainPathCard.kt")
+    if "highlighted" not in path_card:
+        errors.append("chain path card must highlight chained hops")
+    if "chartHeight = 36.dp" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/UploadTrafficCard.kt"):
+        errors.append("traffic cards should use a compact sparkline")
+
     if errors:
         print("FAIL")
         for e in errors:

@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.component.OverrideBanner
@@ -55,6 +57,7 @@ fun DashboardScreen(
     showStartFab: Boolean = false,
     showStatusBar: Boolean = false,
     onOpenNewProfile: (NewProfileArgs) -> Unit = {},
+    onOpenChainBuilder: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -63,6 +66,10 @@ fun DashboardScreen(
     val isRemote = remoteServer != null
     val remoteServers by rememberRemoteServers()
     var showOthersMenu by remember { mutableStateOf(false) }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.reloadChainPath()
+    }
 
     OverrideTopBar {
         TopAppBar(
@@ -124,23 +131,28 @@ fun DashboardScreen(
             else -> 0.dp
         }
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(scaffoldPadding).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxSize().padding(scaffoldPadding).padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = bottomPadding),
         ) {
             item { OverrideBanner() }
             val serviceRunning = uiState.isStatusVisible
             val actuallyVisibleCards = uiState.visibleCards.filter { cardGroup ->
                 when {
-                    isRemote -> cardGroup != CardGroup.Profiles && cardGroup != CardGroup.SystemProxy && serviceRunning && isCardAvailableWhenServiceRunning(cardGroup, uiState)
-                    cardGroup == CardGroup.Profiles -> true
+                    isRemote ->
+                        cardGroup != CardGroup.Profiles &&
+                            cardGroup != CardGroup.SystemProxy &&
+                            cardGroup != CardGroup.ChainPath &&
+                            serviceRunning &&
+                            isCardAvailableWhenServiceRunning(cardGroup, uiState)
+                    cardGroup == CardGroup.Profiles || cardGroup == CardGroup.ChainPath -> true
                     else -> serviceRunning && isCardAvailableWhenServiceRunning(cardGroup, uiState)
                 }
             }.toSet()
             val cardRenderItems = processCardsForRendering(uiState.cardOrder, actuallyVisibleCards, uiState.cardWidths)
             items(cardRenderItems) { renderItem ->
                 if (renderItem.isRow && renderItem.cards.size >= 2) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         renderItem.cards.forEach { cardGroup ->
                             DashboardCardRenderer(
                                 cardGroup = cardGroup,
@@ -167,6 +179,7 @@ fun DashboardScreen(
                                 onShowProfilePickerSheet = viewModel::showProfilePickerSheet,
                                 onHideProfilePickerSheet = viewModel::hideProfilePickerSheet,
                                 onOpenNewProfile = onOpenNewProfile,
+                                onOpenChainBuilder = onOpenChainBuilder,
                                 commandClient = viewModel.commandClient,
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                             )
@@ -200,6 +213,7 @@ fun DashboardScreen(
                             onShowProfilePickerSheet = viewModel::showProfilePickerSheet,
                             onHideProfilePickerSheet = viewModel::hideProfilePickerSheet,
                             onOpenNewProfile = onOpenNewProfile,
+                            onOpenChainBuilder = onOpenChainBuilder,
                             commandClient = viewModel.commandClient,
                         )
                     }
@@ -235,6 +249,7 @@ fun processCardsForRendering(
 }
 
 fun isCardAvailableWhenServiceRunning(cardGroup: CardGroup, uiState: DashboardUiState): Boolean = when (cardGroup) {
+    CardGroup.ChainPath -> true
     CardGroup.ClashMode -> uiState.clashModeVisible
     CardGroup.UploadTraffic -> uiState.trafficVisible
     CardGroup.DownloadTraffic -> uiState.trafficVisible

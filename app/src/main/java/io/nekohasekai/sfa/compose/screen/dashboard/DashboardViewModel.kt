@@ -5,6 +5,10 @@ import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.sfa.bg.BoxService
+import io.nekohasekai.sfa.chain.ChainBindings
+import io.nekohasekai.sfa.chain.ChainPath
+import io.nekohasekai.sfa.chain.ChainPathBuilder
+import io.nekohasekai.sfa.chain.ChainRuntimeCompiler
 import io.nekohasekai.sfa.compose.base.BaseViewModel
 import io.nekohasekai.sfa.compose.base.UiEvent
 import io.nekohasekai.sfa.constant.Status
@@ -34,6 +38,7 @@ import java.util.Collections
 import java.util.Date
 
 enum class CardGroup {
+    ChainPath,
     ClashMode,
     UploadTraffic,
     DownloadTraffic,
@@ -53,6 +58,7 @@ data class DashboardUiState(
     val profiles: List<Profile> = emptyList(),
     val selectedProfileId: Long = -1L,
     val selectedProfileName: String? = null,
+    val chainPath: ChainPath = ChainPath.regular(),
     val isLoading: Boolean = false,
     val hasGroups: Boolean = false,
     val groupsCount: Int = 0,
@@ -89,6 +95,7 @@ data class DashboardUiState(
     // Card visibility settings
     val visibleCards: Set<CardGroup> =
         setOf(
+            CardGroup.ChainPath,
             CardGroup.ClashMode,
             CardGroup.UploadTraffic,
             CardGroup.DownloadTraffic,
@@ -99,6 +106,7 @@ data class DashboardUiState(
         ),
     val cardOrder: List<CardGroup> =
         listOf(
+            CardGroup.ChainPath,
             CardGroup.UploadTraffic,
             CardGroup.DownloadTraffic,
             CardGroup.Debug,
@@ -109,6 +117,7 @@ data class DashboardUiState(
         ),
     val cardWidths: Map<CardGroup, CardWidth> =
         mapOf(
+            CardGroup.ChainPath to CardWidth.Full,
             CardGroup.ClashMode to CardWidth.Full,
             CardGroup.UploadTraffic to CardWidth.Half,
             CardGroup.DownloadTraffic to CardWidth.Half,
@@ -199,13 +208,16 @@ class DashboardViewModel :
             try {
                 val profiles = ProfileManager.list()
                 val selectedId = Settings.selectedProfile
+                val selected = profiles.find { it.id == selectedId }
+                val path = buildChainPath(profiles, selectedId, selected)
 
                 withContext(Dispatchers.Main) {
                     updateState {
                         copy(
                             profiles = profiles,
                             selectedProfileId = selectedId,
-                            selectedProfileName = profiles.find { it.id == selectedId }?.name,
+                            selectedProfileName = selected?.name,
+                            chainPath = path,
                         )
                     }
                 }
@@ -213,6 +225,36 @@ class DashboardViewModel :
                 sendError(e)
             }
         }
+    }
+
+    fun reloadChainPath() {
+        loadProfiles()
+    }
+
+    private fun buildChainPath(
+        profiles: List<Profile>,
+        selectedId: Long,
+        selected: Profile?,
+    ): ChainPath {
+        val binding = ChainBindings.get(selectedId)
+        val landingName = binding?.let { b -> profiles.find { it.id == b.landingProfileId }?.name }
+        return ChainPathBuilder.build(
+            profileName = selected?.name,
+            defaultOutboundTag = selected?.let { readDefaultOutboundTag(it) },
+            binding = binding,
+            landingProfileName = landingName,
+        )
+    }
+
+    private fun readDefaultOutboundTag(profile: Profile): String? {
+        return runCatching {
+            val file = File(profile.typed.path)
+            if (!file.isFile) return null
+            val root = ChainRuntimeCompiler.parseConfig(file.readText())
+            val outs = root.optJSONArray("outbounds") ?: return null
+            val routeFinal = root.optJSONObject("route")?.optString("final").orEmpty()
+            ChainRuntimeCompiler.resolveMainTag(outs, routeFinal)
+        }.getOrNull()
     }
 
     private fun checkDeprecatedNotes() {
@@ -714,6 +756,7 @@ class DashboardViewModel :
 
     // Helper functions for serialization
     private fun getDefaultItemOrder() = listOf(
+        CardGroup.ChainPath,
         CardGroup.UploadTraffic,
         CardGroup.DownloadTraffic,
         CardGroup.Debug,
@@ -741,8 +784,16 @@ class DashboardViewModel :
             // Add any new items that aren't in the saved order
             val allItems = CardGroup.values().toSet()
             val savedItems = order.toSet()
-            val newItems = allItems - savedItems
-
+            val newItems = (allItems - savedItems).toMutableList()
+            if (CardGroup.ChainPath in newItems) {
+                newItems.remove(CardGroup.ChainPath)
+                val profilesIdx = order.indexOf(CardGroup.Profiles)
+                if (profilesIdx >= 0) {
+                    order.add(profilesIdx, CardGroup.ChainPath)
+                } else {
+                    order.add(0, CardGroup.ChainPath)
+                }
+            }
             order.addAll(newItems)
             order
         } catch (e: JSONException) {

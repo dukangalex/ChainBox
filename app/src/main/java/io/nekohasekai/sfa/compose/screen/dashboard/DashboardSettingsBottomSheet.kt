@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.outlined.AltRoute
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Cable
 import androidx.compose.material.icons.outlined.Download
@@ -158,6 +159,7 @@ fun DashboardSettingsBottomSheet(
                     onClick = {
                         val defaultOrder =
                             listOfNotNull(
+                                CardGroup.ChainPath,
                                 CardGroup.UploadTraffic,
                                 CardGroup.DownloadTraffic,
                                 CardGroup.Debug,
@@ -168,6 +170,7 @@ fun DashboardSettingsBottomSheet(
                             )
                         val allCardsEnabled =
                             setOfNotNull(
+                                CardGroup.ChainPath,
                                 CardGroup.ClashMode,
                                 CardGroup.UploadTraffic,
                                 CardGroup.DownloadTraffic,
@@ -381,6 +384,7 @@ fun DashboardItemCard(
             Icon(
                 imageVector =
                 when (cardGroup) {
+                    CardGroup.ChainPath -> Icons.Outlined.AltRoute
                     CardGroup.Debug -> Icons.Outlined.BugReport
                     CardGroup.Connections -> Icons.Outlined.Cable
                     CardGroup.UploadTraffic -> Icons.Outlined.Upload
@@ -412,6 +416,7 @@ fun DashboardItemCard(
                 Text(
                     text =
                     when (cardGroup) {
+                        CardGroup.ChainPath -> stringResource(R.string.chain_path_title)
                         CardGroup.Debug -> stringResource(R.string.title_debug)
                         CardGroup.Connections -> stringResource(R.string.title_connections)
                         CardGroup.UploadTraffic -> stringResource(R.string.upload)

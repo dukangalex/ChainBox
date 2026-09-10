@@ -35,10 +35,19 @@ fun DashboardCardRenderer(
     onShowProfilePickerSheet: () -> Unit = {},
     onHideProfilePickerSheet: () -> Unit = {},
     onOpenNewProfile: (NewProfileArgs) -> Unit = {},
+    onOpenChainBuilder: () -> Unit = {},
     commandClient: CommandClient? = null,
     modifier: Modifier = Modifier,
 ) {
     when (cardGroup) {
+        CardGroup.ChainPath -> {
+            ChainPathCard(
+                path = uiState.chainPath,
+                onOpenChainBuilder = onOpenChainBuilder,
+                modifier = modifier,
+            )
+        }
+
         CardGroup.ClashMode -> {
             if (uiState.clashModeVisible) {
                 ClashModeCard(

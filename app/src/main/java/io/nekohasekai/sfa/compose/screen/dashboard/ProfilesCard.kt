@@ -221,7 +221,7 @@ fun ProfilesCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -234,13 +234,13 @@ fun ProfilesCard(
                     Icon(
                         imageVector = Icons.Outlined.Description,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.title_configuration),
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -257,7 +257,7 @@ fun ProfilesCard(
                     } else {
                         MaterialTheme.colorScheme.surfaceDim
                     },
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
@@ -289,7 +289,7 @@ fun ProfilesCard(
 
                 ProfileInfoRow(profile = selectedProfile)
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 ProfileActionRow(
                     profile = selectedProfile,
@@ -766,7 +766,7 @@ private fun ActionButton(
         } else {
             MaterialTheme.colorScheme.surfaceDim
         },
-        modifier = Modifier.size(44.dp),
+        modifier = Modifier.size(36.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (isLoading) {

@@ -678,4 +678,15 @@
     <string name="chain_builder">鏈式代理</string>
     <string name="chain_builder_title">鏈式代理產生器</string>
     <string name="chain_builder_subtitle">只綁定目前設定的入口與落地，其他設定互不影響</string>
+    <string name="chain_path_title">鏈路</string>
+    <string name="chain_path_chained">鏈式代理</string>
+    <string name="chain_path_regular">常規鏈路</string>
+    <string name="chain_path_device">裝置</string>
+    <string name="chain_path_entry">入口</string>
+    <string name="chain_path_exit">出口</string>
+    <string name="chain_path_landing">落地</string>
+    <string name="chain_path_destination">目標</string>
+    <string name="chain_path_expand">展開鏈路</string>
+    <string name="chain_path_hint_chained">出站公網位址是落地節點。入口只作為第一跳，不會成為出口。</string>
+    <string name="chain_path_hint_regular">目前設定未綁定鏈式代理，走該設定的預設出口。</string>
 </resources>

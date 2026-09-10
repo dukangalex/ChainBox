@@ -47,6 +47,15 @@ git merge upstream/dev
 
 ## 内核同步
 
+当前已同步（与 README / `version.properties` 一致）：
+
+| 项目 | 值 |
+|------|-----|
+| 官方上游 | SagerNet/sing-box **v1.14.0** |
+| 本仓库 | dukangalex/sing-box 分支 `chain-dev` |
+| 已对齐基线 | 官方 1.14 系（Go 1.25.5） |
+| 内核 tag | v1.12.0-chain.4 |
+
 官方上游：`https://github.com/SagerNet/sing-box`
 
 ```bash

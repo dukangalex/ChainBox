@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
 
@@ -27,6 +28,7 @@ fun LineChart(
     lineColor: Color = MaterialTheme.colorScheme.primary,
     gridColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
     animate: Boolean = true,
+    chartHeight: Dp = 80.dp,
 ) {
     val animationProgress = remember { Animatable(if (animate) 0f else 1f) }
 
@@ -43,7 +45,7 @@ fun LineChart(
         modifier =
         modifier
             .fillMaxWidth()
-            .height(80.dp),
+            .height(chartHeight),
     ) {
         val width = size.width
         val height = size.height

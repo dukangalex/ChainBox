@@ -748,4 +748,15 @@
     <string name="chain_builder">Chain Proxy</string>
     <string name="chain_builder_title">Chain proxy builder</string>
     <string name="chain_builder_subtitle">Bind entry and landing to the current profile only; other profiles stay independent</string>
+    <string name="chain_path_title">Path</string>
+    <string name="chain_path_chained">Chained</string>
+    <string name="chain_path_regular">Normal</string>
+    <string name="chain_path_device">Device</string>
+    <string name="chain_path_entry">Entry</string>
+    <string name="chain_path_exit">Exit</string>
+    <string name="chain_path_landing">Landing</string>
+    <string name="chain_path_destination">Destination</string>
+    <string name="chain_path_expand">Expand path</string>
+    <string name="chain_path_hint_chained">Traffic leaves through the landing hop. Entry is only the first hop and is not the public exit.</string>
+    <string name="chain_path_hint_regular">No chain binding on this profile. Traffic uses the profile\'s default outbound.</string>
 </resources>
