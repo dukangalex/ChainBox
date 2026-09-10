@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AltRoute
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,8 +36,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -47,6 +43,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.nekohasekai.sfa.R
@@ -61,6 +58,10 @@ fun ChainPathCard(
     topology: LiveTopology,
     onOpenChainBuilder: () -> Unit,
     modifier: Modifier = Modifier,
+    downlink: String = "",
+    uplink: String = "",
+    downlinkTotal: String = "",
+    uplinkTotal: String = "",
 ) {
     val running = topology.running
     Card(
@@ -73,19 +74,12 @@ fun ChainPathCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.AltRoute,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = stringResource(R.string.chain_path_title),
                     style = MaterialTheme.typography.labelLarge,
@@ -104,6 +98,44 @@ fun ChainPathCard(
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
+                }
+            }
+
+            if (running && (downlink.isNotEmpty() || uplink.isNotEmpty())) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = downlink.ifEmpty { "0 B/s" },
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "↓ ${downlinkTotal.ifEmpty { "0 B" }}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = uplink.ifEmpty { "0 B/s" },
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "↑ ${uplinkTotal.ifEmpty { "0 B" }}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -133,27 +165,8 @@ fun ChainPathCard(
                 flowing = topology.flowing && running,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (running) 276.dp else 196.dp),
+                    .height(if (running) 300.dp else 200.dp),
             )
-
-            if (running && (topology.destinations.isNotEmpty() || topology.activeConnections > 0)) {
-                val destText = if (topology.destinations.isNotEmpty()) {
-                    topology.destinations.take(3).joinToString(" · ")
-                } else {
-                    stringResource(R.string.chain_path_destination)
-                }
-                Text(
-                    text = stringResource(
-                        R.string.chain_path_live_summary,
-                        topology.activeConnections,
-                        destText,
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
         }
     }
 }
@@ -196,13 +209,12 @@ private fun TrafficSankey(
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
-    val dark = isSystemInDarkTheme()
-    val labelColor = if (dark) Color.White else Color(0xFF1F2937)
+    val labelColor = MaterialTheme.colorScheme.onSurface
     val labelStyle = TextStyle(
-        fontSize = 8.sp,
+        fontSize = 10.sp,
         fontWeight = FontWeight.Medium,
         color = labelColor,
-        lineHeight = 10.sp,
+        lineHeight = 12.sp,
     )
     val phase by rememberInfiniteTransition(label = "sankey").animateFloat(
         initialValue = 0f,
@@ -213,20 +225,20 @@ private fun TrafficSankey(
         ),
         label = "phase",
     )
-    val source = Color(0xFF5B6CFF)
-    val rule = Color(0xFF2FBF71)
-    val hop = Color(0xFFF0B429)
-    val dest = Color(0xFFE57373)
+    val source = Color(0xFF6A6FC5)
+    val rule = Color(0xFFA8D4A0)
+    val hop = Color(0xFFFDDB8A)
+    val dest = Color(0xFFF2A0A0)
     Canvas(modifier = modifier) {
         if (nodes.isEmpty()) return@Canvas
-        val nodeWidth = 56.dp.toPx()
+        val barW = 12.dp.toPx()
         val (placed, ribbons) = SankeyLayout.layout(
             nodes = nodes,
             links = links,
             width = size.width,
             height = size.height,
-            nodeWidth = nodeWidth,
-            pad = 3.dp.toPx(),
+            nodeWidth = barW,
+            pad = 4.dp.toPx(),
         )
         fun columnColor(col: Int, last: Int): Color = when {
             col <= 0 -> source
@@ -234,14 +246,9 @@ private fun TrafficSankey(
             col == 1 && last >= 3 -> rule
             else -> hop
         }
-        fun pastel(c: Color): Color {
-            return if (dark) {
-                lerp(c, Color.Black, 0.18f).copy(alpha = 0.92f)
-            } else {
-                lerp(c, Color.White, 0.52f)
-            }
-        }
         val lastCol = nodes.maxOf { it.column }
+        val colXs = placed.groupBy { it.node.column }.mapValues { (_, items) -> items.first().x }
+        val sortedCols = colXs.keys.sorted()
         ribbons.forEach { ribbon ->
             val fromC = columnColor(ribbon.columnFrom, lastCol)
             val toC = columnColor(ribbon.columnTo, lastCol)
@@ -249,7 +256,7 @@ private fun TrafficSankey(
             drawPath(
                 path = path,
                 brush = Brush.horizontalGradient(
-                    colors = listOf(fromC.copy(alpha = 0.28f), toC.copy(alpha = 0.30f)),
+                    colors = listOf(fromC.copy(alpha = 0.40f), toC.copy(alpha = 0.40f)),
                     startX = ribbon.x0,
                     endX = ribbon.x1,
                 ),
@@ -273,46 +280,36 @@ private fun TrafficSankey(
                         ribbon.x1, y1,
                     )
                     val glow = lerp(fromC, toC, t)
-                    drawCircle(glow.copy(alpha = 0.22f), radius = 7.dp.toPx(), center = p)
-                    drawCircle(glow.copy(alpha = 0.70f), radius = 2.6.dp.toPx(), center = p)
-                    drawCircle(Color.White.copy(alpha = 0.90f), radius = 1.2.dp.toPx(), center = p)
+                    drawCircle(glow.copy(alpha = 0.22f), radius = 6.dp.toPx(), center = p)
+                    drawCircle(glow.copy(alpha = 0.75f), radius = 2.4.dp.toPx(), center = p)
+                    drawCircle(Color.White.copy(alpha = 0.90f), radius = 1.1.dp.toPx(), center = p)
                 }
             }
         }
         placed.forEach { node ->
             val ink = columnColor(node.node.column, lastCol)
-            val fill = pastel(ink)
-            val radius = (node.h / 2f).coerceAtMost(8.dp.toPx())
-            val round = CornerRadius(radius, radius)
             drawRoundRect(
-                color = fill,
+                color = ink,
                 topLeft = Offset(node.x, node.y),
                 size = Size(node.w, node.h),
-                cornerRadius = round,
-            )
-            drawRoundRect(
-                color = ink.copy(alpha = if (dark) 0.55f else 0.42f),
-                topLeft = Offset(node.x, node.y),
-                size = Size(3.dp.toPx(), node.h),
                 cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
             )
-            drawRoundRect(
-                color = ink.copy(alpha = 0.22f),
-                topLeft = Offset(node.x, node.y),
-                size = Size(node.w, node.h),
-                cornerRadius = round,
-                style = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round),
-            )
-            if (node.h < 11f) return@forEach
-            val padX = 5.dp.toPx()
+            val colIndex = sortedCols.indexOf(node.node.column)
+            val nextX = if (colIndex >= 0 && colIndex < sortedCols.lastIndex) {
+                colXs[sortedCols[colIndex + 1]] ?: size.width
+            } else {
+                size.width - 4.dp.toPx()
+            }
+            val maxText = (nextX - node.x - node.w - 8.dp.toPx()).coerceAtLeast(24.dp.toPx())
             val layout = textMeasurer.measure(
                 text = node.node.label,
                 style = labelStyle,
                 maxLines = if (node.h >= 28f) 2 else 1,
                 overflow = TextOverflow.Ellipsis,
+                constraints = Constraints(maxWidth = maxText.toInt()),
             )
-            val tx = node.x + padX
-            val ty = node.y + ((node.h - layout.size.height) / 2f).coerceAtLeast(1f)
+            val tx = node.x + node.w + 5f
+            val ty = node.y + ((node.h - layout.size.height) / 2f).coerceAtLeast(0f)
             drawText(layout, topLeft = Offset(tx, ty))
         }
     }

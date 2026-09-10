@@ -102,6 +102,7 @@ def write_vector() -> None:
     mono.append("</vector>")
     (RES / "drawable/ic_launcher_monochrome.xml").write_text("\n".join(mono) + "\n", encoding="utf-8")
     write_qs_tile()
+    write_qs_brand()
 
 
 def qs_iso(x: float, y: float, z: float) -> tuple[float, float]:
@@ -131,6 +132,32 @@ def write_qs_tile() -> None:
         )
     parts.append("</vector>")
     (RES / "drawable/ic_qs_tile.xml").write_text("\n".join(parts) + "\n", encoding="utf-8")
+
+
+def write_qs_brand() -> None:
+    """Full-color cube for the quick-settings tile (not status-bar small icons)."""
+    def face(f: str) -> list[tuple[float, float]]:
+        if f == "front":
+            return [qs_iso(0, 0, 0), qs_iso(0, 0, 3), qs_iso(0, 3, 3), qs_iso(0, 3, 0)]
+        if f == "top":
+            return [qs_iso(0, 3, 0), qs_iso(3, 3, 0), qs_iso(3, 3, 3), qs_iso(0, 3, 3)]
+        return [qs_iso(3, 0, 0), qs_iso(3, 0, 3), qs_iso(3, 3, 3), qs_iso(3, 3, 0)]
+
+    colors = {"front": "#0EA5E9", "right": "#F43F5E", "top": "#FBBF24"}
+    parts = [
+        '<vector xmlns:android="http://schemas.android.com/apk/res/android"',
+        '    android:width="24dp"',
+        '    android:height="24dp"',
+        '    android:viewportWidth="24"',
+        '    android:viewportHeight="24">',
+        "    <!-- AngelaBox cube for QS: left=sky 正面, right=rose, top=amber -->",
+    ]
+    for f in ("front", "right", "top"):
+        parts.append(
+            f'    <path android:fillColor="{colors[f]}" android:pathData="{path(face(f))}" />'
+        )
+    parts.append("</vector>")
+    (RES / "drawable/ic_qs_brand.xml").write_text("\n".join(parts) + "\n", encoding="utf-8")
 
 
 def project_px(x: float, y: float, z: float, cx: float, cy: float, s: float) -> tuple[float, float]:

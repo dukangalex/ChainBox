@@ -44,6 +44,10 @@ fun DashboardCardRenderer(
             ChainPathCard(
                 topology = uiState.topology,
                 onOpenChainBuilder = onOpenChainBuilder,
+                downlink = uiState.downlink,
+                uplink = uiState.uplink,
+                downlinkTotal = uiState.downlinkTotal,
+                uplinkTotal = uiState.uplinkTotal,
                 modifier = modifier,
             )
         }

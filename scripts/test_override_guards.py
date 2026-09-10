@@ -323,8 +323,18 @@ def main() -> int:
     manifest = read("app/src/main/AndroidManifest.xml")
     if 'android:icon="@drawable/ic_menu"' in manifest:
         errors.append("QS tile must not use the upstream sing-box Z icon")
-    if "ic_qs_tile" not in manifest:
-        errors.append("QS tile should use ic_qs_tile")
+    if 'android:icon="@drawable/ic_qs_brand"' not in manifest:
+        errors.append("QS tile should use the colored cube ic_qs_brand")
+    tile_chunk = manifest[manifest.find('android:name=".bg.TileService"') : manifest.find('android:name=".bg.TileService"') + 700]
+    if 'android:label="@string/app_name"' not in tile_chunk:
+        errors.append("QS tile service must label itself with app_name")
+    tile = read("app/src/main/java/io/nekohasekai/sfa/bg/TileService.kt")
+    if "R.string.app_name" not in tile:
+        errors.append("QS tile must set label to app_name at runtime so OEM caches refresh")
+    if "ic_qs_brand" not in tile:
+        errors.append("QS tile must set icon to ic_qs_brand at runtime")
+    if "createWithResource" not in tile:
+        errors.append("QS tile must push Icon.createWithResource so Samsung drops the cached Z")
     notif = read("app/src/main/java/io/nekohasekai/sfa/bg/ServiceNotification.kt")
     if 'setContentTitle("sing-box")' in notif or '?: "sing-box"' in notif:
         errors.append("service notification must not title itself sing-box")
@@ -379,6 +389,12 @@ def main() -> int:
         errors.append("chain path card must render a live sankey topology")
     if "phase" not in path_card:
         errors.append("live topology must animate traffic flow")
+    if "node.w + 5f" not in path_card:
+        errors.append("sankey labels must sit beside thin bars, not inside wide pills")
+    if "0xFF6A6FC5" not in path_card:
+        errors.append("sankey colors should follow the radiating source-rule-hop-dest palette")
+    if "headlineSmall" not in path_card:
+        errors.append("path card should show live down/up rates like the home topology")
     if "chartHeight = 18.dp" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/UploadTrafficCard.kt"):
         errors.append("traffic cards should use a compact sparkline")
     if "AngelaBox" not in read("app/src/main/res/values/strings.xml"):

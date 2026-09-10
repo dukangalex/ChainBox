@@ -243,32 +243,15 @@ object SankeyLayout {
             return emptyList<PlacedNode>() to emptyList()
         }
         val columns = nodes.groupBy { it.column }.toSortedMap()
-        val colKeys = columns.keys.toList()
-        val nCols = colKeys.size.coerceAtLeast(1)
-        val lastCol = colKeys.last()
-        val shares = colKeys.map { col ->
-            when {
-                col == 0 -> 0.78f
-                col == 1 && lastCol >= 3 -> 1.26f
-                col == lastCol -> 1.20f
-                else -> 1f
-            }
-        }
-        val shareSum = shares.sum().coerceAtLeast(0.01f)
-        val gapX = if (nCols <= 1) {
-            0f
-        } else {
-            ((width - 2f * pad) * 0.045f).coerceIn(8f, 16f)
-        }
-        val budget = (width - 2f * pad - gapX * (nCols - 1)).coerceAtLeast(nodeWidth)
-        val widths = shares.map { share -> (share / shareSum * budget).coerceAtLeast(nodeWidth * 0.55f) }
+        val nCols = columns.size.coerceAtLeast(1)
+        val inner = (width - 2f * pad).coerceAtLeast(nodeWidth * nCols)
+        val layerWidth = inner / nCols
         val placed = ArrayList<PlacedNode>(nodes.size)
         val byId = HashMap<String, PlacedNode>(nodes.size)
-        var x = pad
         columns.entries.forEachIndexed { index, (_, colNodes) ->
-            val w = widths.getOrElse(index) { nodeWidth }
+            val x = pad + index * layerWidth
             val total = colNodes.sumOf { it.weight }.coerceAtLeast(1)
-            val gapY = 4f
+            val gapY = 6f
             val n = colNodes.size
             val usable = (height - 2f * pad - gapY * (n - 1).coerceAtLeast(0)).coerceAtLeast(16f)
             val minH = 16f
@@ -288,12 +271,11 @@ object SankeyLayout {
             var y = pad
             colNodes.forEachIndexed { i, node ->
                 val h = heights[i]
-                val item = PlacedNode(node, x, y, w, h)
+                val item = PlacedNode(node, x, y, nodeWidth, h)
                 placed += item
                 byId[node.id] = item
                 y += h + gapY
             }
-            x += w + gapX
         }
         val outgoing = links.groupBy { it.fromId }
         val incoming = links.groupBy { it.toId }
