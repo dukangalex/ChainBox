@@ -292,6 +292,7 @@
     <string name="update_source_fdroid">F-Droid</string>
     <string name="github_token">GitHub Token</string>
     <string name="github_token_description">取得更高的 GitHub API 速率限制</string>
+    <string name="update_hash_mismatch">APK SHA-256 與發行校驗不符，已中止下載。</string>
     <string name="fdroid_mirror">F-Droid 鏡像</string>
     <string name="fdroid_mirror_test_all">依延遲自動選擇</string>
     <string name="fdroid_mirror_testing">測試中…</string>
@@ -689,4 +690,10 @@
     <string name="chain_path_expand">展開鏈路</string>
     <string name="chain_path_hint_chained">出站公網位址是落地節點。入口只作為第一跳，不會成為出口。</string>
     <string name="chain_path_hint_regular">目前設定未綁定鏈式代理，走該設定的預設出口。</string>
+    <string name="chain_path_idle">未啟動</string>
+    <string name="chain_path_live_chained">即時鏈式</string>
+    <string name="chain_path_live_regular">即時</string>
+    <string name="chain_path_mode_direct">直連</string>
+    <string name="chain_path_waiting_dest">等待連線</string>
+    <string name="chain_path_live_summary">%1$d 條連線 · %2$s</string>
 </resources>

@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.io.File
+import java.security.MessageDigest
 
 class ApkDownloader : Closeable {
     private val client = Libbox.newHTTPClient().apply {
@@ -16,7 +17,7 @@ class ApkDownloader : Closeable {
         keepAlive()
     }
 
-    suspend fun download(url: String): File = withContext(Dispatchers.IO) {
+    suspend fun download(url: String, expectedSha256: String? = null): File = withContext(Dispatchers.IO) {
         val cacheDir = File(Application.application.cacheDir, "updates")
         cacheDir.mkdirs()
         val apkFile = File(cacheDir, "update.apk")
@@ -42,11 +43,37 @@ class ApkDownloader : Closeable {
             throw Exception("Download failed: empty file")
         }
 
+        val expected = expectedSha256?.trim()?.lowercase().orEmpty()
+        if (expected.matches(SHA256_HEX)) {
+            val actual = sha256Hex(apkFile)
+            if (actual != expected) {
+                apkFile.delete()
+                throw Exception("APK SHA-256 mismatch (expected $expected, got $actual)")
+            }
+        }
+
         UpdateState.saveApkPath(apkFile)
         apkFile
     }
 
     override fun close() {
         client.close()
+    }
+
+    companion object {
+        private val SHA256_HEX = Regex("^[0-9a-f]{64}$")
+
+        fun sha256Hex(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n <= 0) break
+                    digest.update(buf, 0, n)
+                }
+            }
+            return digest.digest().joinToString("") { b -> "%02x".format(b) }
+        }
     }
 }

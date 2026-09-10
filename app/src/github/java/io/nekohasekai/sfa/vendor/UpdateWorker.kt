@@ -72,7 +72,7 @@ class UpdateWorker(private val appContext: Context, params: WorkerParameters) : 
 
             if (Settings.silentInstallEnabled && ApkInstaller.canSilentInstall()) {
                 Log.d(TAG, "Downloading update...")
-                val apkFile = ApkDownloader().use { it.download(updateInfo.downloadUrl) }
+                val apkFile = ApkDownloader().use { it.download(updateInfo.downloadUrl, updateInfo.sha256) }
 
                 Log.d(TAG, "Installing update...")
                 ApkInstaller.install(appContext, apkFile)

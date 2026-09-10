@@ -68,9 +68,9 @@ class ChainRuntimeCompilerTest {
         assertFalse(chain.has("fail_closed"))
         val hops = chain.getJSONArray("outbounds")
         assertEquals(2, hops.length())
-        val entryTag = hops.getString(0)
+        assertEquals("漏网之鱼", hops.getString(0))
         val entry = (0 until outs.length()).map { outs.getJSONObject(it) }
-            .first { it.optString("tag") == entryTag }
+            .first { it.optString("tag") == "漏网之鱼" }
         val members = (0 until entry.getJSONArray("outbounds").length()).map {
             entry.getJSONArray("outbounds").getString(it)
         }
@@ -78,6 +78,12 @@ class ChainRuntimeCompilerTest {
         assertTrue(members.contains("节点选择"))
         assertEquals("jp-1", hops.getString(1))
         assertTrue(root.getJSONObject("route").getString("final").startsWith("chainbox-chain-"))
+        assertTrue(tagsNoneStartWithEntryClone(outs))
+    }
+
+    private fun tagsNoneStartWithEntryClone(outs: JSONArray): Boolean {
+        val tags = (0 until outs.length()).map { outs.getJSONObject(it).optString("tag") }
+        return tags.none { it.startsWith("chainbox-entry-") }
     }
 
     @Test
@@ -180,7 +186,7 @@ class ChainRuntimeCompilerTest {
         assertEquals(chainTag, rules.getJSONObject(0).getString("outbound"))
         assertEquals("direct", rules.getJSONObject(1).getString("outbound"))
         val detour = root.getJSONObject("dns").getJSONArray("servers").getJSONObject(0).getString("detour")
-        assertEquals(chainTag, detour)
+        assertEquals("节点选择", detour)
         val outs = root.getJSONArray("outbounds")
         val chain = (0 until outs.length()).map { outs.getJSONObject(it) }
             .first { it.optString("type") == "chain" }
@@ -212,9 +218,35 @@ class ChainRuntimeCompilerTest {
             ),
         )
         val servers = JSONObject(compiled).getJSONObject("dns").getJSONArray("servers")
-        val chainTag = JSONObject(compiled).getJSONObject("route").getString("final")
-        assertEquals(chainTag, servers.getJSONObject(0).getString("detour"))
+        assertEquals("节点选择", servers.getJSONObject(0).getString("detour"))
         assertEquals("jp-1", servers.getJSONObject(1).getString("detour"))
+    }
+
+    @Test
+    fun emptyCrossProfileLandingContentFailsClosed() {
+        try {
+            ChainRuntimeCompiler.apply(
+                ChainRuntimeCompiler.ApplyRequest(
+                    content = profile("节点选择"),
+                    currentProfileId = 1L,
+                    entryTag = "节点选择",
+                    landingProfileId = 99L,
+                    landingTag = "zgo",
+                    landingContent = "",
+                ),
+            )
+            throw AssertionError("expected fail-closed on empty landing content")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message!!.contains("跨配置落地"))
+        }
+    }
+
+    @Test
+    fun displayHopTagStripsGeneratedPrefixes() {
+        assertEquals("自动选择", ChainRuntimeCompiler.displayHopTag("chainbox-entry-自动选择"))
+        assertEquals("zgo", ChainRuntimeCompiler.displayHopTag("chainbox-landing-99-zgo"))
+        assertEquals("", ChainRuntimeCompiler.displayHopTag("chainbox-chain-1-2"))
+        assertEquals("节点选择", ChainRuntimeCompiler.displayHopTag("节点选择"))
     }
 
     @Test

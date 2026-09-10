@@ -1,6 +1,8 @@
 package io.nekohasekai.sfa.compose.screen.dashboard
 
 import androidx.lifecycle.viewModelScope
+import io.nekohasekai.libbox.ConnectionEvents
+import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.StatusMessage
@@ -9,13 +11,18 @@ import io.nekohasekai.sfa.chain.ChainBindings
 import io.nekohasekai.sfa.chain.ChainPath
 import io.nekohasekai.sfa.chain.ChainPathBuilder
 import io.nekohasekai.sfa.chain.ChainRuntimeCompiler
+import io.nekohasekai.sfa.chain.GroupHint
+import io.nekohasekai.sfa.chain.LiveTopology
+import io.nekohasekai.sfa.chain.LiveTopologyBuilder
 import io.nekohasekai.sfa.compose.base.BaseViewModel
 import io.nekohasekai.sfa.compose.base.UiEvent
+import io.nekohasekai.sfa.compose.model.ConnectionStateFilter
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
+import io.nekohasekai.sfa.ktx.toList
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
 import io.nekohasekai.sfa.utils.CommandClient
 import io.nekohasekai.sfa.utils.CommandTarget
@@ -30,6 +37,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
@@ -59,6 +68,7 @@ data class DashboardUiState(
     val selectedProfileId: Long = -1L,
     val selectedProfileName: String? = null,
     val chainPath: ChainPath = ChainPath.regular(),
+    val topology: LiveTopology = LiveTopology.idle(),
     val isLoading: Boolean = false,
     val hasGroups: Boolean = false,
     val groupsCount: Int = 0,
@@ -147,9 +157,33 @@ class DashboardViewModel :
                 CommandClient.ConnectionType.Status,
                 CommandClient.ConnectionType.ClashMode,
                 CommandClient.ConnectionType.Groups,
+                CommandClient.ConnectionType.Connections,
             ),
             this,
         )
+
+    private var plannedPath: ChainPath = ChainPath.regular()
+    @Volatile private var groupHints: List<GroupHint> = emptyList()
+    @Volatile private var liveChain: List<String> = emptyList()
+    @Volatile private var liveDestinations: List<String> = emptyList()
+    @Volatile private var liveActive: Int = 0
+    @Volatile private var liveFlowing: Boolean = false
+    private var connectionsStore: Connections? = null
+    private val connectionsMutex = Mutex()
+    private val topologyLock = Any()
+    private var lastTopologyPublishAt = 0L
+    private var pendingTopology = false
+
+    companion object {
+        private const val TOPOLOGY_THROTTLE_MS = 400L
+    }
+
+    private data class LiveSnap(
+        val chain: List<String>,
+        val destinations: List<String>,
+        val active: Int,
+        val flowing: Boolean,
+    )
 
     override fun createInitialState(): DashboardUiState {
         val savedOrder = loadItemOrder()
@@ -210,6 +244,8 @@ class DashboardViewModel :
                 val selectedId = Settings.selectedProfile
                 val selected = profiles.find { it.id == selectedId }
                 val path = buildChainPath(profiles, selectedId, selected)
+                plannedPath = path
+                val topology = buildTopology()
 
                 withContext(Dispatchers.Main) {
                     updateState {
@@ -218,6 +254,7 @@ class DashboardViewModel :
                             selectedProfileId = selectedId,
                             selectedProfileName = selected?.name,
                             chainPath = path,
+                            topology = topology,
                         )
                     }
                 }
@@ -504,6 +541,7 @@ class DashboardViewModel :
         when (status) {
             Status.Started -> {
                 checkDeprecatedNotes()
+                requestTopologyPublish(force = true)
                 if (isRemote) {
                     return
                 }
@@ -515,6 +553,8 @@ class DashboardViewModel :
                 if (isRemote) {
                     return
                 }
+                resetLiveSnapshot()
+                val topology = LiveTopologyBuilder.fromPath(plannedPath, running = false)
                 updateState {
                     copy(
                         hasGroups = false,
@@ -534,6 +574,7 @@ class DashboardViewModel :
                         downlinkTotal = "0 B",
                         uplinkHistory = List(30) { 0f },
                         downlinkHistory = List(30) { 0f },
+                        topology = topology,
                     )
                 }
             }
@@ -602,11 +643,11 @@ class DashboardViewModel :
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 CommandTarget.standaloneClient().setClashMode(mode)
-                // Update UI state directly without reconnecting
                 withContext(Dispatchers.Main) {
                     updateState {
                         copy(selectedClashMode = mode)
                     }
+                    requestTopologyPublish(force = true)
                 }
             } catch (e: Exception) {
                 sendError(e)
@@ -629,11 +670,13 @@ class DashboardViewModel :
 
     override fun onDisconnected() {
         viewModelScope.launch(Dispatchers.Main) {
+            resetLiveSnapshot()
             updateState {
                 copy(
                     memory = "",
                     goroutines = "",
                     isStatusVisible = false,
+                    topology = LiveTopologyBuilder.fromPath(plannedPath, running = false),
                 )
             }
         }
@@ -667,6 +710,11 @@ class DashboardViewModel :
                     downlinkHistory = newDownlinkHistory,
                 )
             }
+            val trafficFlowing = status.uplink > 0L || status.downlink > 0L
+            if (trafficFlowing != liveFlowing && liveActive == 0) {
+                liveFlowing = trafficFlowing
+                requestTopologyPublish()
+            }
         }
     }
 
@@ -679,6 +727,7 @@ class DashboardViewModel :
                     selectedClashMode = currentMode,
                 )
             }
+            requestTopologyPublish(force = true)
         }
     }
 
@@ -687,15 +736,120 @@ class DashboardViewModel :
             updateState {
                 copy(selectedClashMode = newMode)
             }
+            requestTopologyPublish(force = true)
         }
     }
 
     override fun updateGroups(newGroups: MutableList<OutboundGroup>) {
         viewModelScope.launch(Dispatchers.Main) {
             val hasGroups = newGroups.isNotEmpty()
+            // Read only tag/selected. Do not iterate items — GroupsViewModel
+            // consumes that iterator after this primary handler.
+            groupHints = newGroups.map { group ->
+                GroupHint(tag = group.tag, selected = group.selected)
+            }
             updateState {
                 copy(hasGroups = hasGroups, groupsCount = newGroups.size)
             }
+            requestTopologyPublish(force = true)
+        }
+    }
+
+    override fun writeConnectionEvents(events: ConnectionEvents) {
+        viewModelScope.launch(Dispatchers.Default) {
+            val snap = connectionsMutex.withLock {
+                val store = connectionsStore ?: Connections().also { connectionsStore = it }
+                store.applyEvents(events)
+                store.filterState(ConnectionStateFilter.Active.libboxValue)
+                extractLive(store)
+            }
+            liveChain = snap.chain
+            liveDestinations = snap.destinations
+            liveActive = snap.active
+            liveFlowing = snap.flowing
+            requestTopologyPublish()
+        }
+    }
+
+    private fun extractLive(store: Connections): LiveSnap {
+        val destCounts = LinkedHashMap<String, Int>()
+        var bestChain = emptyList<String>()
+        var active = 0
+        var flowing = false
+        val iterator = store.iterator()
+        while (iterator.hasNext()) {
+            val connection = iterator.next()
+            if (connection.outboundType == "dns") continue
+            active++
+            if (connection.uplink > 0L || connection.downlink > 0L) flowing = true
+            val dest = connection.displayDestination().ifBlank {
+                connection.domain
+            }.ifBlank {
+                connection.destination
+            }
+            if (dest.isNotBlank()) {
+                destCounts[dest] = (destCounts[dest] ?: 0) + 1
+            }
+            val hops = runCatching { connection.chain().toList() }.getOrDefault(emptyList())
+            if (hops.size > bestChain.size) bestChain = hops
+        }
+        val destinations = destCounts.entries
+            .sortedByDescending { it.value }
+            .map { it.key }
+            .take(3)
+        return LiveSnap(bestChain, destinations, active, flowing)
+    }
+
+    private fun resetLiveSnapshot() {
+        liveChain = emptyList()
+        liveDestinations = emptyList()
+        liveActive = 0
+        liveFlowing = false
+        groupHints = emptyList()
+        viewModelScope.launch(Dispatchers.Default) {
+            connectionsMutex.withLock { connectionsStore = null }
+        }
+    }
+
+    private fun buildTopology(): LiveTopology {
+        val running = _serviceStatus.value == Status.Started
+        return LiveTopologyBuilder.fromPath(
+            path = plannedPath,
+            running = running,
+            mode = currentState.selectedClashMode,
+            groups = groupHints,
+            liveChain = liveChain,
+            destinations = liveDestinations,
+            activeConnections = if (liveActive > 0) liveActive else currentState.connectionsCount,
+            flowing = liveFlowing,
+        )
+    }
+
+    private fun requestTopologyPublish(force: Boolean = false) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        synchronized(topologyLock) {
+            if (!force && now - lastTopologyPublishAt < TOPOLOGY_THROTTLE_MS) {
+                if (pendingTopology) return
+                pendingTopology = true
+                val wait = TOPOLOGY_THROTTLE_MS - (now - lastTopologyPublishAt)
+                viewModelScope.launch {
+                    delay(wait.coerceAtLeast(1L))
+                    synchronized(topologyLock) { pendingTopology = false }
+                    publishTopologyNow()
+                }
+                return
+            }
+        }
+        publishTopologyNow()
+    }
+
+    private fun publishTopologyNow() {
+        val topology = buildTopology()
+        synchronized(topologyLock) {
+            lastTopologyPublishAt = android.os.SystemClock.elapsedRealtime()
+        }
+        viewModelScope.launch(Dispatchers.Main) {
+            updateState { copy(topology = topology) }
         }
     }
 

@@ -24,7 +24,9 @@ object ConfigChainReapply {
             null
         } else {
             val landingProfile = ProfileManager.get(landingId) ?: error("落地配置不存在或已被删除")
-            File(landingProfile.typed.path).readText()
+            val text = File(landingProfile.typed.path).readText()
+            require(text.isNotBlank()) { "落地配置文件为空，无法跨配置组链" }
+            text
         }
         return ChainRuntimeCompiler.apply(
             ChainRuntimeCompiler.ApplyRequest(

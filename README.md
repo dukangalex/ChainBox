@@ -1,6 +1,6 @@
 # ChainBox
 
-ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 Android 代理客户端，面向社区用户，在其上提供可配置的多级出站（链式代理）以及相关的运行时覆盖选项。
+ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 Android 代理客户端。项目保持官方内核完整，并在其上提供模块化的链式出站与面向普通用户的操作界面。
 
 本项目与 SagerNet 及官方 sing-box 无从属或授权关系，不得使用官方名称及标志进行商业发布或应用商店上架。
 
@@ -15,44 +15,47 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 |------|-----|
 | 应用名称 | ChainBox |
 | 应用包名 | `io.chainbox.app` |
-| 客户端仓库 | [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox) （分支 `dev`） |
-| 内核仓库 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) （分支 `chain-dev`） |
+| 客户端仓库 | [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox)（分支 `dev`） |
+| 内核仓库 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box)（分支 `chain-dev`） |
 | 更新检查 | 仅本仓库 GitHub Releases |
-| 应用图标 | 白色底、居中魔方（橙黄顶 / 天蓝正面 / 玫红侧面） |
+| 应用图标 | 白色底、居中立方体（橙黄顶 / 天蓝正面 / 玫红侧面） |
 
 ## 上游内核
 
-当前发版对齐的内核型号写在 `version.properties`（`KERNEL_*`），随每次跟版更新。
+当前发版对齐的内核型号写在 `version.properties`（`KERNEL_*`），并在 GitHub Release 中记录内核 commit SHA。
 
 | 项目 | 值 |
 |------|-----|
 | 官方上游 | [SagerNet/sing-box](https://github.com/SagerNet/sing-box) **v1.14.0** |
 | 本项目内核 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) 分支 **`chain-dev`** |
 | 已同步基线 | 官方 **sing-box 1.14** 系（Go 1.25.5；OpenConnect / Snell / USB/IP 等 1.14 能力已在依赖中） |
-| 内核型号 / tag | `v1.12.0-chain.4`（`chain-dev` 当前 git tag；App 内 `Libbox.version()` 读取此值） |
+| 内核型号 / tag | `v1.12.0-chain.4`（`chain-dev` 当前 git tag；App 内 `Libbox.version()` 读取此值）。tag 沿用历史 1.12 命名，**代码基线为 1.14**。 |
 | 客户端版本 | 见 `version.properties` 的 `VERSION_NAME` |
 
 ### 同步更新策略
 
-1. **跟随官方，不替换内核。** ChainBox = 官方 sing-box + 模块化 Chain 外挂 + 普通用户界面。不另做协议栈，不为跟版而改内核架构。
+1. **跟随官方，不替换内核。** ChainBox 在官方 sing-box 之上提供模块化链式出站与普通用户界面，不另做协议栈，不为跟版而改内核架构。
 2. **内核：** `git fetch` 官方 `SagerNet/sing-box`，merge 进 `chain-dev`，只解决与 Chain outbound 相关的冲突。
 3. **App：** `git fetch` 官方 `SagerNet/sing-box-for-android`，merge 进本仓库 `dev`。冲突以 ChainBox 为准（包名、组链、覆盖层、备份、更新检查、发版工作流）。
 4. **Fail Closed：** 链路失败必须报错并停止启动，不得静默落到 DIRECT。
-5. **不必为跟版而跟版。** 官方新版本发布后，先把 App 兼容层（DNS / inbound / rule-set）和 Chain 外挂做稳，**验证 Chain outbound 之后**再合入更新的官方提交。不要在未验证时整包快进。
-6. **发版：** 改 `version.properties` 后走 `.github/workflows/build-chainbox.yml`，`publish_release=true` 并指定 `version_tag`。
+5. **先验证再合入。** 官方新版本发布后，先把 App 兼容层（DNS / inbound / rule-set）和链式出站做稳，**验证 Chain outbound 之后**再合入更新的官方提交，避免未验证的整包快进。
+6. **发版核对官方功能。** 每次发布会拉取 `version.properties` 中的官方 tag，确认官方 inbound/outbound 类型常量仍存在于 `chain-dev`；缺失则拒绝发版。Release 说明记录内核 commit SHA。
+7. **功能范围。** 本项目增加的能力只为降低日常操作成本，不改变官方配置模型。
 
 细节与命令见 [docs/MAINTENANCE.md](docs/MAINTENANCE.md)。
 
 ## 架构
 
-官方 sing-box 内核保持完整。Chain、中国直连、WebRTC、DNS/入站兼容等都是 **模块化外挂**：只在导入/启动时改运行时 JSON，不改订阅文件，不替换内核。产品面向社区通用场景，不为单一订阅商或个人配置定制。
+官方 sing-box 内核保持完整。Chain、中国直连、WebRTC、DNS/入站兼容等都是 **模块化运行时覆盖层**：只在导入/启动时改运行时 JSON，不改订阅文件，不替换内核。产品面向社区通用场景，不为单一订阅商或个人配置定制。
 
 ## 功能范围
 
-- 多级出站：在当前配置中选择入口分组/节点，再选择落地（可来自当前或其他配置）；外部访问的源地址应为落地节点地址。**每份配置独立保存链路**。前置只作为链式入口，不会成为出口。
+- 多级出站：在当前配置中选择入口分组/节点，再选择落地（可来自当前或其他配置）；外部访问的源地址应为落地节点地址。**每份配置独立保存链路**。入口只作为链式第一跳，不会成为出口。
+- 实时拓扑：仪表页按 selector/urltest 当前选中节点、活动连接路径和访问目标绘制流量走向，而不是静态展示已保存的绑定标签。
 - 链路保持：出口选择保存于本地；远程订阅更新后仍按已保存的出口复用，不必重配。
 - 运行时覆盖：中国直连、严格路由、DNS、IPv6、QUIC、WebRTC 防护。开启后**强制覆盖**对应字段，不修改订阅原文。
-- 备份与恢复：本地文件及 WebDAV（连通性指示灯常驻，检测方法与实际上传一致；覆盖=完全替换，兼容=与现有共存；VPN 开启时尽量走系统直连）。备份不含账号密码。
+- 备份与恢复：本地文件及 WebDAV（覆盖=完全替换，兼容=与现有共存）。备份不含账号密码。
+- 更新校验：Releases 附带 APK SHA-256；应用内下载在存在校验和时会验证。
 - 日志：内核日志等级默认 info。
 
 具体操作见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
@@ -60,10 +63,10 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 ## 多级出站
 
 ```
-设备 → 入口节点 → 出口节点 → 目的站
+设备 → 入口节点 → 落地节点 → 目的站
 ```
 
-仪表页有链路图：未绑定显示常规路径（设备 → 当前出口 → 目标）；绑定链式后高亮入口 → 落地。
+仪表页显示实时流量：设备 → 当前选中的入口节点 → 当前选中的落地节点 → 活动连接的目标。Direct 模式显示设备 → DIRECT → 目标。
 
 1. 导入并启用配置，确认基础连通。
 2. 在「工具 → 链式代理」中为**当前配置**选择入口与落地并保存。其他配置可各自绑定不同落地。
@@ -71,9 +74,17 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 
 取消链式后，出站恢复为当前配置的默认出口。
 
+同配置链式不会改写 DNS `detour`（解析保持一跳，与 Clash Meta 一致），并对 selector/urltest 就地过滤 DIRECT，避免克隆后双重测速。
+
+已知上游限制：两种均启用 TLS 的协议互相 `detour`（例如 VLESS 经 Trojan）可能失败，见 [SagerNet/sing-box#3205](https://github.com/SagerNet/sing-box/issues/3205)。入口或落地一侧使用 SOCKS / HTTP / SSH 更稳妥。ChainBox 不能在应用层绕过该限制。
+
 ## 下载
 
-请从 [Releases](https://github.com/dukangalex/ChainBox/releases) 下载 `ChainBox-android.apk`。
+请从 [Releases](https://github.com/dukangalex/ChainBox/releases) 下载 `ChainBox-android.apk`，并用同目录 `ChainBox-android.apk.sha256` 校验：
+
+```
+sha256sum -c ChainBox-android.apk.sha256
+```
 
 覆盖安装要求使用相同签名证书，且新版本的 `versionCode` 须大于已安装版本。自行构建时须在仓库 Secrets 中配置：
 
@@ -87,8 +98,9 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 使用工作流 `.github/workflows/build-chainbox.yml`：
 
 1. 从 `chain-dev` 编译 `libbox.aar`
-2. 组装 Android APK
-3. 若 `publish_release=true` 并指定 `version_tag`，则发布至 GitHub Releases
+2. 与官方 sing-box 核对 inbound/outbound 类型常量
+3. 组装 Android APK，生成 `ChainBox-android.apk.sha256`
+4. 若 `publish_release=true` 并指定 `version_tag`，则发布至 GitHub Releases（含内核 commit SHA）
 
 客户端版本号以 `version.properties` 为准。
 

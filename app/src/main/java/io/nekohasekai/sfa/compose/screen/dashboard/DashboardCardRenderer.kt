@@ -42,7 +42,7 @@ fun DashboardCardRenderer(
     when (cardGroup) {
         CardGroup.ChainPath -> {
             ChainPathCard(
-                path = uiState.chainPath,
+                topology = uiState.topology,
                 onOpenChainBuilder = onOpenChainBuilder,
                 modifier = modifier,
             )

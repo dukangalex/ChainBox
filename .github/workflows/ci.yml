@@ -14,6 +14,37 @@ permissions:
   contents: read
 
 jobs:
+  overlay-guards:
+    name: overlay source guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout ChainBox
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Run Python overlay tests
+        run: |
+          set -euo pipefail
+          python3 scripts/test_override_guards.py
+          python3 scripts/test_china_direct_overlay.py
+          python3 scripts/test_dns_migrate.py
+          python3 scripts/test_inbound_compat.py
+
+      - name: Checkout Chain kernel
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: dukangalex/sing-box
+          ref: chain-dev
+          path: sing-box
+          fetch-depth: 0
+
+      - name: Verify official types present in chain-dev
+        run: |
+          set -euo pipefail
+          UPSTREAM=$(grep '^KERNEL_UPSTREAM=' version.properties | cut -d= -f2 | tr -d '\r')
+          git clone --depth 1 --branch "v${UPSTREAM}" https://github.com/SagerNet/sing-box.git sing-box-official
+          python3 scripts/check_upstream_features.py --official sing-box-official --fork sing-box
+
   kernel-test:
     name: sing-box kernel tests
     runs-on: ubuntu-latest

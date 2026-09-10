@@ -35,9 +35,37 @@ data class ChainPath(
     }
 }
 
+data class GroupHint(
+    val tag: String,
+    val selected: String = "",
+    val delays: Map<String, Int> = emptyMap(),
+)
+
+data class LiveHop(
+    val role: ChainPathHop.Role,
+    val title: String,
+    val subtitle: String = "",
+    val delayMs: Int = 0,
+    val highlighted: Boolean = false,
+)
+
+data class LiveTopology(
+    val running: Boolean = false,
+    val chained: Boolean = false,
+    val mode: String = "",
+    val hops: List<LiveHop> = emptyList(),
+    val destinations: List<String> = emptyList(),
+    val activeConnections: Int = 0,
+    val flowing: Boolean = false,
+) {
+    companion object {
+        fun idle(): LiveTopology = LiveTopologyBuilder.fromPath(ChainPath.regular(), running = false)
+    }
+}
+
 /**
- * Dashboard hop diagram. Bindings highlight 入口 → 落地; otherwise the
- * current profile's default outbound is the single exit hop.
+ * Planned hops from the saved binding. Live topology overlays current
+ * selector/urltest picks and active connection chains on top of this.
  */
 object ChainPathBuilder {
     fun build(
@@ -93,5 +121,189 @@ object ChainPathBuilder {
             landingProfileName = landingName,
             profileName = profile,
         )
+    }
+}
+
+object LiveTopologyBuilder {
+    fun fromPath(
+        path: ChainPath,
+        running: Boolean,
+        mode: String = "",
+        groups: List<GroupHint> = emptyList(),
+        liveChain: List<String> = emptyList(),
+        destinations: List<String> = emptyList(),
+        activeConnections: Int = 0,
+        flowing: Boolean = false,
+    ): LiveTopology {
+        val modeNorm = mode.trim()
+        if (running && modeNorm.equals("direct", ignoreCase = true)) {
+            return LiveTopology(
+                running = true,
+                chained = false,
+                mode = modeNorm,
+                hops = listOf(
+                    LiveHop(ChainPathHop.Role.Device, title = ""),
+                    LiveHop(ChainPathHop.Role.Exit, title = "DIRECT"),
+                    LiveHop(ChainPathHop.Role.Destination, title = destinations.firstOrNull().orEmpty()),
+                ),
+                destinations = destinations,
+                activeConnections = activeConnections,
+                flowing = flowing,
+            )
+        }
+        val hops = if (running) {
+            liveHops(path, groups, liveChain, destinations)
+        } else {
+            path.hops.map { plannedHop(it) }
+        }
+        return LiveTopology(
+            running = running,
+            chained = path.chained,
+            mode = modeNorm,
+            hops = hops,
+            destinations = destinations,
+            activeConnections = activeConnections,
+            flowing = flowing && running,
+        )
+    }
+
+    private fun plannedHop(hop: ChainPathHop): LiveHop = LiveHop(
+        role = hop.role,
+        title = hop.label,
+        subtitle = hop.detail,
+        highlighted = hop.highlighted,
+    )
+
+    private fun liveHops(
+        path: ChainPath,
+        groups: List<GroupHint>,
+        liveChain: List<String>,
+        destinations: List<String>,
+    ): List<LiveHop> {
+        val useful = liveChain.map { ChainRuntimeCompiler.displayHopTag(it) }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        val destTitle = destinations.firstOrNull().orEmpty()
+        if (path.chained) {
+            val leaves = useful.filterNot { hop ->
+                hop.equals(path.entryTag, ignoreCase = false) ||
+                    hop.equals(path.landingTag, ignoreCase = false) ||
+                    hop == path.profileName
+            }
+            val entryLive = when {
+                leaves.size >= 2 -> leaves.first()
+                else -> pickLive(useful, path.entryTag, groups, preferFirst = true)
+            }
+            val landLive = when {
+                leaves.size >= 2 -> leaves.last()
+                leaves.size == 1 -> leaves.first()
+                else -> pickLive(useful, path.landingTag, groups, preferFirst = false)
+            }
+            val entryPick = resolve(path.entryTag, groups, entryLive)
+            val landPick = resolve(path.landingTag, groups, landLive)
+            return listOf(
+                LiveHop(ChainPathHop.Role.Device, title = ""),
+                LiveHop(
+                    role = ChainPathHop.Role.Entry,
+                    title = entryPick.first,
+                    subtitle = path.entryTag.ifBlank { path.profileName },
+                    delayMs = entryPick.second,
+                    highlighted = true,
+                ),
+                LiveHop(
+                    role = ChainPathHop.Role.Landing,
+                    title = landPick.first,
+                    subtitle = path.landingProfileName.ifBlank { path.landingTag },
+                    delayMs = landPick.second,
+                    highlighted = true,
+                ),
+                LiveHop(ChainPathHop.Role.Destination, title = destTitle),
+            )
+        }
+        val exitTag = path.hops.firstOrNull { it.role == ChainPathHop.Role.Exit }?.label.orEmpty()
+        val exitPick = resolve(exitTag, groups, useful.lastOrNull())
+        return listOf(
+            LiveHop(ChainPathHop.Role.Device, title = ""),
+            LiveHop(
+                role = ChainPathHop.Role.Exit,
+                title = exitPick.first.ifBlank { exitTag },
+                subtitle = path.profileName,
+                delayMs = exitPick.second,
+            ),
+            LiveHop(ChainPathHop.Role.Destination, title = destTitle),
+        )
+    }
+
+    private fun pickLive(
+        useful: List<String>,
+        groupTag: String,
+        groups: List<GroupHint>,
+        preferFirst: Boolean,
+    ): String? {
+        val members = membersOf(groupTag, groups)
+        val matched = useful.filter { hop ->
+            hop in members || members.any { ChainRuntimeCompiler.displayHopTag(it) == hop }
+        }
+        return when {
+            matched.isNotEmpty() -> if (preferFirst) matched.first() else matched.last()
+            preferFirst -> useful.firstOrNull()
+            else -> useful.lastOrNull()
+        }
+    }
+
+    private fun membersOf(groupTag: String, groups: List<GroupHint>): Set<String> {
+        val key = ChainRuntimeCompiler.displayHopTag(groupTag).ifBlank { groupTag.trim() }
+        val group = groups.find {
+            it.tag == key || ChainRuntimeCompiler.displayHopTag(it.tag) == key
+        }
+        return buildSet {
+            add(key)
+            if (group != null) {
+                add(group.tag)
+                add(ChainRuntimeCompiler.displayHopTag(group.tag))
+                if (group.selected.isNotBlank()) add(group.selected)
+                addAll(group.delays.keys)
+            }
+        }.filter { it.isNotBlank() }.toSet()
+    }
+
+    private fun resolve(
+        groupTag: String,
+        groups: List<GroupHint>,
+        liveOverride: String?,
+    ): Pair<String, Int> {
+        val override = liveOverride?.trim().orEmpty()
+        if (override.isNotEmpty()) {
+            val delay = delayOf(override, groups)
+            return override to delay
+        }
+        return leafOf(groupTag, groups, 0)
+    }
+
+    private fun leafOf(tag: String, groups: List<GroupHint>, depth: Int): Pair<String, Int> {
+        val key = ChainRuntimeCompiler.displayHopTag(tag).ifBlank { tag.trim() }
+        if (key.isEmpty() || depth > 6) return key to 0
+        val group = groups.find { it.tag == key || ChainRuntimeCompiler.displayHopTag(it.tag) == key }
+            ?: return key to 0
+        val selected = group.selected.trim()
+        if (selected.isEmpty() || selected == key) {
+            return key to (group.delays[key] ?: 0)
+        }
+        val nested = groups.find {
+            it.tag == selected || ChainRuntimeCompiler.displayHopTag(it.tag) == selected
+        }
+        return if (nested != null) {
+            leafOf(selected, groups, depth + 1)
+        } else {
+            selected to (group.delays[selected] ?: 0)
+        }
+    }
+
+    private fun delayOf(tag: String, groups: List<GroupHint>): Int {
+        groups.forEach { g ->
+            g.delays[tag]?.let { return it }
+        }
+        return 0
     }
 }

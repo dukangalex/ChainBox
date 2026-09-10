@@ -61,6 +61,7 @@ class GitHubUpdateChecker : Closeable {
             releaseNotes = release.body,
             isPrerelease = release.prerelease,
             fileSize = apkAsset?.size ?: 0,
+            sha256 = runCatching { pickSha256(release.assets, apkAsset, githubToken) }.getOrNull(),
         )
     }
 
@@ -111,6 +112,28 @@ class GitHubUpdateChecker : Closeable {
             throw IllegalStateException(msg.ifBlank { "GitHub API 错误" })
         }
         return json.decodeFromString(trimmed)
+    }
+
+    private fun pickSha256(assets: List<GitHubAsset>, apk: GitHubAsset?, githubToken: String): String? {
+        val apkName = apk?.name ?: PREFERRED_APK
+        val shaAsset = assets.find { it.name.equals("$apkName.sha256", ignoreCase = true) }
+            ?: assets.find { it.name.equals("$PREFERRED_APK.sha256", ignoreCase = true) }
+            ?: return null
+        val body = getText(shaAsset.browserDownloadUrl, githubToken)
+        val hex = body.trim().substringBefore(' ').substringBefore('\t').lowercase()
+        return hex.takeIf { it.matches(Regex("^[0-9a-f]{64}$")) }
+    }
+
+    private fun getText(url: String, githubToken: String): String {
+        val request = client.newRequest()
+        request.setURL(url)
+        request.setHeader("Accept", "application/octet-stream")
+        val token = githubToken.trim()
+        if (token.isNotEmpty()) {
+            request.setHeader("Authorization", "Bearer $token")
+        }
+        request.setUserAgent(HTTPClient.userAgent)
+        return request.execute().content.unwrap
     }
 
     private fun isReleaseInTrack(release: GitHubRelease, track: UpdateTrack): Boolean {

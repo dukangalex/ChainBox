@@ -129,7 +129,7 @@ object Vendor : VendorInterface {
         val apkFile = if (cachedApk != null && cachedApk.exists() && cachedApk.length() > 0) {
             cachedApk
         } else {
-            ApkDownloader().use { it.download(downloadUrl) }
+            ApkDownloader().use { it.download(downloadUrl, UpdateState.updateInfo.value?.sha256) }
         }
         ApkInstaller.install(context, apkFile)
     }

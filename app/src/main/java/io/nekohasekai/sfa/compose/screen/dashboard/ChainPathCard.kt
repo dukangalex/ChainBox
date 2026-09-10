@@ -1,11 +1,12 @@
 package io.nekohasekai.sfa.compose.screen.dashboard
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,8 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AltRoute
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,47 +31,38 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.nekohasekai.sfa.R
-import io.nekohasekai.sfa.chain.ChainPath
 import io.nekohasekai.sfa.chain.ChainPathHop
+import io.nekohasekai.sfa.chain.LiveHop
+import io.nekohasekai.sfa.chain.LiveTopology
 
 @Composable
 fun ChainPathCard(
-    path: ChainPath,
+    topology: LiveTopology,
     onOpenChainBuilder: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val chained = path.chained
-    LaunchedEffect(chained) {
-        if (chained) expanded = true
-    }
+    val chained = topology.chained
+    val running = topology.running
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (chained) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = when {
+                chained && running -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
+                else -> MaterialTheme.colorScheme.surfaceContainerLow
             },
         ),
-        border = if (chained) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))
-        } else {
-            null
-        },
-        onClick = { expanded = !expanded },
+        onClick = onOpenChainBuilder,
     ) {
         Column(
             modifier = Modifier
@@ -96,27 +86,7 @@ fun ChainPathCard(
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = if (chained) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
-                    contentColor = if (chained) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                ) {
-                    Text(
-                        text = stringResource(
-                            if (chained) R.string.chain_path_chained else R.string.chain_path_regular,
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-                }
+                StatusPill(topology)
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(
                     onClick = onOpenChainBuilder,
@@ -129,87 +99,111 @@ fun ChainPathCard(
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
-                Icon(
-                    imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    contentDescription = stringResource(R.string.chain_path_expand),
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
             ) {
-                path.hops.forEachIndexed { index, hop ->
+                topology.hops.forEachIndexed { index, hop ->
                     if (index > 0) {
-                        Text(
-                            text = "→",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (hop.highlighted || path.hops[index - 1].highlighted) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.padding(horizontal = 2.dp),
+                        FlowArrow(
+                            flowing = topology.flowing && running,
+                            highlighted = hop.highlighted || topology.hops[index - 1].highlighted,
                         )
                     }
-                    HopChip(hop = hop, showRole = true)
+                    LiveHopChip(hop = hop, running = running)
                 }
             }
 
-            AnimatedVisibility(
-                visible = expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    path.hops.forEachIndexed { index, hop ->
-                        ExpandedHopRow(hop = hop)
-                        if (index < path.hops.lastIndex) {
-                            Text(
-                                text = "↓",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (hop.highlighted || path.hops[index + 1].highlighted) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                modifier = Modifier.padding(start = 22.dp, top = 1.dp, bottom = 1.dp),
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = stringResource(
-                            if (chained) R.string.chain_path_hint_chained else R.string.chain_path_hint_regular,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            if (running && (topology.destinations.isNotEmpty() || topology.activeConnections > 0)) {
+                Spacer(modifier = Modifier.height(6.dp))
+                val destText = if (topology.destinations.isNotEmpty()) {
+                    topology.destinations.take(3).joinToString(" · ")
+                } else {
+                    stringResource(R.string.chain_path_destination)
                 }
+                Text(
+                    text = stringResource(
+                        R.string.chain_path_live_summary,
+                        topology.activeConnections,
+                        destText,
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else if (!running) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(
+                        if (chained) R.string.chain_path_hint_chained else R.string.chain_path_hint_regular,
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun HopChip(hop: ChainPathHop, showRole: Boolean) {
-    val role = hopRoleLabel(hop.role)
-    val title = hop.label.ifBlank { role }
+private fun StatusPill(topology: LiveTopology) {
+    val (label, emphasized) = when {
+        !topology.running -> stringResource(R.string.chain_path_idle) to false
+        topology.mode.equals("direct", ignoreCase = true) ->
+            stringResource(R.string.chain_path_mode_direct) to false
+        topology.chained -> stringResource(R.string.chain_path_live_chained) to true
+        else -> stringResource(R.string.chain_path_live_regular) to false
+    }
     Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = if (hop.highlighted) {
+        shape = RoundedCornerShape(6.dp),
+        color = if (emphasized) {
             MaterialTheme.colorScheme.primary
         } else {
             MaterialTheme.colorScheme.surfaceVariant
         },
-        contentColor = if (hop.highlighted) {
+        contentColor = if (emphasized) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+    }
+}
+
+@Composable
+private fun LiveHopChip(hop: LiveHop, running: Boolean) {
+    val role = hopRoleLabel(hop.role)
+    val title = hop.title.ifBlank {
+        when (hop.role) {
+            ChainPathHop.Role.Device -> role
+            ChainPathHop.Role.Destination ->
+                if (running) stringResource(R.string.chain_path_waiting_dest) else role
+            else -> role
+        }
+    }
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (hop.highlighted && running) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        contentColor = if (hop.highlighted && running) {
             MaterialTheme.colorScheme.onPrimary
         } else {
             MaterialTheme.colorScheme.onSurface
@@ -217,18 +211,16 @@ private fun HopChip(hop: ChainPathHop, showRole: Boolean) {
     ) {
         Column(
             modifier = Modifier
-                .widthIn(min = 44.dp, max = 108.dp)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .widthIn(min = 48.dp, max = 112.dp)
+                .padding(horizontal = 8.dp, vertical = 5.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (showRole && hop.label.isNotBlank()) {
-                Text(
-                    text = role,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            Text(
+                text = role,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelMedium,
@@ -236,57 +228,60 @@ private fun HopChip(hop: ChainPathHop, showRole: Boolean) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
-}
-
-@Composable
-private fun ExpandedHopRow(hop: ChainPathHop) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = if (hop.highlighted) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
-            contentColor = if (hop.highlighted) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.widthIn(min = 44.dp),
-        ) {
-            Text(
-                text = hopRoleLabel(hop.role),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            )
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            val title = hop.label.ifBlank { hopRoleLabel(hop.role) }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (hop.detail.isNotBlank() && hop.detail != hop.label) {
+            val meta = buildString {
+                if (hop.delayMs > 0) append("${hop.delayMs}ms")
+                if (hop.subtitle.isNotBlank() && hop.subtitle != hop.title) {
+                    if (isNotEmpty()) append(" · ")
+                    append(hop.subtitle)
+                }
+            }
+            if (meta.isNotBlank()) {
                 Text(
-                    text = hop.detail,
+                    text = meta,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun FlowArrow(flowing: Boolean, highlighted: Boolean) {
+    val color = if (highlighted) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val phase by rememberInfiniteTransition(label = "flow").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "phase",
+    )
+    Canvas(modifier = Modifier.width(20.dp).height(16.dp)) {
+        val y = size.height / 2f
+        val effect = if (flowing) {
+            PathEffect.dashPathEffect(floatArrayOf(10f, 8f), phase * 18f)
+        } else {
+            null
+        }
+        drawLine(
+            color = color,
+            start = Offset(0f, y),
+            end = Offset(size.width - 4.dp.toPx(), y),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+            pathEffect = effect,
+        )
+        val tip = size.width
+        val ah = 4.dp.toPx()
+        drawLine(color, Offset(tip - ah - 2f, y - ah), Offset(tip, y), 2.dp.toPx(), StrokeCap.Round)
+        drawLine(color, Offset(tip - ah - 2f, y + ah), Offset(tip, y), 2.dp.toPx(), StrokeCap.Round)
     }
 }
 

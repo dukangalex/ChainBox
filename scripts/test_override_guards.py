@@ -49,8 +49,14 @@ def main() -> int:
         errors.append("chain compiler should document packet path: entry first, landing last")
     if "if (sameProfile) add(req.landingTag)" not in chain:
         errors.append("cross-profile landing tags must not be extraExcluded from the entry hop")
-    if "detour in entryTags" not in chain:
-        errors.append("DNS detours should only rewrite entry hops, not every proxy")
+    if "rewriteDnsDetours" in chain:
+        errors.append("compiler must not rewrite DNS detours onto the chain")
+    if "DNS detours stay" not in chain and "DNS detours are left" not in chain:
+        errors.append("compiler must leave DNS detours on the original outbound (one hop)")
+    if "inPlace = true" not in chain and "inPlace=true" not in chain:
+        errors.append("same-profile group hops must mutate in place to avoid double urltest")
+    if "跨配置落地内容缺失" not in chain:
+        errors.append("empty cross-profile landing content must fail closed")
 
     bindings = read("app/src/main/java/io/nekohasekai/sfa/chain/ChainBindings.kt")
     if "per-profile" not in bindings.lower() and "Per-profile" not in bindings:
@@ -334,8 +340,18 @@ def main() -> int:
         errors.append("README must include the kernel/app sync strategy section")
     if "chain-dev" not in readme:
         errors.append("README must name the kernel branch chain-dev")
-    if "不必为跟版而跟版" not in readme:
-        errors.append("README sync strategy must keep 不必为跟版而跟版")
+    if "外挂" in readme:
+        errors.append("README must stay professional; do not use 外挂")
+    if "不必为跟版而跟版" in readme:
+        errors.append("README must use formal sync-policy wording")
+    if "KERNEL_UPSTREAM" not in read("docs/MAINTENANCE.md") and "check_upstream_features" not in read("docs/MAINTENANCE.md"):
+        errors.append("MAINTENANCE must document the official feature check")
+    if "外挂" in read("docs/MAINTENANCE.md"):
+        errors.append("MAINTENANCE must stay professional; do not use 外挂")
+    if "3205" not in read("docs/USER_GUIDE.md"):
+        errors.append("USER_GUIDE must document official detour TLS limitation #3205")
+    if "DNS" not in read("docs/USER_GUIDE.md") or "一跳" not in read("docs/USER_GUIDE.md"):
+        errors.append("USER_GUIDE must say DNS stays one hop")
     props = read("version.properties")
     if "KERNEL_UPSTREAM=1.14.0" not in props:
         errors.append("version.properties must record KERNEL_UPSTREAM")
@@ -344,11 +360,32 @@ def main() -> int:
     dash = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardViewModel.kt")
     if "ChainPath" not in dash:
         errors.append("dashboard must expose a ChainPath card")
+    if "LiveTopology" not in dash:
+        errors.append("dashboard must expose live topology")
+    if "ConnectionType.Connections" not in dash:
+        errors.append("dashboard must subscribe to live connections for topology")
     path_card = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/ChainPathCard.kt")
     if "highlighted" not in path_card:
         errors.append("chain path card must highlight chained hops")
+    if "LiveTopology" not in path_card:
+        errors.append("chain path card must render LiveTopology, not a static PPT")
+    if "FlowArrow" not in path_card:
+        errors.append("live topology must animate traffic flow")
     if "chartHeight = 36.dp" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/UploadTrafficCard.kt"):
         errors.append("traffic cards should use a compact sparkline")
+    downloader = read("app/src/github/java/io/nekohasekai/sfa/vendor/ApkDownloader.kt")
+    if "expectedSha256" not in downloader or "SHA-256" not in downloader:
+        errors.append("in-app update must verify APK SHA-256 when the release sidecar exists")
+    checker = read("app/src/github/java/io/nekohasekai/sfa/vendor/GitHubUpdateChecker.kt")
+    if "pickSha256" not in checker:
+        errors.append("GitHub update checker must fetch the APK SHA-256 asset")
+    workflow = read(".github/workflows/build-chainbox.yml")
+    if "check_upstream_features.py" not in workflow:
+        errors.append("release workflow must check official type constants")
+    if "ChainBox-android.apk.sha256" not in workflow:
+        errors.append("release workflow must attach APK SHA-256")
+    if "KERNEL_COMMIT" not in workflow:
+        errors.append("release workflow must record the kernel commit SHA")
 
     if errors:
         print("FAIL")

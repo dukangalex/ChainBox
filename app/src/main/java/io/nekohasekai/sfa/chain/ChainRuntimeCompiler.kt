@@ -21,10 +21,10 @@ import org.json.JSONObject
  * Connection failure is fail-closed (no silent DIRECT fallback).
  *
  * After the chain outbound is created, route rules that would have used the
- * front airport as an exit are rewritten to the chain tag. DNS detours are
- * only rewritten when they pointed at the entry hop — leaving landing /
- * dedicated DNS alone avoids an extra chain RTT versus Clash Meta. The entry
- * outbound is only hop 0 and must never become the public exit.
+ * front airport as an exit are rewritten to the chain tag. DNS detours stay
+ * on their original outbound so same-profile chains do not add an extra DNS
+ * hop versus Clash Meta. The entry outbound is only hop 0 and must never
+ * become the public exit.
  */
 object ChainRuntimeCompiler {
     const val NATIVE_CHAIN_TYPE = "chain"
@@ -34,6 +34,8 @@ object ChainRuntimeCompiler {
     const val LEGACY_PREFIX = "ext-"
     const val LEGACY_CHAIN_TAG = "my-chain"
     const val MAX_CONFIG_CHARS = 8 * 1024 * 1024
+    const val MAX_MERGE_DEPTH = 24
+    const val MAX_GROUP_MEMBERS = 512
 
     private val forbiddenTypes = setOf("direct", "block", "dns", NATIVE_CHAIN_TYPE)
     private val forbiddenTags = setOf("direct", "block", "dns")
@@ -68,11 +70,20 @@ object ChainRuntimeCompiler {
             else -> resolveMainTag(outs, routeFinal) ?: error("无法识别当前配置的链式入口，请到「工具 → 链式代理」手动选择入口")
         }
 
-        val sameProfile = req.landingContent.isNullOrBlank() || req.landingProfileId == req.currentProfileId
+        val sameProfile = req.landingProfileId == req.currentProfileId
+        require(sameProfile || !req.landingContent.isNullOrBlank()) {
+            "跨配置落地内容缺失，无法组链"
+        }
         val landingMergedTag = if (sameProfile) {
             require(req.landingTag != main) { "入口与落地不能是同一个 outbound" }
             find(outs, req.landingTag) ?: error("落地 outbound 不存在：${req.landingTag}")
-            prepareGroupHop(outs, req.landingTag, extraExclude = setOf(main), tagPrefix = "$LANDING_PREFIX${req.currentProfileId}-")
+            prepareGroupHop(
+                outs,
+                req.landingTag,
+                extraExclude = setOf(main),
+                tagPrefix = "$LANDING_PREFIX${req.currentProfileId}-",
+                inPlace = true,
+            )
         } else {
             val landingRoot = parseConfig(req.landingContent!!, "落地配置")
             val landingOuts = landingRoot.optJSONArray("outbounds") ?: error("落地配置没有 outbounds")
@@ -88,6 +99,7 @@ object ChainRuntimeCompiler {
             main,
             extraExclude = entryExclude,
             tagPrefix = ENTRY_PREFIX,
+            inPlace = sameProfile,
         )
 
         val chainTag = "$GENERATED_PREFIX${req.currentProfileId}-${req.landingProfileId}"
@@ -171,10 +183,9 @@ object ChainRuntimeCompiler {
 
     /**
      * Front airport outbounds may only appear as hop 0 of the generated chain.
-     * Rewrite route.final, route.rules[].outbound and dns.servers[].detour so
-     * unmatched / Global / explicit-proxy traffic cannot exit via the entry.
-     * DNS is only rewritten when it would have used the front hop; leaving
-     * landing / dedicated DNS detours alone avoids an extra chain RTT.
+     * Rewrite route.final and route.rules[].outbound so unmatched / Global /
+     * explicit-proxy traffic cannot exit via the entry. DNS detours are left
+     * unchanged so queries stay one hop (Clash Meta behaviour).
      * entryTags are never treated as a valid public exit.
      */
     internal fun pinTrafficToChain(
@@ -200,7 +211,6 @@ object ChainRuntimeCompiler {
             route.put("final", chainTag)
         }
         rewriteRuleOutbounds(route.optJSONArray("rules"), protected, chainTag)
-        rewriteDnsDetours(root.optJSONObject("dns"), entryTags, chainTag)
     }
 
     private fun rewriteRuleOutbounds(rules: JSONArray?, protected: Set<String>, chainTag: String) {
@@ -215,19 +225,28 @@ object ChainRuntimeCompiler {
         }
     }
 
-    private fun rewriteDnsDetours(dns: JSONObject?, entryTags: Set<String>, chainTag: String) {
-        if (dns == null) return
-        val servers = dns.optJSONArray("servers") ?: return
-        for (i in 0 until servers.length()) {
-            val server = servers.optJSONObject(i) ?: continue
-            val detour = server.optString("detour").trim()
-            if (detour.isNotEmpty() && (detour in entryTags || detour.startsWith(ENTRY_PREFIX))) {
-                server.put("detour", chainTag)
-            }
+    fun displayHopTag(tag: String): String {
+        val t = tag.trim()
+        if (t.isEmpty() || isGeneratedChainTag(t)) return ""
+        if (t.startsWith(ENTRY_PREFIX)) return t.removePrefix(ENTRY_PREFIX)
+        if (t.startsWith(LANDING_PREFIX)) {
+            val rest = t.removePrefix(LANDING_PREFIX)
+            return rest.substringAfter("-", rest)
         }
+        if (t.startsWith(LEGACY_PREFIX)) return t.removePrefix(LEGACY_PREFIX)
+        return t
     }
 
-    private fun prepareGroupHop(outs: JSONArray, tag: String, extraExclude: Set<String>, tagPrefix: String): String {
+    private fun isGeneratedChainTag(tag: String): Boolean =
+        tag == LEGACY_CHAIN_TAG || tag.startsWith(GENERATED_PREFIX)
+
+    private fun prepareGroupHop(
+        outs: JSONArray,
+        tag: String,
+        extraExclude: Set<String>,
+        tagPrefix: String,
+        inPlace: Boolean = false,
+    ): String {
         val original = find(outs, tag) ?: error("outbound 不存在：$tag")
         val type = original.optString("type")
         require(type !in forbiddenTypes) { "不能使用 $type 作为链式跳板：$tag" }
@@ -236,6 +255,7 @@ object ChainRuntimeCompiler {
             return tag
         }
         val members = original.optJSONArray("outbounds") ?: error("分组没有 outbounds：$tag")
+        require(members.length() <= MAX_GROUP_MEMBERS) { "分组成员过多：$tag" }
         val mapped = JSONArray()
         for (i in 0 until members.length()) {
             val member = members.optString(i).trim()
@@ -245,14 +265,21 @@ object ChainRuntimeCompiler {
             mapped.put(member)
         }
         require(mapped.length() > 0) { "分组过滤 DIRECT/落地后没有可用代理：$tag。请另选入口或落地。" }
-        val needsClone = mapped.length() != members.length()
-        if (!needsClone) return tag
+        val needsRewrite = mapped.length() != members.length()
+        if (!needsRewrite) return tag
+        fun stripDefault(obj: JSONObject) {
+            if (!obj.has("default")) return
+            val d = obj.optString("default")
+            if (d.isBlank() || d in forbiddenTags || d in extraExclude) obj.remove("default")
+        }
+        if (inPlace) {
+            original.put("outbounds", mapped)
+            stripDefault(original)
+            return tag
+        }
         val newTag = tagPrefix + tag
         val clone = JSONObject(original.toString()).put("tag", newTag).put("outbounds", mapped)
-        if (clone.has("default")) {
-            val d = clone.optString("default")
-            if (d.isBlank() || d in forbiddenTags || d in extraExclude) clone.remove("default")
-        }
+        stripDefault(clone)
         removeOutbound(outs, newTag)
         outs.put(clone)
         return newTag
@@ -297,8 +324,9 @@ object ChainRuntimeCompiler {
         val visiting = mutableSetOf<String>()
         val merged = mutableMapOf<String, String>()
 
-        fun merge(tag: String): String {
+        fun merge(tag: String, depth: Int = 0): String {
             require(tag.isNotBlank()) { "落地 outbound 为空" }
+            require(depth <= MAX_MERGE_DEPTH) { "落地配置分组嵌套过深" }
             if (tag in visiting) error("落地配置拓扑存在循环：$tag")
             merged[tag]?.let { return it }
             visiting.add(tag)
@@ -313,19 +341,20 @@ object ChainRuntimeCompiler {
             val clone = JSONObject(original.toString()).put("tag", newTag)
             if (type in groupTypes) {
                 val members = original.optJSONArray("outbounds") ?: error("落地分组没有 outbounds：$tag")
+                require(members.length() <= MAX_GROUP_MEMBERS) { "落地分组成员过多：$tag" }
                 val mapped = JSONArray()
                 for (i in 0 until members.length()) {
                     val member = members.optString(i)
                     if (member in forbiddenTags) continue
                     val child = find(src, member)
                     if (child != null && child.optString("type") in forbiddenTypes) continue
-                    mapped.put(merge(member))
+                    mapped.put(merge(member, depth + 1))
                 }
                 require(mapped.length() > 0) { "落地分组过滤后没有可用代理：$tag" }
                 clone.put("outbounds", mapped)
                 if (clone.has("default")) {
                     val d = clone.optString("default")
-                    if (d.isNotBlank() && d !in forbiddenTags) clone.put("default", merge(d))
+                    if (d.isNotBlank() && d !in forbiddenTags) clone.put("default", merge(d, depth + 1))
                     else clone.remove("default")
                 }
             }

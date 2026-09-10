@@ -278,6 +278,7 @@
     <string name="update_source_fdroid">F-Droid</string>
     <string name="github_token">GitHub Token</string>
     <string name="github_token_description">Get higher GitHub API rate limits</string>
+    <string name="update_hash_mismatch">APK SHA-256 does not match the release checksum. Download aborted.</string>
     <string name="update_track">Update Track</string>
     <string name="update_track_stable">Stable</string>
     <string name="update_track_beta">Beta</string>
@@ -757,6 +758,12 @@
     <string name="chain_path_landing">Landing</string>
     <string name="chain_path_destination">Destination</string>
     <string name="chain_path_expand">Expand path</string>
-    <string name="chain_path_hint_chained">Traffic leaves through the landing hop. Entry is only the first hop and is not the public exit.</string>
-    <string name="chain_path_hint_regular">No chain binding on this profile. Traffic uses the profile\'s default outbound.</string>
+    <string name="chain_path_hint_chained">Public exit is the landing hop. Entry is only the first hop.</string>
+    <string name="chain_path_hint_regular">No chain on this profile. Traffic uses the default outbound.</string>
+    <string name="chain_path_idle">Idle</string>
+    <string name="chain_path_live_chained">Live chain</string>
+    <string name="chain_path_live_regular">Live</string>
+    <string name="chain_path_mode_direct">Direct</string>
+    <string name="chain_path_waiting_dest">waiting</string>
+    <string name="chain_path_live_summary">%1$d connections · %2$s</string>
 </resources>

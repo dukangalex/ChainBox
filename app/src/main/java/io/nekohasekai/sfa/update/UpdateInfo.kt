@@ -13,6 +13,7 @@ data class UpdateInfo(
     val releaseNotes: String?,
     val isPrerelease: Boolean,
     val fileSize: Long = 0,
+    val sha256: String? = null,
 ) {
     fun toJson(): String = Json.encodeToString(this)
 

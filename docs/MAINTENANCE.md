@@ -1,17 +1,18 @@
 # ChainBox 维护说明
 
-ChainBox 是**独立 App**，不是官方 sing-box / SFA 的分支产品名。
-维护目标：**内核可长期跟随官方 sing-box；App 只维护组链体验与发布。**
+ChainBox 是独立客户端，不是官方 sing-box / SFA 的产品名。
+维护目标：内核长期跟随官方 sing-box；App 只维护组链体验、运行时覆盖与发布。
 
 ## 产品边界（必须遵守）
 
-ChainBox = Fork 官方 sing-box + **模块化 Chain 扩展** + 普通用户操作层。
+ChainBox = 官方 sing-box 内核 + **模块化链式出站覆盖层** + 面向普通用户的操作界面。
 
 - 不重新设计 sing-box，不替换内核，不另做代理协议栈。
-- 组链、中国直连、WebRTC、DNS 兼容、备份等全部是 **运行时/导入外挂**：只改内存中的 JSON 覆盖层，不改订阅原文，不改 libbox 架构。
+- 组链、中国直连、WebRTC、DNS 兼容、备份等都是 **运行时/导入覆盖层**：只改内存中的 JSON，不改订阅原文，不改 libbox 架构。
 - 冲突即停：与官方配置模型无法兼容时停止发版，而不是在内核里开特例。
+- 增加的功能只为降低日常操作成本，不为单一订阅商或个人配置定制。
 
-仓库首页若已 **Detach fork / 分离分叉**，不影响发版。GitHub 只是不再显示 fork 网络、也没有 Sync fork 按钮。同步上游继续用 git remote：
+仓库首页若已 Detach fork，不影响发版。同步上游继续用 git remote：
 
 ```bash
 git remote add upstream https://github.com/SagerNet/sing-box-for-android.git   # 若尚未添加
@@ -20,7 +21,7 @@ git checkout dev
 git merge upstream/dev
 ```
 
-后期同步上游与发版由维护者发起，不要依赖仓库首页 **Sync fork**。
+后期同步与发版由维护者发起，不要依赖仓库首页 Sync fork。
 
 ## 仓库分工
 
@@ -54,7 +55,7 @@ git merge upstream/dev
 | 官方上游 | SagerNet/sing-box **v1.14.0** |
 | 本仓库 | dukangalex/sing-box 分支 `chain-dev` |
 | 已对齐基线 | 官方 1.14 系（Go 1.25.5） |
-| 内核 tag | v1.12.0-chain.4 |
+| 内核 tag | v1.12.0-chain.4（历史命名；代码基线为 1.14） |
 
 官方上游：`https://github.com/SagerNet/sing-box`
 
@@ -74,7 +75,9 @@ git push origin chain-dev
 1. **Fail Closed**：链路失败不得静默落到 DIRECT。
 2. **低耦合**：Chain 尽量只挂在 outbound 注册与 dial 链路上。
 3. **冲突即停**：与官方架构无法兼容时停止发版。
-4. **不必为跟版而跟版**：官方 sing-box 1.14 已发布，但 `chain-dev` 已带 1.14 依赖。App 侧先把兼容层（fakeip / rcode / inbound sniff / rule-set URL）与 Chain 外挂做稳，再考虑合入更新的官方提交。不要在未验证 Chain outbound 的情况下整包快进。
+4. **先验证再跟进**：官方 sing-box 1.14 已发布，`chain-dev` 已带 1.14 依赖。App 侧先把兼容层（fakeip / rcode / inbound sniff / rule-set URL）与链式出站做稳，再合入更新的官方提交。不要在未验证 Chain outbound 的情况下整包快进。
+5. **发版核对官方功能**：CI 拉取 `SagerNet/sing-box` 的 `v$KERNEL_UPSTREAM`，用 `scripts/check_upstream_features.py` 确认官方 inbound/outbound 类型常量仍存在于 `chain-dev`。缺失即失败，不得发版。
+6. **记录内核 commit**：Release 说明写入本次构建的 `chain-dev` SHA，便于复现与审计。构建仍从 `chain-dev` 分支拉取，不以可变分支代替记录。
 
 ## App 同步
 
@@ -93,11 +96,14 @@ git merge upstream/dev
 
 1. 改 `version.properties`（`VERSION_NAME` 与 tag 一致，`VERSION_CODE` 必须递增）。
 2. Actions → **Build ChainBox APK** → `publish_release=true` → `version_tag=vX.Y.Z`。
-3. 用户只装 `ChainBox-android.apk`。
+3. 用户只装 `ChainBox-android.apk`，并用 `ChainBox-android.apk.sha256` 校验。
+4. 发版说明必须包含：内核 commit SHA、官方基线 tag、官方类型常量检查结果。
 
 Secrets：`KEYSTORE_BASE64`，以及 `KEYSTORE_PASSWORD`/`KEYSTORE_PASS`、`KEY_ALIAS`/`ALIAS_NAME`、`KEY_PASSWORD`/`ALIAS_PASS`。
 
 ## 能力边界
 
 - 支持：分组→节点、分组→分组、多跳 chain，订阅更新后保持链路。
+- 同配置链式：DNS detour 不改写到 chain（保持一跳）；selector/urltest 就地剔除 DIRECT，避免克隆后双重测速。
+- 已知上游限制：跨 TLS 协议的 `detour`（SagerNet/sing-box#3205，官方不计划修复）。文档说明即可，不要在内核里做特例。
 - 不支持冒充官方；不向官方仓库提交 Chain 补丁。
