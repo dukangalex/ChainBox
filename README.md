@@ -74,7 +74,7 @@ ChainBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 An
 
 取消链式后，出站恢复为当前配置的默认出口。
 
-同配置链式不会改写 DNS `detour`（解析保持一跳，与 Clash Meta 一致），并对 selector/urltest 就地过滤 DIRECT，避免克隆后双重测速。
+同配置链式不会改写 DNS `detour`（解析保持一跳），并对 selector/urltest 就地过滤 DIRECT，避免克隆后双重测速。
 
 已知上游限制：两种均启用 TLS 的协议互相 `detour`（例如 VLESS 经 Trojan）可能失败，见 [SagerNet/sing-box#3205](https://github.com/SagerNet/sing-box/issues/3205)。入口或落地一侧使用 SOCKS / HTTP / SSH 更稳妥。ChainBox 不能在应用层绕过该限制。
 
