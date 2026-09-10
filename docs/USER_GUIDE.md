@@ -1,10 +1,10 @@
-# ChainBox 使用说明
+# AngelaBox 使用说明
 
-ChainBox 是面向社区用户的 Android 代理客户端，基于开源 sing-box 内核。界面与设置只描述功能本身，不绑定任何机场或订阅商。
+AngelaBox 是面向社区用户的 Android 代理客户端，基于开源 sing-box 内核。界面与设置只描述功能本身，不绑定任何机场或订阅商。
 
 ## 安装
 
-1. 从项目 Releases 下载 **ChainBox-android.apk**。同目录的 `ChainBox-android.apk.sha256` 可用于校验；应用内更新在发行附带校验和时会验证 SHA-256。
+1. 从项目 Releases 下载 **AngelaBox-android.apk**。同目录的 `AngelaBox-android.apk.sha256` 可用于校验；应用内更新在发行附带校验和时会验证 SHA-256。同内容也会发布 `ChainBox-android.apk`，便于旧版覆盖更新。
 2. 允许安装未知来源应用后安装。
 3. 同一签名且 versionCode 更大的新版可直接覆盖。
 
@@ -26,7 +26,7 @@ ChainBox 是面向社区用户的 Android 代理客户端，基于开源 sing-bo
 
 Chain 是 sing-box 原生 outbound：按你指定的顺序串联已有出站。不绑定机场或协议。
 
-**每份配置独立绑定。** 在某一份配置上保存的链路不会套到其他配置；切换后各自走自己的落地。链式页有「另有 N 个配置已绑定落地」按钮——点开就能看到是哪几份、各自落到哪里。仪表页的链路图是**实时拓扑**：启动后显示 selector/urltest 当前选中的节点、活动连接的实际路径，以及正在访问的目标；未启动时才显示已保存的绑定。Direct 模式显示设备 → DIRECT → 目标。
+**每份配置独立绑定。** 在某一份配置上保存的链路不会套到其他配置；切换后各自走自己的落地。链式页有「另有 N 个配置已绑定落地」按钮——点开就能看到是哪几份、各自落到哪里。仪表页的链路图是放射状实时路径：左侧来源，中间规则与当前入口/落地，右侧目的站；未启动时显示已保存绑定。Direct 模式显示设备 → DIRECT → 目标。
 
 **订阅更新不会清掉链式。** 入口/落地存在本地设置里，不写进订阅 JSON。远程刷新只换节点列表，启动时再按绑定组链。若入口分组被改名，会自动改用当前配置的主分组，落地仍有效。
 
@@ -39,7 +39,7 @@ Chain 是 sing-box 原生 outbound：按你指定的顺序串联已有出站。�
 
 **Fail Closed**：链路或节点失败会明确报错并停止启动，不会偷偷改走 DIRECT。指向入口的**路由规则**会改写到 Chain，避免入口 IP 泄漏。DNS `detour` **不改写**，解析仍走原来的一跳出站（与 Clash Meta 相同），同配置链式不会因此多一跳。
 
-跨协议且两端都启用 TLS 的组合（例如 VLESS 经 Trojan、VMess 经 VMess）在官方 sing-box 上存在已知限制（[SagerNet/sing-box#3205](https://github.com/SagerNet/sing-box/issues/3205)，官方不计划修复）。更稳妥的是入口或落地一侧使用 SOCKS / HTTP / SSH。ChainBox 的链式出站建立在官方 `detour` 语义上，应用层无法绕过该限制。若链路连不通且测速显示落地正常，优先怀疑这一组合，而不是落地节点本身。
+跨协议且两端都启用 TLS 的组合（例如 VLESS 经 Trojan、VMess 经 VMess）在官方 sing-box 上存在已知限制（[SagerNet/sing-box#3205](https://github.com/SagerNet/sing-box/issues/3205)，官方不计划修复）。更稳妥的是入口或落地一侧使用 SOCKS / HTTP / SSH。AngelaBox 的链式出站建立在官方 `detour` 语义上，应用层无法绕过该限制。若链路连不通且测速显示落地正常，优先怀疑这一组合，而不是落地节点本身。
 
 **取消链式**：只取消当前配置；其他配置的绑定保留。删除配置时会清掉相关绑定。
 
@@ -50,6 +50,7 @@ Chain 是 sing-box 原生 outbound：按你指定的顺序串联已有出站。�
 | 开关 | 作用 |
 |------|------|
 | 防 WebRTC 泄露 | 在中国直连等绕过规则之前拒绝 STUN/TURN（UDP 3478-3481/5349/19302-19310、TCP 3478/5349、主机名含 stun./turn.）。国内 STUN 同样拦截 |
+| 广告拦截 | 注入官方 geosite-category-ads-all 规则集并拒绝匹配流量。不改订阅文件，国内广告同样拦截 |
 | 中国直连 | 打包绕过：中国 IP/域名、中国公共 DNS IP/域名、局域网 IP/域名。只改路由，不注入 DNS 服务器（避免内核因空 direct detour 无法启动） |
 | 严格路由 | 强制 TUN `strict_route` |
 | DNS 防泄漏倾向 | 强制 DNS 独立缓存、自动探测网卡 |
@@ -57,7 +58,7 @@ Chain 是 sing-box 原生 outbound：按你指定的顺序串联已有出站。�
 | 禁用 QUIC | 拦截 UDP 443 |
 | 排除国内 QUIC | 国内域名 UDP 443 走 direct，其余仍拦 |
 
-官方 sing-box 客户端并不对订阅节点自带的 ECH 做额外处理。ChainBox 同样不提供 ECH 开关，节点里若写了 `tls.ech` 会原样交给内核，不会改写也不会强开。
+官方 sing-box 客户端并不对订阅节点自带的 ECH 做额外处理。AngelaBox 同样不提供 ECH 开关，节点里若写了 `tls.ech` 会原样交给内核，不会改写也不会强开。
 
 内核日志等级默认 **info**。
 
@@ -82,10 +83,13 @@ WebDAV 走 HTTPS。若 VPN 已开启，备份会尽量改走系统 Wi-Fi/蜂窝�
 ## 常见问题
 
 **必须卸载才能装新版**  
-debug 与正式签名混过。卸载后装正式 `ChainBox-android.apk`，以后同一 keystore 可覆盖。
+debug 与正式签名混过。卸载后装正式 `AngelaBox-android.apk`，以后同一 keystore 可覆盖。
 
 **链式连上了但比 Clash Meta 慢很多**  
 旧版会把 DNS detour 改写到整条 Chain（DNS 多走一跳），并克隆 urltest 分组导致双重测速。当前版本 DNS 保持一跳，同配置分组就地过滤。请用当前发行版重载。
+
+**仪表链路图不像流量图**  
+请更新到当前发行版。链路图按来源、规则、当前入口/落地和目的站绘制放射状路径，有流量时缎带会流动。
 
 **链式保存后无法启动**  
 请更新到当前发行版，并在链式页手动选择代理分组（不要用「漏网之鱼」）。

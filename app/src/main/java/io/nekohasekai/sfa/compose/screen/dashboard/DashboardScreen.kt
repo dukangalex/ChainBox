@@ -131,8 +131,8 @@ fun DashboardScreen(
             else -> 0.dp
         }
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(scaffoldPadding).padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize().padding(scaffoldPadding).padding(horizontal = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(bottom = bottomPadding),
         ) {
             item { OverrideBanner() }

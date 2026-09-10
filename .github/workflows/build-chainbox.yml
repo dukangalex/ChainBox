@@ -220,7 +220,9 @@ jobs:
           PREFERRED=$(ls dist/*arm64-v8a*.apk 2>/dev/null | grep -v debug | head -n1 || true)
           if [ -z "$PREFERRED" ]; then PREFERRED=$(ls dist/*arm64-v8a*.apk 2>/dev/null | head -n1 || true); fi
           if [ -z "$PREFERRED" ]; then PREFERRED=$(ls dist/*.apk | head -n1); fi
-          cp -f "$PREFERRED" dist/ChainBox-android.apk
+          cp -f "$PREFERRED" dist/AngelaBox-android.apk
+          cp -f dist/AngelaBox-android.apk dist/ChainBox-android.apk
+          sha256sum dist/AngelaBox-android.apk | tee dist/AngelaBox-android.apk.sha256
           sha256sum dist/ChainBox-android.apk | tee dist/ChainBox-android.apk.sha256
           ls -lah dist
 
@@ -230,6 +232,8 @@ jobs:
         with:
           name: ChainBox-apk
           path: |
+            dist/AngelaBox-android.apk
+            dist/AngelaBox-android.apk.sha256
             dist/ChainBox-android.apk
             dist/ChainBox-android.apk.sha256
           if-no-files-found: error
@@ -239,17 +243,18 @@ jobs:
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           tag_name: ${{ inputs.version_tag }}
-          name: ChainBox ${{ inputs.version_tag }}
+          name: AngelaBox ${{ inputs.version_tag }}
           body: |
-            ChainBox ${{ inputs.version_tag }}
+            AngelaBox ${{ inputs.version_tag }}
 
-            Install `ChainBox-android.apk` (arm64). Verify the SHA-256 sidecar:
+            Install `AngelaBox-android.apk` (arm64). `ChainBox-android.apk` is the same build for overlay updates from earlier names. Verify:
 
             ```
-            sha256sum -c ChainBox-android.apk.sha256
+            sha256sum -c AngelaBox-android.apk.sha256
             ```
 
-            - Package: `io.chainbox.app`
+            - Product: AngelaBox
+            - Package: `io.chainbox.app` (unchanged so overlay install still works)
             - Kernel branch: `chain-dev`
             - Kernel tag: `${{ env.KERNEL_DESCRIBE }}`
             - Kernel commit: `${{ env.KERNEL_COMMIT }}`
@@ -258,6 +263,8 @@ jobs:
 
             Added features exist only to make ordinary operation easier. The kernel remains official sing-box plus the chain outbound overlay.
           files: |
+            dist/AngelaBox-android.apk
+            dist/AngelaBox-android.apk.sha256
             dist/ChainBox-android.apk
             dist/ChainBox-android.apk.sha256
           draft: false

@@ -74,6 +74,7 @@ fun ProfileOverrideScreen(
     var isScanning by remember { mutableStateOf(false) }
     var webrtcProtect by remember { mutableStateOf(Settings.webrtcProtect) }
     var chinaDirect by remember { mutableStateOf(Settings.chinaDirect) }
+    var adsBlock by remember { mutableStateOf(Settings.adsBlock) }
     var disableQuic by remember { mutableStateOf(Settings.disableQuic) }
     var excludeCnQuic by remember { mutableStateOf(Settings.excludeCnQuic) }
     var strictRoute by remember { mutableStateOf(Settings.strictRoute) }
@@ -262,6 +263,24 @@ fun ProfileOverrideScreen(
                         webrtcProtect = it
                         scope.launch(Dispatchers.IO) {
                             Settings.webrtcProtect = it
+                            withContext(Dispatchers.Main) { reload() }
+                        }
+                    },
+                )
+                OverrideSwitch(
+                    title = "广告拦截",
+                    subtitle = "拒绝 geosite 广告规则集匹配的域名",
+                    checked = adsBlock,
+                    onHelp = {
+                        help = SwitchHelp(
+                            "广告拦截",
+                            "开启后在运行时注入官方 sing-geosite 的 geosite-category-ads-all 规则集，并对匹配流量执行 reject。不改订阅文件。首次开启会下载规则集；国内站点广告同样拦截。",
+                        )
+                    },
+                    onCheckedChange = {
+                        adsBlock = it
+                        scope.launch(Dispatchers.IO) {
+                            Settings.adsBlock = it
                             withContext(Dispatchers.Main) { reload() }
                         }
                     },

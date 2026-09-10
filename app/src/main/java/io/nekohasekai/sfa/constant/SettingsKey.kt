@@ -24,6 +24,7 @@ object SettingsKey {
     const val DISABLE_IPV6 = "disable_ipv6"
     const val WEBRTC_PROTECT = "webrtc_protect"
     const val CHINA_DIRECT = "china_direct"
+    const val ADS_BLOCK = "ads_block"
     const val CHAIN_ENABLED = "chain_enabled"
     const val CHAIN_ENTRY_TAG = "chain_entry_tag"
     const val CHAIN_LANDING_PROFILE_ID = "chain_landing_profile_id"

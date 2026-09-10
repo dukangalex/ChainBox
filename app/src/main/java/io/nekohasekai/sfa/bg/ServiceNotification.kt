@@ -51,7 +51,7 @@ class ServiceNotification(private val status: MutableLiveData<Status>, private v
 
     private val notificationBuilder by lazy {
         NotificationCompat.Builder(service, notificationChannel).setShowWhen(false).setOngoing(true)
-            .setContentTitle("ChainBox").setOnlyAlertOnce(true)
+            .setContentTitle("AngelaBox").setOnlyAlertOnce(true)
             .setSmallIcon(R.drawable.ic_qs_tile)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setContentIntent(
@@ -94,7 +94,7 @@ class ServiceNotification(private val status: MutableLiveData<Status>, private v
         service.startForeground(
             notificationId,
             notificationBuilder
-                .setContentTitle(lastProfileName.takeIf { it.isNotBlank() } ?: "ChainBox")
+                .setContentTitle(lastProfileName.takeIf { it.isNotBlank() } ?: "AngelaBox")
                 .setContentText(service.getString(contentTextId)).build(),
         )
     }

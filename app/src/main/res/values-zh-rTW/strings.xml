@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <!-- App -->
-    <string name="app_name" translatable="false">sing-box</string>
+    <string name="app_name" translatable="false">AngelaBox</string>
     <string name="app_version_title">應用程式版本</string>
     <string name="language">語言</string>
     <string name="system_default">跟隨系統</string>
@@ -696,4 +696,8 @@
     <string name="chain_path_mode_direct">直連</string>
     <string name="chain_path_waiting_dest">等待連線</string>
     <string name="chain_path_live_summary">%1$d 條連線 · %2$s</string>
+    <string name="chain_path_unknown">未知</string>
+    <string name="chain_path_final">最終</string>
+    <string name="ads_block">廣告攔截</string>
+    <string name="ads_block_summary">拒絕廣告規則集匹配的網域</string>
 </resources>

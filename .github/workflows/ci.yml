@@ -29,6 +29,7 @@ jobs:
           python3 scripts/test_china_direct_overlay.py
           python3 scripts/test_dns_migrate.py
           python3 scripts/test_inbound_compat.py
+          python3 scripts/test_adblock_overlay.py
 
       - name: Checkout Chain kernel
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

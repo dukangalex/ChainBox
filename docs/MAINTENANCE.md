@@ -1,14 +1,14 @@
-# ChainBox 维护说明
+# AngelaBox 维护说明
 
-ChainBox 是独立客户端，不是官方 sing-box / SFA 的产品名。
+AngelaBox 是独立客户端，不是官方 sing-box / SFA 的产品名。曾用名 ChainBox。
 维护目标：内核长期跟随官方 sing-box；App 只维护组链体验、运行时覆盖与发布。
 
 ## 产品边界（必须遵守）
 
-ChainBox = 官方 sing-box 内核 + **模块化链式出站覆盖层** + 面向普通用户的操作界面。
+AngelaBox = 官方 sing-box 内核 + **模块化链式出站覆盖层** + 面向普通用户的操作界面。
 
 - 不重新设计 sing-box，不替换内核，不另做代理协议栈。
-- 组链、中国直连、WebRTC、DNS 兼容、备份等都是 **运行时/导入覆盖层**：只改内存中的 JSON，不改订阅原文，不改 libbox 架构。
+- 组链、中国直连、广告拦截、WebRTC、DNS 兼容、备份等都是 **运行时/导入覆盖层**：只改内存中的 JSON，不改订阅原文，不改 libbox 架构。
 - 冲突即停：与官方配置模型无法兼容时停止发版，而不是在内核里开特例。
 - 增加的功能只为降低日常操作成本，不为单一订阅商或个人配置定制。
 
@@ -28,18 +28,19 @@ git merge upstream/dev
 | 仓库 | 分支 | 职责 |
 |------|------|------|
 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) | `chain-dev` | Chain 内核（低耦合 outbound） |
-| [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox) | `dev` | ChainBox Android 客户端 |
+| [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox) | `dev` | AngelaBox Android 客户端 |
 
 | 项目 | 值 |
 |------|-----|
-| 应用名 | ChainBox |
+| 应用名 | AngelaBox |
 | 包名 | `io.chainbox.app` |
 | 更新源 | 仅本仓库 Releases |
 | 内部代码包 | `io.nekohasekai.sfa`（上游遗留，不对外） |
 
 ## 对外身份（已落地）
 
-- 仓库名、README、About、Release、APK 文件名都是 ChainBox。
+- 对外产品名、README、About、Release、APK 文件名都是 AngelaBox。仓库路径仍为 `dukangalex/ChainBox`，包名仍为 `io.chainbox.app`。
+- 同时发布 `ChainBox-android.apk`（与 AngelaBox 包内容相同），供旧版应用内更新。
 - App 更新只查 `https://api.github.com/repos/dukangalex/ChainBox/releases`。
 - 不走 F-Droid / 官方 SagerNet 更新源。
 - 不得用官方名称上架应用商店。
@@ -90,13 +91,13 @@ git checkout dev
 git merge upstream/dev
 ```
 
-冲突时以 ChainBox 为准：包名、签名、组链、配置覆盖、备份、更新检查、`build-chainbox.yml`、`version.properties`。
+冲突时以 AngelaBox 为准：包名、签名、组链、配置覆盖、备份、更新检查、`build-chainbox.yml`、`version.properties`。
 
 ## 发版
 
 1. 改 `version.properties`（`VERSION_NAME` 与 tag 一致，`VERSION_CODE` 必须递增）。
 2. Actions → **Build ChainBox APK** → `publish_release=true` → `version_tag=vX.Y.Z`。
-3. 用户只装 `ChainBox-android.apk`，并用 `ChainBox-android.apk.sha256` 校验。
+3. 用户安装 `AngelaBox-android.apk`，并用 `AngelaBox-android.apk.sha256` 校验。`ChainBox-android.apk` 为同内容兼容包。
 4. 发版说明必须包含：内核 commit SHA、官方基线 tag、官方类型常量检查结果。
 
 Secrets：`KEYSTORE_BASE64`，以及 `KEYSTORE_PASSWORD`/`KEYSTORE_PASS`、`KEY_ALIAS`/`ALIAS_NAME`、`KEY_PASSWORD`/`ALIAS_PASS`。

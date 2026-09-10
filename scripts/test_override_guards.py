@@ -105,8 +105,10 @@ def main() -> int:
         errors.append("WebRTC protect should default on so Chinese STUN cannot leak by default")
     if "configNormalize" in settings:
         errors.append("Settings.configNormalize must stay removed")
-    if "chinaDirect" not in settings:
-        errors.append("Settings.chinaDirect missing")
+    if "adsBlock" not in settings:
+        errors.append("Settings.adsBlock missing")
+    if "ADS_BLOCK" not in read("app/src/main/java/io/nekohasekai/sfa/constant/SettingsKey.kt"):
+        errors.append("SettingsKey.ADS_BLOCK missing")
     if "echDns" in settings or "ECH_DNS" in settings:
         errors.append("ECH overlay was removed; Settings.echDns must not return")
     if "fun closeDatabase" not in settings:
@@ -200,6 +202,10 @@ def main() -> int:
         errors.append("unknown-app-sources should toast instead of throwing")
 
     ui_override = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/ProfileOverrideScreen.kt")
+    if "ConfigAdBlock.apply" not in override:
+        errors.append("ConfigQuicOverride must apply ad block")
+    if "广告拦截" not in ui_override:
+        errors.append("Profile override UI must expose 广告拦截")
     if "中国直连" not in ui_override:
         errors.append("Profile override UI must expose 中国直连")
     if "ECH" in ui_override or "echDns" in ui_override:
@@ -364,15 +370,19 @@ def main() -> int:
         errors.append("dashboard must expose live topology")
     if "ConnectionType.Connections" not in dash:
         errors.append("dashboard must subscribe to live connections for topology")
+    if "TrafficFlowBuilder" not in read("app/src/main/java/io/nekohasekai/sfa/chain/TrafficFlow.kt"):
+        errors.append("live topology must build a radiating traffic flow")
     path_card = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/ChainPathCard.kt")
-    if "highlighted" not in path_card:
-        errors.append("chain path card must highlight chained hops")
     if "LiveTopology" not in path_card:
         errors.append("chain path card must render LiveTopology, not a static PPT")
-    if "FlowArrow" not in path_card:
+    if "TrafficSankey" not in path_card and "SankeyLayout" not in path_card:
+        errors.append("chain path card must render a live sankey topology")
+    if "phase" not in path_card:
         errors.append("live topology must animate traffic flow")
-    if "chartHeight = 36.dp" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/UploadTrafficCard.kt"):
+    if "chartHeight = 18.dp" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/UploadTrafficCard.kt"):
         errors.append("traffic cards should use a compact sparkline")
+    if "AngelaBox" not in read("app/src/main/res/values/strings.xml"):
+        errors.append("app_name must be AngelaBox")
     downloader = read("app/src/github/java/io/nekohasekai/sfa/vendor/ApkDownloader.kt")
     if "expectedSha256" not in downloader or "SHA-256" not in downloader:
         errors.append("in-app update must verify APK SHA-256 when the release sidecar exists")
@@ -382,6 +392,8 @@ def main() -> int:
     workflow = read(".github/workflows/build-chainbox.yml")
     if "check_upstream_features.py" not in workflow:
         errors.append("release workflow must check official type constants")
+    if "AngelaBox-android.apk" not in workflow:
+        errors.append("release must publish AngelaBox-android.apk")
     if "ChainBox-android.apk.sha256" not in workflow:
         errors.append("release workflow must attach APK SHA-256")
     if "KERNEL_COMMIT" not in workflow:

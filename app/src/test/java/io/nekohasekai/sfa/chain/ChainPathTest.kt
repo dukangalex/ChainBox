@@ -147,6 +147,66 @@ class ChainPathTest {
         assertEquals(4, topology.activeConnections)
         assertTrue(topology.flowing)
         assertEquals(listOf("api.example.com:443", "1.1.1.1:443"), topology.destinations)
+        assertTrue(topology.flowNodes.isNotEmpty())
+        assertTrue(topology.flowLinks.isNotEmpty())
+    }
+
+    @Test
+    fun trafficFlowUsesRulesAndSources() {
+        val path = ChainPathBuilder.build(
+            profileName = "UOT",
+            defaultOutboundTag = "节点选择",
+            binding = ChainBinding(1L, "节点选择", 2L, "zgo"),
+            landingProfileName = "VPS",
+        )
+        val (nodes, links) = TrafficFlowBuilder.build(
+            samples = listOf(
+                FlowSample(
+                    source = "172.19.0.1:43210",
+                    rule = "geosite-google",
+                    outbound = "hk-1",
+                    chain = listOf("hk-1", "us-9"),
+                    dest = "hbjsjpcl.cloudflareaccess.com:443",
+                ),
+                FlowSample(
+                    source = "172.19.0.1:43211",
+                    rule = "geosite-telegram",
+                    outbound = "hk-1",
+                    chain = listOf("hk-1", "us-9"),
+                    dest = "api.telegram.org:443",
+                ),
+            ),
+            path = path,
+            chained = true,
+        )
+        val labels = nodes.map { it.label }
+        assertTrue(labels.any { it.contains("172.19.0.1") })
+        assertTrue(labels.any { it.startsWith("RuleSet:") })
+        assertTrue(labels.contains("hk-1"))
+        assertTrue(labels.contains("us-9"))
+        assertTrue(links.isNotEmpty())
+        val (placed, ribbons) = SankeyLayout.layout(nodes, links, 400f, 200f, 64f, 4f)
+        assertEquals(nodes.size, placed.size)
+        assertTrue(ribbons.isNotEmpty())
+    }
+
+    @Test
+    fun trafficFlowOverflowKeepsLinks() {
+        val path = ChainPath.regular(profileName = "UOT", exitTag = "节点选择")
+        val samples = (0 until 12).map { i ->
+            FlowSample(
+                source = "172.19.0.1:40$i",
+                rule = "geosite-site-$i",
+                outbound = "hk-1",
+                chain = listOf("hk-1"),
+                dest = "host$i.example.com:443",
+            )
+        }
+        val (nodes, links) = TrafficFlowBuilder.build(samples, path, chained = false)
+        assertTrue(nodes.any { it.label.startsWith("+") })
+        assertTrue(links.isNotEmpty())
+        val ids = nodes.map { it.id }.toSet()
+        assertTrue(links.all { it.fromId in ids && it.toId in ids })
     }
 
     @Test

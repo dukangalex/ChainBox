@@ -25,59 +25,43 @@ import io.nekohasekai.sfa.compose.LineChart
 
 @Composable
 fun DownloadTrafficCard(downlink: String, downlinkTotal: String, downlinkHistory: List<Float>, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-    ) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(
-            modifier =
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Outlined.Download,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(12.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = stringResource(R.string.download),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
                 )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Text(
-                    text = downlink,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
+                Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = downlinkTotal,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
+            Text(
+                text = downlink,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
             LineChart(
                 data = downlinkHistory,
                 lineColor = MaterialTheme.colorScheme.primary,
                 animate = false,
-                chartHeight = 36.dp,
+                chartHeight = 18.dp,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

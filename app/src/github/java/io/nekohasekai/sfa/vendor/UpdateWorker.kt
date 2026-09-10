@@ -56,7 +56,7 @@ class UpdateWorker(private val appContext: Context, params: WorkerParameters) : 
             return Result.success()
         }
 
-        Log.d(TAG, "Checking for updates from ChainBox releases...")
+        Log.d(TAG, "Checking for updates from AngelaBox releases...")
 
         return try {
             val track = UpdateTrack.fromString(Settings.updateTrack)

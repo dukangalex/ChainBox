@@ -51,7 +51,7 @@ fun ClashModeCard(modes: List<String>, selectedMode: String, onModeSelected: (St
             modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -59,18 +59,18 @@ fun ClashModeCard(modes: List<String>, selectedMode: String, onModeSelected: (St
                 Icon(
                     imageVector = Icons.Outlined.Tune,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(12.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = stringResource(R.string.mode),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             BoxWithConstraints(
                 modifier = Modifier.fillMaxWidth(),

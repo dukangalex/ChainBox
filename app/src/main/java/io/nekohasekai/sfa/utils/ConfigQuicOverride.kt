@@ -60,6 +60,9 @@ object ConfigQuicOverride {
             applyOne(warnings, "防 WebRTC 泄露") {
                 if (Settings.webrtcProtect) applyWebrtc(root)
             }
+            applyOne(warnings, "广告拦截") {
+                if (Settings.adsBlock) ConfigAdBlock.apply(root)
+            }
             ConfigCompat.stripBrokenDnsDetours(root)
             out = root.toString()
         } catch (e: Exception) {

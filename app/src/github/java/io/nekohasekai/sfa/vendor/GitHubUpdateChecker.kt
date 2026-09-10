@@ -18,7 +18,7 @@ class GitHubUpdateChecker : Closeable {
             "https://api.github.com/repos/dukangalex/ChainBox/releases"
         const val RELEASES_PAGE_URL =
             "https://github.com/dukangalex/ChainBox/releases"
-        private const val PREFERRED_APK = "ChainBox-android.apk"
+        private const val PREFERRED_APK = "AngelaBox-android.apk"
     }
 
     private val client = Libbox.newHTTPClient().apply {
@@ -75,7 +75,12 @@ class GitHubUpdateChecker : Closeable {
             return apks.find { it.name.contains("legacy", ignoreCase = true) } ?: apks.first()
         }
         return apks.find { it.name.equals(PREFERRED_APK, ignoreCase = true) }
-            ?: apks.find { it.name.contains("ChainBox", ignoreCase = true) && !it.name.contains("legacy", ignoreCase = true) }
+            ?: apks.find { it.name.equals("ChainBox-android.apk", ignoreCase = true) }
+            ?: apks.find {
+                (it.name.contains("AngelaBox", ignoreCase = true) ||
+                    it.name.contains("ChainBox", ignoreCase = true)) &&
+                    !it.name.contains("legacy", ignoreCase = true)
+            }
             ?: apks.find { !it.name.contains("legacy", ignoreCase = true) }
             ?: apks.first()
     }
@@ -118,6 +123,7 @@ class GitHubUpdateChecker : Closeable {
         val apkName = apk?.name ?: PREFERRED_APK
         val shaAsset = assets.find { it.name.equals("$apkName.sha256", ignoreCase = true) }
             ?: assets.find { it.name.equals("$PREFERRED_APK.sha256", ignoreCase = true) }
+            ?: assets.find { it.name.equals("ChainBox-android.apk.sha256", ignoreCase = true) }
             ?: return null
         val body = getText(shaAsset.browserDownloadUrl, githubToken)
         val hex = body.trim().substringBefore(' ').substringBefore('\t').lowercase()

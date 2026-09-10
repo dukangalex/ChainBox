@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">ChainBox</string>
+    <string name="app_name" translatable="false">AngelaBox</string>
     <string name="app_version_title">应用版本</string>
     <string name="language">语言</string>
     <string name="system_default">跟随系统</string>
@@ -660,4 +660,8 @@
     <string name="chain_path_mode_direct">直连</string>
     <string name="chain_path_waiting_dest">等待连接</string>
     <string name="chain_path_live_summary">%1$d 条连接 · %2$s</string>
+    <string name="chain_path_unknown">未知</string>
+    <string name="chain_path_final">最终</string>
+    <string name="ads_block">广告拦截</string>
+    <string name="ads_block_summary">拒绝广告规则集匹配的域名</string>
 </resources>

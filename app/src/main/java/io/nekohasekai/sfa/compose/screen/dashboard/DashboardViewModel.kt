@@ -11,6 +11,7 @@ import io.nekohasekai.sfa.chain.ChainBindings
 import io.nekohasekai.sfa.chain.ChainPath
 import io.nekohasekai.sfa.chain.ChainPathBuilder
 import io.nekohasekai.sfa.chain.ChainRuntimeCompiler
+import io.nekohasekai.sfa.chain.FlowSample
 import io.nekohasekai.sfa.chain.GroupHint
 import io.nekohasekai.sfa.chain.LiveTopology
 import io.nekohasekai.sfa.chain.LiveTopologyBuilder
@@ -168,6 +169,7 @@ class DashboardViewModel :
     @Volatile private var liveDestinations: List<String> = emptyList()
     @Volatile private var liveActive: Int = 0
     @Volatile private var liveFlowing: Boolean = false
+    @Volatile private var liveSamples: List<FlowSample> = emptyList()
     private var connectionsStore: Connections? = null
     private val connectionsMutex = Mutex()
     private val topologyLock = Any()
@@ -183,6 +185,7 @@ class DashboardViewModel :
         val destinations: List<String>,
         val active: Int,
         val flowing: Boolean,
+        val samples: List<FlowSample> = emptyList(),
     )
 
     override fun createInitialState(): DashboardUiState {
@@ -767,6 +770,7 @@ class DashboardViewModel :
             liveDestinations = snap.destinations
             liveActive = snap.active
             liveFlowing = snap.flowing
+            liveSamples = snap.samples
             requestTopologyPublish()
         }
     }
@@ -776,6 +780,7 @@ class DashboardViewModel :
         var bestChain = emptyList<String>()
         var active = 0
         var flowing = false
+        val samples = ArrayList<FlowSample>(40)
         val iterator = store.iterator()
         while (iterator.hasNext()) {
             val connection = iterator.next()
@@ -792,12 +797,23 @@ class DashboardViewModel :
             }
             val hops = runCatching { connection.chain().toList() }.getOrDefault(emptyList())
             if (hops.size > bestChain.size) bestChain = hops
+            if (samples.size < 40) {
+                samples.add(
+                    FlowSample(
+                        source = connection.source.ifBlank { connection.inbound },
+                        rule = connection.rule,
+                        outbound = connection.outbound,
+                        chain = hops,
+                        dest = dest,
+                    ),
+                )
+            }
         }
         val destinations = destCounts.entries
             .sortedByDescending { it.value }
             .map { it.key }
             .take(3)
-        return LiveSnap(bestChain, destinations, active, flowing)
+        return LiveSnap(bestChain, destinations, active, flowing, samples)
     }
 
     private fun resetLiveSnapshot() {
@@ -805,6 +821,7 @@ class DashboardViewModel :
         liveDestinations = emptyList()
         liveActive = 0
         liveFlowing = false
+        liveSamples = emptyList()
         groupHints = emptyList()
         viewModelScope.launch(Dispatchers.Default) {
             connectionsMutex.withLock { connectionsStore = null }
@@ -822,6 +839,7 @@ class DashboardViewModel :
             destinations = liveDestinations,
             activeConnections = if (liveActive > 0) liveActive else currentState.connectionsCount,
             flowing = liveFlowing,
+            samples = liveSamples,
         )
     }
 

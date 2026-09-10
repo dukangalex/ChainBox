@@ -405,7 +405,7 @@ fun BackupRestoreScreen(navController: NavController) {
                     headlineContent = { Text("备份") },
                     supportingContent = { Text("备份数据到本地") },
                     modifier = Modifier.clickable(enabled = !busy) {
-                        createDoc.launch("ChainBox-backup.zip")
+                        createDoc.launch("AngelaBox-backup.zip")
                     },
                 )
                 ListItem(

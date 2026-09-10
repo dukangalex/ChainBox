@@ -7,7 +7,7 @@ import org.json.JSONObject
  * Clash/mihomo → sing-box field coercion applied on import, remote refresh
  * and runtime overlay. This is a compatibility shim, not a second kernel:
  * user nodes stay intact; only fields the current libbox cannot decode
- * are rewritten. ChainBox overlays (chain / China direct / WebRTC) run
+ * are rewritten. Runtime overlays (chain / China direct / ads / WebRTC) run
  * after this step.
  *
  * sing-box `ShadowsocksOutboundOptions.plugin_opts` is a string. Clash writes

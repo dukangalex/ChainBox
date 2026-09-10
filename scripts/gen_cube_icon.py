@@ -123,7 +123,7 @@ def write_qs_tile() -> None:
         '    android:height="24dp"',
         '    android:viewportWidth="24"',
         '    android:viewportHeight="24">',
-        "    <!-- ChainBox cube, tinted by the system -->",
+        "    <!-- AngelaBox cube, tinted by the system -->",
     ]
     for f in ("front", "right", "top"):
         parts.append(
@@ -211,6 +211,10 @@ def main() -> None:
     other = ROOT / "app/src/other/play/listings/en-US/graphics/icon/ic_launcher-playstore.png"
     other.parent.mkdir(parents=True, exist_ok=True)
     play.save(other, "PNG")
+    hd = Path("/workspace/artifacts")
+    hd.mkdir(parents=True, exist_ok=True)
+    master.save(hd / "AngelaBox-icon-1024.png", "PNG")
+    master.resize((512, 512), Image.Resampling.LANCZOS).save(hd / "AngelaBox-icon-512.png", "PNG")
     bbox_pts = [
         iso(0, 0, 0), iso(0, 0, 3), iso(3, 0, 0), iso(3, 0, 3),
         iso(0, 3, 0), iso(3, 3, 3),

@@ -42,7 +42,7 @@ object SystemPackageInstaller {
             context.startActivity(settings)
             Toast.makeText(
                 context,
-                "请先允许 ChainBox 安装未知应用，返回后再点一次更新",
+                "请先允许 AngelaBox 安装未知应用，返回后再点一次更新",
                 Toast.LENGTH_LONG,
             ).show()
             return

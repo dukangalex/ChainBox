@@ -57,6 +57,8 @@ data class LiveTopology(
     val destinations: List<String> = emptyList(),
     val activeConnections: Int = 0,
     val flowing: Boolean = false,
+    val flowNodes: List<FlowNode> = emptyList(),
+    val flowLinks: List<FlowLink> = emptyList(),
 ) {
     companion object {
         fun idle(): LiveTopology = LiveTopologyBuilder.fromPath(ChainPath.regular(), running = false)
@@ -134,36 +136,38 @@ object LiveTopologyBuilder {
         destinations: List<String> = emptyList(),
         activeConnections: Int = 0,
         flowing: Boolean = false,
+        samples: List<FlowSample> = emptyList(),
     ): LiveTopology {
         val modeNorm = mode.trim()
-        if (running && modeNorm.equals("direct", ignoreCase = true)) {
-            return LiveTopology(
-                running = true,
-                chained = false,
-                mode = modeNorm,
-                hops = listOf(
-                    LiveHop(ChainPathHop.Role.Device, title = ""),
-                    LiveHop(ChainPathHop.Role.Exit, title = "DIRECT"),
-                    LiveHop(ChainPathHop.Role.Destination, title = destinations.firstOrNull().orEmpty()),
-                ),
-                destinations = destinations,
-                activeConnections = activeConnections,
-                flowing = flowing,
+        val direct = running && modeNorm.equals("direct", ignoreCase = true)
+        val hops = when {
+            direct -> listOf(
+                LiveHop(ChainPathHop.Role.Device, title = ""),
+                LiveHop(ChainPathHop.Role.Exit, title = "DIRECT"),
+                LiveHop(ChainPathHop.Role.Destination, title = destinations.firstOrNull().orEmpty()),
             )
+            running -> liveHops(path, groups, liveChain, destinations)
+            else -> path.hops.map { plannedHop(it) }
         }
-        val hops = if (running) {
-            liveHops(path, groups, liveChain, destinations)
-        } else {
-            path.hops.map { plannedHop(it) }
-        }
+        val chained = if (direct) false else path.chained
+        val (flowNodes, flowLinks) = TrafficFlowBuilder.build(
+            samples = samples,
+            path = path,
+            hops = hops,
+            chained = chained,
+            destinations = destinations,
+            running = running,
+        )
         return LiveTopology(
             running = running,
-            chained = path.chained,
+            chained = chained,
             mode = modeNorm,
             hops = hops,
             destinations = destinations,
             activeConnections = activeConnections,
             flowing = flowing && running,
+            flowNodes = flowNodes,
+            flowLinks = flowLinks,
         )
     }
 

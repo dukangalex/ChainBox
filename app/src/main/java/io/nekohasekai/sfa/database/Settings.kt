@@ -83,6 +83,7 @@ object Settings {
     var disableIpv6 by dataStore.boolean(SettingsKey.DISABLE_IPV6) { false }
     var webrtcProtect by dataStore.boolean(SettingsKey.WEBRTC_PROTECT) { true }
     var chinaDirect by dataStore.boolean(SettingsKey.CHINA_DIRECT) { false }
+    var adsBlock by dataStore.boolean(SettingsKey.ADS_BLOCK) { false }
     var chainEnabled by dataStore.boolean(SettingsKey.CHAIN_ENABLED) { false }
     var chainEntryTag by dataStore.string(SettingsKey.CHAIN_ENTRY_TAG) { "" }
     var chainLandingProfileId by dataStore.long(SettingsKey.CHAIN_LANDING_PROFILE_ID) { -1L }

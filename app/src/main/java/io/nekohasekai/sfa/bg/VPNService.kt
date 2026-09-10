@@ -60,7 +60,7 @@ class VPNService :
 
         val builder =
             Builder()
-                .setSession("ChainBox")
+                .setSession("AngelaBox")
                 .setMtu(options.mtu)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

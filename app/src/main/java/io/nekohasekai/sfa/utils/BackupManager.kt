@@ -453,7 +453,7 @@ object BackupManager {
         conn.connectTimeout = 15_000
         conn.readTimeout = 30_000
         conn.instanceFollowRedirects = false
-        conn.setRequestProperty("User-Agent", "ChainBox-WebDAV")
+        conn.setRequestProperty("User-Agent", "AngelaBox-WebDAV")
         conn.setRequestProperty("Connection", "close")
         if (username.isNotEmpty()) {
             val token = Base64.encodeToString("$username:$password".toByteArray(), Base64.NO_WRAP)
