@@ -44,11 +44,13 @@ data class PlacedRibbon(
 )
 
 /**
- * Builds a left-to-right radiating path:
- * source → matching rule → hop(s) → destination.
+ * Left-to-right live path with at most four columns:
+ * source → matching rule → hop(s) / exit.
+ * Remote hosts are not a fifth column — they crowd the labels.
  */
 object TrafficFlowBuilder {
     private const val MAX_PER_COLUMN = 8
+    internal const val MAX_COLUMN = 3
 
     fun build(
         samples: List<FlowSample>,
@@ -61,7 +63,7 @@ object TrafficFlowBuilder {
         if (samples.isNotEmpty()) {
             return fromSamples(samples, chained, path)
         }
-        return fromHops(path, hops, chained, destinations, running)
+        return fromHops(path, hops, chained)
     }
 
     private fun fromSamples(
@@ -86,23 +88,19 @@ object TrafficFlowBuilder {
             val hopTags = hopLabelsFor(sample, chained, path)
             val hopIds = hopTags.mapIndexed { index, tag ->
                 val col = if (chained && hopTags.size >= 2) 2 + index else 2
-                val id = idOf(col, tag)
+                val id = idOf(col.coerceAtMost(MAX_COLUMN), tag)
                 if (isDirectTag(tag)) directIds.add(id)
                 id
             }
-            val destCol = if (chained && hopTags.size >= 2) 4 else 3
-            val dest = idOf(destCol, prettyDest(sample.dest))
             bump(src)
             bump(rule)
             hopIds.forEach { bump(it) }
-            bump(dest)
             link(src, rule)
             var prev = rule
             hopIds.forEach { hop ->
                 link(prev, hop)
                 prev = hop
             }
-            link(prev, dest)
         }
         return finish(counts, links, directIds)
     }
@@ -138,8 +136,6 @@ object TrafficFlowBuilder {
         path: ChainPath,
         hops: List<LiveHop>,
         chained: Boolean,
-        destinations: List<String>,
-        running: Boolean,
     ): Pair<List<FlowNode>, List<FlowLink>> {
         val labels = mutableListOf<String>()
         val directFlags = mutableListOf<Boolean>()
@@ -178,17 +174,11 @@ object TrafficFlowBuilder {
                     .ifBlank { "proxy" },
             )
         }
-        val dest = when {
-            destinations.isNotEmpty() -> prettyDest(destinations.first())
-            running -> "waiting"
-            else -> "Destination"
-        }
-        addLabel(dest, false)
         val counts = LinkedHashMap<String, Int>()
         val links = LinkedHashMap<Pair<String, String>, Int>()
         val directIds = HashSet<String>()
         val ids = labels.mapIndexed { index, label ->
-            val id = idOf(index, label)
+            val id = idOf(index.coerceAtMost(MAX_COLUMN), label)
             if (directFlags.getOrNull(index) == true) directIds.add(id)
             id
         }
@@ -351,7 +341,6 @@ object SankeyLayout {
         nodeWidth: Float,
         pad: Float,
         minHeights: Map<String, Float> = emptyMap(),
-        labelReserve: Float = 0f,
         gapY: Float = 10f,
     ): Pair<List<PlacedNode>, List<PlacedRibbon>> {
         if (nodes.isEmpty() || width <= 0f || height <= 0f) {
@@ -359,7 +348,7 @@ object SankeyLayout {
         }
         val columns = nodes.groupBy { it.column }.toSortedMap()
         val nCols = columns.size.coerceAtLeast(1)
-        val inner = (width - 2f * pad - labelReserve).coerceAtLeast(nodeWidth * nCols)
+        val inner = (width - 2f * pad).coerceAtLeast(nodeWidth * nCols)
         val layerWidth = inner / nCols
         val placed = ArrayList<PlacedNode>(nodes.size)
         val byId = HashMap<String, PlacedNode>(nodes.size)

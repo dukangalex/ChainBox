@@ -768,6 +768,12 @@
     <string name="chain_path_live_summary">%1$d connections · %2$s</string>
     <string name="chain_path_unknown">unknown</string>
     <string name="chain_path_final">final</string>
+    <string name="chain_path_downlink">Downlink</string>
+    <string name="chain_path_uplink">Uplink</string>
+    <string name="chain_path_node">Node</string>
+    <string name="chain_path_delay">Latency</string>
+    <string name="chain_path_running">Running</string>
+    <string name="chain_path_ms">%1$d ms</string>
     <string name="ads_block">Ad blocking</string>
     <string name="ads_block_summary">Reject domains in the ads rule-set</string>
 </resources>

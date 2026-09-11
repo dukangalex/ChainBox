@@ -48,6 +48,8 @@ fun DashboardCardRenderer(
                 uplink = uiState.uplink,
                 downlinkTotal = uiState.downlinkTotal,
                 uplinkTotal = uiState.uplinkTotal,
+                downlinkHistory = uiState.downlinkHistory,
+                profileName = uiState.selectedProfileName.orEmpty(),
                 modifier = modifier,
             )
         }

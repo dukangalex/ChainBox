@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,8 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.OpenInNew
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,11 +52,14 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.nekohasekai.sfa.R
+import io.nekohasekai.sfa.chain.ChainPathHop
 import io.nekohasekai.sfa.chain.FlowLink
 import io.nekohasekai.sfa.chain.FlowNode
+import io.nekohasekai.sfa.chain.LiveHop
 import io.nekohasekai.sfa.chain.LiveTopology
 import io.nekohasekai.sfa.chain.PlacedRibbon
 import io.nekohasekai.sfa.chain.SankeyLayout
+import io.nekohasekai.sfa.compose.LineChart
 
 @Composable
 fun ChainPathCard(
@@ -68,110 +70,202 @@ fun ChainPathCard(
     uplink: String = "",
     downlinkTotal: String = "",
     uplinkTotal: String = "",
+    downlinkHistory: List<Float> = emptyList(),
+    profileName: String = "",
 ) {
     val running = topology.running
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-        onClick = onOpenChainBuilder,
+    val exitHop = remember(topology.hops) { pickExitHop(topology.hops) }
+    val entryHop = remember(topology.hops) {
+        topology.hops.firstOrNull { it.role == ChainPathHop.Role.Entry }
+    }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpenChainBuilder)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
     ) {
-        Column(
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (profileName.isNotBlank()) {
+                StatusChip(profileName, emphasized = false)
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+            StatusPill(topology)
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(
+                onClick = onOpenChainBuilder,
+                modifier = Modifier.size(28.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.OpenInNew,
+                    contentDescription = stringResource(R.string.chain_builder),
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+
+        Text(
+            text = stringResource(R.string.chain_path_downlink),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        val (downNum, downUnit) = remember(downlink) { splitRate(downlink.ifEmpty { "0 B/s" }) }
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = downNum,
+                style = MaterialTheme.typography.displayMedium,
+                fontWeight = FontWeight.Normal,
+                color = Color(0xFF2E9E7A),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = downUnit,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.chain_path_uplink),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = uplink.ifEmpty { "0 B/s" },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            if (downlinkTotal.isNotEmpty() || uplinkTotal.isNotEmpty()) {
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "↓ ${downlinkTotal.ifEmpty { "0 B" }}  ↑ ${uplinkTotal.ifEmpty { "0 B" }}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (running) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusChip(stringResource(R.string.chain_path_running), emphasized = true)
+                if (topology.chained) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    StatusChip(stringResource(R.string.chain_path_chained), emphasized = false)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.chain_path_node),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = exitHop?.title?.ifBlank { exitHop.subtitle }.orEmpty()
+                        .ifBlank { profileName.ifBlank { "—" } },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = stringResource(R.string.chain_path_delay),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val delayMs = exitHop?.delayMs ?: 0
+                Text(
+                    text = if (delayMs > 0) {
+                        stringResource(R.string.chain_path_ms, delayMs)
+                    } else {
+                        "—"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = if (delayMs in 1..200) {
+                        Color(0xFF2E9E7A)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
+        }
+        if (topology.chained && entryHop != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.chain_path_entry),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = entryHop.title.ifBlank { entryHop.subtitle }.ifBlank { "—" },
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        if (running && downlinkHistory.any { it > 0f }) {
+            Spacer(modifier = Modifier.height(8.dp))
+            LineChart(
+                data = downlinkHistory,
+                chartHeight = 28.dp,
+                lineColor = Color(0xFF2E9E7A),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        val device = stringResource(R.string.chain_path_device)
+        val dest = stringResource(R.string.chain_path_destination)
+        val waiting = stringResource(R.string.chain_path_waiting_dest)
+        val unknown = stringResource(R.string.chain_path_unknown)
+        val finalRule = stringResource(R.string.chain_path_final)
+        val localizedNodes = remember(topology.flowNodes, device, dest, waiting, unknown, finalRule) {
+            topology.flowNodes.map { node ->
+                node.copy(
+                    label = when (node.label) {
+                        "Device", "" -> device
+                        "Destination" -> dest
+                        "waiting" -> waiting
+                        "<unknown>" -> unknown
+                        "<final>" -> finalRule
+                        else -> node.label
+                    },
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        TrafficSankey(
+            nodes = localizedNodes,
+            links = topology.flowLinks,
+            flowing = topology.flowing && running,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.chain_path_title),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                StatusPill(topology)
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(
-                    onClick = onOpenChainBuilder,
-                    modifier = Modifier.size(28.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.OpenInNew,
-                        contentDescription = stringResource(R.string.chain_builder),
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
+                .height(if (running) 280.dp else 180.dp),
+        )
 
-            if (running && (downlink.isNotEmpty() || uplink.isNotEmpty())) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 4.dp),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = downlink.ifEmpty { "0 B/s" },
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "↓ ${downlinkTotal.ifEmpty { "0 B" }}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = uplink.ifEmpty { "0 B/s" },
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "↑ ${uplinkTotal.ifEmpty { "0 B" }}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
-            val device = stringResource(R.string.chain_path_device)
-            val dest = stringResource(R.string.chain_path_destination)
-            val waiting = stringResource(R.string.chain_path_waiting_dest)
-            val unknown = stringResource(R.string.chain_path_unknown)
-            val finalRule = stringResource(R.string.chain_path_final)
-            val localizedNodes = remember(topology.flowNodes, device, dest, waiting, unknown, finalRule) {
-                topology.flowNodes.map { node ->
-                    node.copy(
-                        label = when (node.label) {
-                            "Device", "" -> device
-                            "Destination" -> dest
-                            "waiting" -> waiting
-                            "<unknown>" -> unknown
-                            "<final>" -> finalRule
-                            else -> node.label
-                        },
-                    )
-                }
-            }
-
-            TrafficSankey(
-                nodes = localizedNodes,
-                links = topology.flowLinks,
-                flowing = topology.flowing && running,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(if (running) 320.dp else 200.dp),
+        if (topology.destinations.isNotEmpty()) {
+            Text(
+                text = topology.destinations.joinToString("  ·  "),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }
@@ -186,15 +280,20 @@ private fun StatusPill(topology: LiveTopology) {
         topology.chained -> stringResource(R.string.chain_path_live_chained) to true
         else -> stringResource(R.string.chain_path_live_regular) to false
     }
+    StatusChip(label, emphasized)
+}
+
+@Composable
+private fun StatusChip(label: String, emphasized: Boolean) {
     Surface(
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(50),
         color = if (emphasized) {
-            MaterialTheme.colorScheme.primary
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
         } else {
             MaterialTheme.colorScheme.surfaceVariant
         },
         contentColor = if (emphasized) {
-            MaterialTheme.colorScheme.onPrimary
+            MaterialTheme.colorScheme.primary
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
@@ -202,7 +301,9 @@ private fun StatusPill(topology: LiveTopology) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -217,12 +318,11 @@ private fun TrafficSankey(
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurface
-    val scrim = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)
     val labelStyle = TextStyle(
-        fontSize = 10.sp,
+        fontSize = 11.sp,
         fontWeight = FontWeight.Medium,
         color = labelColor,
-        lineHeight = 12.sp,
+        lineHeight = 13.sp,
     )
     val phase by rememberInfiniteTransition(label = "sankey").animateFloat(
         initialValue = 0f,
@@ -239,26 +339,41 @@ private fun TrafficSankey(
     val dest = Color(0xFFF2A0A0)
     val direct = Color(0xFF94A3B8)
     BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        if (nodes.isEmpty()) return@BoxWithConstraints
+        val widthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+        val viewportPx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
         val padPx = with(density) { 6.dp.toPx() }
-        val gapY = with(density) { 10.dp.toPx() }
-        val minLine = with(density) { 20.dp.toPx() }
-        val labelReserve = with(density) { 112.dp.toPx() }
-        val minHeights = remember(nodes) { nodes.associate { it.id to minLine } }
-        val viewport = constraints.maxHeight.toFloat().coerceAtLeast(1f)
-        val canvasH = SankeyLayout.requiredHeight(nodes, padPx, gapY, minHeights, viewport)
+        val gapY = with(density) { 8.dp.toPx() }
+        val barW = with(density) { 12.dp.toPx() }
+        val nSlots = nodes.map { it.column }.distinct().size.coerceAtLeast(1)
+        val layerWidth = widthPx / nSlots
+        val maxText = (layerWidth - barW - with(density) { 10.dp.toPx() }).coerceAtLeast(
+            with(density) { 48.dp.toPx() },
+        )
+        val measured = remember(nodes, maxText, labelColor) {
+            nodes.associate { node ->
+                node.id to textMeasurer.measure(
+                    text = node.label,
+                    style = labelStyle,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    constraints = Constraints(maxWidth = maxText.toInt().coerceAtLeast(24)),
+                )
+            }
+        }
+        val minHeights = remember(measured) {
+            val padH = with(density) { 6.dp.toPx() }
+            measured.mapValues { (_, layout) -> layout.size.height + padH }
+        }
+        val required = SankeyLayout.requiredHeight(nodes, padPx, gapY, minHeights, viewportPx)
+        val canvasH = required.coerceAtMost(viewportPx * 2.4f)
         val canvasDp = with(density) { canvasH.toDp() }
         Column(
-            modifier = Modifier
+            Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
         ) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(canvasDp),
-            ) {
-                if (nodes.isEmpty()) return@Canvas
-                val barW = 12.dp.toPx()
+            Canvas(Modifier.fillMaxWidth().height(canvasDp)) {
                 val (placed, ribbons) = SankeyLayout.layout(
                     nodes = nodes,
                     links = links,
@@ -267,29 +382,26 @@ private fun TrafficSankey(
                     nodeWidth = barW,
                     pad = padPx,
                     minHeights = minHeights,
-                    labelReserve = labelReserve,
                     gapY = gapY,
                 )
                 fun columnColor(col: Int, last: Int): Color = when {
                     col <= 0 -> source
                     col == last -> dest
-                    col == 1 && last >= 3 -> rule
+                    col == 1 && last >= 2 -> rule
                     else -> hop
                 }
+                fun ink(col: Int, last: Int, isDirect: Boolean): Color =
+                    if (isDirect) direct else columnColor(col, last)
                 val lastCol = nodes.maxOf { it.column }
                 val colXs = placed.groupBy { it.node.column }.mapValues { (_, items) -> items.first().x }
                 val sortedCols = colXs.keys.sorted()
-                fun fromInk(ribbon: PlacedRibbon): Color =
-                    if (ribbon.direct) direct else columnColor(ribbon.columnFrom, lastCol)
-                fun toInk(ribbon: PlacedRibbon): Color =
-                    if (ribbon.direct) direct else columnColor(ribbon.columnTo, lastCol)
                 ribbons.forEach { ribbon ->
-                    val fromC = fromInk(ribbon)
-                    val toC = toInk(ribbon)
+                    val fromC = ink(ribbon.columnFrom, lastCol, ribbon.direct)
+                    val toC = ink(ribbon.columnTo, lastCol, ribbon.direct)
                     drawPath(
                         path = ribbonPath(ribbon),
                         brush = Brush.horizontalGradient(
-                            colors = listOf(fromC.copy(alpha = 0.40f), toC.copy(alpha = 0.40f)),
+                            colors = listOf(fromC.copy(alpha = 0.38f), toC.copy(alpha = 0.38f)),
                             startX = ribbon.x0,
                             endX = ribbon.x1,
                         ),
@@ -297,8 +409,8 @@ private fun TrafficSankey(
                 }
                 if (flowing) {
                     ribbons.forEach { ribbon ->
-                        val fromC = fromInk(ribbon)
-                        val toC = toInk(ribbon)
+                        val fromC = ink(ribbon.columnFrom, lastCol, ribbon.direct)
+                        val toC = ink(ribbon.columnTo, lastCol, ribbon.direct)
                         val dx = (ribbon.x1 - ribbon.x0) * 0.48f
                         val y0 = (ribbon.y0Top + ribbon.y0Bottom) / 2f
                         val y1 = (ribbon.y1Top + ribbon.y1Bottom) / 2f
@@ -320,44 +432,59 @@ private fun TrafficSankey(
                     }
                 }
                 placed.forEach { node ->
-                    val ink = if (node.node.direct) direct else columnColor(node.node.column, lastCol)
+                    val color = ink(node.node.column, lastCol, node.node.direct)
                     drawRoundRect(
-                        color = ink,
+                        color = color,
                         topLeft = Offset(node.x, node.y),
                         size = Size(node.w, node.h),
                         cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
                     )
+                    val layout = measured[node.node.id] ?: return@forEach
                     val colIndex = sortedCols.indexOf(node.node.column)
                     val nextX = if (colIndex >= 0 && colIndex < sortedCols.lastIndex) {
                         colXs[sortedCols[colIndex + 1]] ?: size.width
                     } else {
                         size.width - padPx
                     }
-                    val maxText = (nextX - node.x - node.w - 8.dp.toPx()).coerceAtLeast(24.dp.toPx())
-                    val layout = textMeasurer.measure(
-                        text = node.node.label,
-                        style = labelStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        constraints = Constraints(maxWidth = maxText.toInt()),
-                    )
+                    val maxW = (nextX - node.x - node.w - 8.dp.toPx()).coerceAtLeast(24.dp.toPx())
+                    val drawn = if (layout.size.width <= maxW.toInt() + 1) {
+                        layout
+                    } else {
+                        textMeasurer.measure(
+                            text = node.node.label,
+                            style = labelStyle,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            constraints = Constraints(maxWidth = maxW.toInt()),
+                        )
+                    }
                     val tx = node.x + node.w + 5f
-                    val ty = node.y + ((node.h - layout.size.height) / 2f).coerceAtLeast(0f)
-                    val padX = 3.dp.toPx()
-                    val padY = 1.dp.toPx()
-                    drawRoundRect(
-                        color = scrim,
-                        topLeft = Offset(tx - padX, ty - padY),
-                        size = Size(
-                            layout.size.width.toFloat() + padX * 2f,
-                            layout.size.height.toFloat() + padY * 2f,
-                        ),
-                        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx()),
-                    )
-                    drawText(layout, topLeft = Offset(tx, ty))
+                    val ty = node.y + ((node.h - drawn.size.height) / 2f).coerceAtLeast(0f)
+                    drawText(drawn, topLeft = Offset(tx, ty))
                 }
             }
         }
+    }
+}
+
+private fun pickExitHop(hops: List<LiveHop>): LiveHop? {
+    return hops.lastOrNull { it.role == ChainPathHop.Role.Landing }
+        ?: hops.lastOrNull { it.role == ChainPathHop.Role.Exit }
+        ?: hops.lastOrNull {
+            it.role != ChainPathHop.Role.Device && it.role != ChainPathHop.Role.Destination
+        }
+}
+
+internal fun splitRate(raw: String): Pair<String, String> {
+    val value = raw.trim().ifBlank { "0 B/s" }
+    val slash = value.indexOf('/')
+    val core = if (slash > 0) value.take(slash).trim() else value
+    val suffix = if (slash > 0) value.substring(slash) else ""
+    val sp = core.lastIndexOf(' ')
+    return if (sp > 0) {
+        core.take(sp) to (core.substring(sp + 1) + suffix)
+    } else {
+        core to suffix.removePrefix("/")
     }
 }
 

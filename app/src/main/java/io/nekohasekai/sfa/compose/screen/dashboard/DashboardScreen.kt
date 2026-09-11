@@ -137,8 +137,12 @@ fun DashboardScreen(
         ) {
             item { OverrideBanner() }
             val serviceRunning = uiState.isStatusVisible
+            val pathShowing = !isRemote && CardGroup.ChainPath in uiState.visibleCards
             val actuallyVisibleCards = uiState.visibleCards.filter { cardGroup ->
                 when {
+                    pathShowing &&
+                        (cardGroup == CardGroup.UploadTraffic || cardGroup == CardGroup.DownloadTraffic) ->
+                        false
                     isRemote ->
                         cardGroup != CardGroup.Profiles &&
                             cardGroup != CardGroup.SystemProxy &&

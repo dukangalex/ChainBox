@@ -185,6 +185,8 @@ class ChainPathTest {
         assertTrue(labels.contains("telegram"))
         assertTrue(labels.contains("hk-1"))
         assertTrue(labels.contains("us-9"))
+        assertTrue(nodes.none { it.column > 3 })
+        assertTrue(labels.none { it.contains("cloudflareaccess") })
         assertTrue(links.isNotEmpty())
         val (placed, ribbons) = SankeyLayout.layout(nodes, links, 400f, 200f, 64f, 4f)
         assertEquals(nodes.size, placed.size)
@@ -224,7 +226,8 @@ class ChainPathTest {
         assertTrue(nodes.any { it.label == "节点选择" })
         assertTrue(nodes.any { it.label == "zgo" })
         assertTrue(nodes.any { it.label == "google" })
-        assertTrue(nodes.any { it.label == "www.google.com" })
+        assertTrue(nodes.maxOf { it.column } <= 3)
+        assertTrue(nodes.none { it.label.contains("www.google.com") })
     }
 
     @Test

@@ -397,17 +397,23 @@ def main() -> int:
         errors.append("DIRECT hops and ribbons must use a distinct slate color")
     if "verticalScroll" not in path_card:
         errors.append("sankey must scroll instead of crushing overlapping labels")
-    if "maxLines = 1" not in path_card:
-        errors.append("sankey labels must stay on one line")
-    if "headlineSmall" not in path_card:
+    if "maxLines = 1" not in path_card and "maxLines = 2" not in path_card:
+        errors.append("sankey labels must not wrap into overlapping stacks")
+    if "headlineSmall" not in path_card and "displayMedium" not in path_card:
         errors.append("path card should show live down/up rates like the home topology")
+    if "displayMedium" not in path_card:
+        errors.append("home path should use a large downlink number")
+    if "112.dp" in path_card:
+        errors.append("do not reserve a floating dest gutter; use equal columns")
     flow = read("app/src/main/java/io/nekohasekai/sfa/chain/TrafficFlow.kt")
     if "prettyHop" not in flow:
         errors.append("generated chain tags must be stripped before they become hop labels")
     if "val direct: Boolean" not in flow:
         errors.append("flow nodes/links must flag DIRECT traffic")
-    if "labelReserve" not in flow:
-        errors.append("sankey layout must reserve dest-label space so names do not overlap bars")
+    if "MAX_COLUMN" not in flow:
+        errors.append("live path must stay within four columns so labels fit")
+    if "pathShowing" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardScreen.kt"):
+        errors.append("dashboard must hide duplicate upload/download cards while the path is visible")
     if "FlyCat" in readme or "FlyCat" in read("docs/MAINTENANCE.md") or "FlyCat" in read("docs/USER_GUIDE.md"):
         errors.append("docs must not mention FlyCat; this Sankey is original")
     if "dukangalex/AngelaBox" not in readme:
