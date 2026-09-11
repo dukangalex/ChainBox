@@ -30,6 +30,8 @@ git merge upstream/dev
 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) | `chain-dev` | Chain 内核（低耦合 outbound） |
 | [dukangalex/AngelaBox](https://github.com/dukangalex/AngelaBox) | `dev` | AngelaBox Android 客户端 |
 
+Telegram 频道：[https://t.me/AngelaBox](https://t.me/AngelaBox)
+
 | 项目 | 值 |
 |------|-----|
 | 应用名 | AngelaBox |

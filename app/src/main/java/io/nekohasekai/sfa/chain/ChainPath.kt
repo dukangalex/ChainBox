@@ -186,7 +186,7 @@ object LiveTopologyBuilder {
     ): List<LiveHop> {
         val useful = liveChain.map { ChainRuntimeCompiler.displayHopTag(it) }
             .map { it.trim() }
-            .filter { it.isNotEmpty() }
+            .filter { it.isNotEmpty() && !TrafficFlowBuilder.isDirectTag(it) }
             .distinct()
         val destTitle = destinations.firstOrNull().orEmpty()
         if (path.chained) {
@@ -206,20 +206,22 @@ object LiveTopologyBuilder {
             }
             val entryPick = resolve(path.entryTag, groups, entryLive)
             val landPick = resolve(path.landingTag, groups, landLive)
+            val entryTitle = displayNonDirect(entryPick.first, path.entryTag, groups)
+            val landTitle = displayNonDirect(landPick.first, path.landingTag, groups)
             return listOf(
                 LiveHop(ChainPathHop.Role.Device, title = ""),
                 LiveHop(
                     role = ChainPathHop.Role.Entry,
-                    title = entryPick.first,
+                    title = entryTitle,
                     subtitle = path.entryTag.ifBlank { path.profileName },
-                    delayMs = entryPick.second,
+                    delayMs = delayOf(entryTitle, groups).takeIf { it > 0 } ?: entryPick.second,
                     highlighted = true,
                 ),
                 LiveHop(
                     role = ChainPathHop.Role.Landing,
-                    title = landPick.first,
+                    title = landTitle,
                     subtitle = path.landingProfileName.ifBlank { path.landingTag },
-                    delayMs = landPick.second,
+                    delayMs = delayOf(landTitle, groups).takeIf { it > 0 } ?: landPick.second,
                     highlighted = true,
                 ),
                 LiveHop(ChainPathHop.Role.Destination, title = destTitle),
@@ -227,11 +229,16 @@ object LiveTopologyBuilder {
         }
         val exitTag = path.hops.firstOrNull { it.role == ChainPathHop.Role.Exit }?.label.orEmpty()
         val exitPick = resolve(exitTag, groups, useful.lastOrNull())
+        val exitTitle = exitPick.first.ifBlank { exitTag }
         return listOf(
             LiveHop(ChainPathHop.Role.Device, title = ""),
             LiveHop(
                 role = ChainPathHop.Role.Exit,
-                title = exitPick.first.ifBlank { exitTag },
+                title = if (TrafficFlowBuilder.isDirectTag(exitTitle)) {
+                    leafOf(exitTag, groups, 0).first.ifBlank { exitTag }
+                } else {
+                    exitTitle
+                },
                 subtitle = path.profileName,
                 delayMs = exitPick.second,
             ),
@@ -304,9 +311,28 @@ object LiveTopologyBuilder {
         }
     }
 
+    private fun displayNonDirect(
+        candidate: String,
+        groupTag: String,
+        groups: List<GroupHint>,
+    ): String {
+        val shown = candidate.trim()
+        if (shown.isNotEmpty() && !TrafficFlowBuilder.isDirectTag(shown)) return shown
+        val leaf = leafOf(groupTag, groups, 0).first
+        if (leaf.isNotEmpty() && !TrafficFlowBuilder.isDirectTag(leaf)) return leaf
+        return groupTag.trim().ifBlank { shown }
+    }
+
     private fun delayOf(tag: String, groups: List<GroupHint>): Int {
+        val keys = buildList {
+            add(tag)
+            val shown = ChainRuntimeCompiler.displayHopTag(tag)
+            if (shown.isNotBlank()) add(shown)
+        }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         groups.forEach { g ->
-            g.delays[tag]?.let { return it }
+            keys.forEach { key ->
+                g.delays[key]?.let { if (it > 0) return it }
+            }
         }
         return 0
     }

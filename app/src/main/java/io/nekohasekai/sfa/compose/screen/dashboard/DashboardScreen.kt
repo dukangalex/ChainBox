@@ -168,6 +168,7 @@ fun DashboardScreen(
                                 cardGroup = cardGroup,
                                 cardWidth = uiState.cardWidths[cardGroup] ?: CardWidth.Full,
                                 uiState = uiState,
+                                serviceStatus = serviceStatus,
                                 onClashModeSelected = viewModel::selectClashMode,
                                 onSystemProxyToggle = viewModel::toggleSystemProxy,
                                 profiles = uiState.profiles,
@@ -190,6 +191,8 @@ fun DashboardScreen(
                                 onHideProfilePickerSheet = viewModel::hideProfilePickerSheet,
                                 onOpenNewProfile = onOpenNewProfile,
                                 onOpenChainBuilder = onOpenChainBuilder,
+                                onToggleService = viewModel::toggleService,
+                                onRequestDelayTest = viewModel::testSelectedDelay,
                                 commandClient = viewModel.commandClient,
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                             )
@@ -224,6 +227,8 @@ fun DashboardScreen(
                             onHideProfilePickerSheet = viewModel::hideProfilePickerSheet,
                             onOpenNewProfile = onOpenNewProfile,
                             onOpenChainBuilder = onOpenChainBuilder,
+                            onToggleService = viewModel::toggleService,
+                            onRequestDelayTest = viewModel::testSelectedDelay,
                             commandClient = viewModel.commandClient,
                         )
                     }

@@ -83,9 +83,12 @@ object TrafficFlowBuilder {
             links[key] = (links[key] ?: 0) + n
         }
         samples.forEach { sample ->
+            val hopTags = hopLabelsFor(sample, chained, path)
+            if (chained && (hopTags.isEmpty() || hopTags.all { isDirectTag(it) })) {
+                return@forEach
+            }
             val src = idOf(0, prettySource(sample.source))
             val rule = idOf(1, prettyRule(sample.rule))
-            val hopTags = hopLabelsFor(sample, chained, path)
             val hopIds = hopTags.mapIndexed { index, tag ->
                 val col = if (chained && hopTags.size >= 2) 2 + index else 2
                 val id = idOf(col.coerceAtMost(MAX_COLUMN), tag)
@@ -102,6 +105,10 @@ object TrafficFlowBuilder {
                 prev = hop
             }
         }
+        val hasExit = counts.keys.any { columnOf(it) >= 2 }
+        if (chained && !hasExit) {
+            return fromHops(path, emptyList(), chained = true)
+        }
         return finish(counts, links, directIds)
     }
 
@@ -116,7 +123,11 @@ object TrafficFlowBuilder {
             leaf.isNotEmpty() -> listOf(leaf)
             else -> emptyList()
         }
-        if (tags.size == 1 && isDirectTag(tags.first())) return listOf("DIRECT")
+        if (tags.size == 1 && isDirectTag(tags.first())) {
+            // China Direct is overlay routing. When chained it must not become
+            // a competing hop in the middle of entry → landing.
+            return if (chained) emptyList() else listOf("DIRECT")
+        }
         if (chained) {
             val visible = tags.filter { !isDirectTag(it) }
             val entry = visible.firstOrNull()?.takeIf { it.isNotBlank() }
@@ -284,7 +295,7 @@ object TrafficFlowBuilder {
         return shortenNodeName(base)
     }
 
-    internal fun shortenNodeName(name: String, maxChars: Int = 22): String {
+    internal fun shortenNodeName(name: String, maxChars: Int = 16): String {
         var s = name.trim()
         if (s.isEmpty()) return s
         s = s.replaceFirst(Regex("^chainbox-(landing|entry|chain)-\\d+-"), "")

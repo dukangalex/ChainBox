@@ -36,6 +36,8 @@ fun DashboardCardRenderer(
     onHideProfilePickerSheet: () -> Unit = {},
     onOpenNewProfile: (NewProfileArgs) -> Unit = {},
     onOpenChainBuilder: () -> Unit = {},
+    onToggleService: () -> Unit = {},
+    onRequestDelayTest: () -> Unit = {},
     commandClient: CommandClient? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -55,6 +57,9 @@ fun DashboardCardRenderer(
                 onClashModeSelected = onClashModeSelected,
                 onShowProfilePicker = onShowProfilePickerSheet,
                 onOpenNewProfile = onOpenNewProfile,
+                onToggleService = onToggleService,
+                onRequestDelayTest = onRequestDelayTest,
+                serviceStatus = serviceStatus,
                 modifier = modifier,
             )
         }

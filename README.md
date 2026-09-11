@@ -6,6 +6,7 @@ AngelaBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 A
 
 - 发行版：[Releases](https://github.com/dukangalex/AngelaBox/releases)
 - 构建：[Actions](https://github.com/dukangalex/AngelaBox/actions)
+- 频道：[Telegram](https://t.me/AngelaBox)
 - 使用说明：[docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - 维护说明：[docs/MAINTENANCE.md](docs/MAINTENANCE.md)
 
@@ -53,7 +54,7 @@ AngelaBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 A
 ## 功能范围
 
 - 多级出站：在当前配置中选择入口分组/节点，再选择落地（可来自当前或其他配置）；外部访问的源地址应为落地节点地址。**每份配置独立保存链路**。入口只作为链式第一跳，不会成为出口。
-- 实时拓扑：仪表首页以下行速率、当前节点/延迟和最多四列的放射状路径为主（来源 → 规则 → 入口/落地）。直连为灰色线束。
+- 实时拓扑：仪表首页以下行速率、当前节点/延迟和最多四列的放射状路径为主（来源 → 规则 → 入口/落地）。首页图标为启动/停止开关。链式时中国直连是底层路由，不作为中间跳或当前节点显示。未链式时直连流量为灰色线束。
 - 链路保持：出口选择保存于本地；远程订阅更新后仍按已保存的出口复用，不必重配。
 - 运行时覆盖：中国直连、广告拦截、严格路由、DNS、IPv6、QUIC、WebRTC 防护。开启后**强制覆盖**对应字段，不修改订阅原文。
 - 备份与恢复：本地文件及 WebDAV（覆盖=完全替换，兼容=与现有共存）。备份不含账号密码。
@@ -68,7 +69,7 @@ AngelaBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 A
 设备 → 入口节点 → 落地节点 → 目的站
 ```
 
-仪表页以放射状实时路径显示流量：来源 → 规则 → 当前入口/落地。直连流量为灰色线束，代理流量为彩色。Direct 模式显示设备 → DIRECT。
+仪表页以放射状实时路径显示流量：来源 → 规则 → 当前入口/落地。链式时中国直连覆盖层不进入路径（避免与落地跳来跳去）。未链式时直连流量为灰色线束。Direct 模式显示设备 → DIRECT。首页图标用于启动或停止服务。
 
 1. 导入并启用配置，确认基础连通。
 2. 在「工具 → 链式代理」中为**当前配置**选择入口与落地并保存。其他配置可各自绑定不同落地。

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Autorenew
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Download
@@ -561,6 +562,43 @@ fun AppSettingsScreen(
                         }
                     }
                 }
+
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            stringResource(R.string.telegram_channel),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            stringResource(R.string.telegram_channel_url),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Outlined.Campaign,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                    modifier =
+                    Modifier
+                        .clickable {
+                            runCatching {
+                                val intent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse(context.getString(R.string.telegram_channel_url)),
+                                )
+                                context.startActivity(intent)
+                            }
+                        },
+                    colors =
+                    ListItemDefaults.colors(
+                        containerColor = Color.Transparent,
+                    ),
+                )
 
                 ListItem(
                     headlineContent = {

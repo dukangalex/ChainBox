@@ -5,16 +5,19 @@ import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.OutboundGroup
+import io.nekohasekai.libbox.OutboundGroupItem
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.sfa.bg.BoxService
 import io.nekohasekai.sfa.chain.ChainBindings
 import io.nekohasekai.sfa.chain.ChainPath
 import io.nekohasekai.sfa.chain.ChainPathBuilder
+import io.nekohasekai.sfa.chain.ChainPathHop
 import io.nekohasekai.sfa.chain.ChainRuntimeCompiler
 import io.nekohasekai.sfa.chain.FlowSample
 import io.nekohasekai.sfa.chain.GroupHint
 import io.nekohasekai.sfa.chain.LiveTopology
 import io.nekohasekai.sfa.chain.LiveTopologyBuilder
+import io.nekohasekai.sfa.chain.TrafficFlowBuilder
 import io.nekohasekai.sfa.compose.base.BaseViewModel
 import io.nekohasekai.sfa.compose.base.UiEvent
 import io.nekohasekai.sfa.compose.model.ConnectionStateFilter
@@ -157,17 +160,20 @@ class DashboardViewModel :
                 CommandClient.ConnectionType.ClashMode,
                 CommandClient.ConnectionType.Groups,
                 CommandClient.ConnectionType.Connections,
+                CommandClient.ConnectionType.Outbounds,
             ),
             this,
         )
 
     private var plannedPath: ChainPath = ChainPath.regular()
     @Volatile private var groupHints: List<GroupHint> = emptyList()
+    @Volatile private var outboundDelays: Map<String, Int> = emptyMap()
     @Volatile private var liveChain: List<String> = emptyList()
     @Volatile private var liveDestinations: List<String> = emptyList()
     @Volatile private var liveActive: Int = 0
     @Volatile private var liveFlowing: Boolean = false
     @Volatile private var liveSamples: List<FlowSample> = emptyList()
+    private var delayPrimed = false
     private var connectionsStore: Connections? = null
     private val connectionsMutex = Mutex()
     private val topologyLock = Any()
@@ -745,13 +751,30 @@ class DashboardViewModel :
         viewModelScope.launch(Dispatchers.Main) {
             val hasGroups = newGroups.isNotEmpty()
             // Read only tag/selected. Do not iterate items — GroupsViewModel
-            // consumes that iterator after this primary handler.
+            // consumes that iterator after this primary handler. Delays come
+            // from ConnectionType.Outbounds.
             groupHints = newGroups.map { group ->
                 GroupHint(tag = group.tag, selected = group.selected)
             }
             updateState {
                 copy(hasGroups = hasGroups, groupsCount = newGroups.size)
             }
+            requestTopologyPublish(force = true)
+            maybePrimeDelay()
+        }
+    }
+
+    override fun updateOutbounds(outbounds: List<OutboundGroupItem>) {
+        viewModelScope.launch(Dispatchers.Main) {
+            val next = LinkedHashMap<String, Int>()
+            outbounds.forEach { item ->
+                if (item.urlTestDelay > 0) {
+                    next[item.tag] = item.urlTestDelay
+                    val shown = ChainRuntimeCompiler.displayHopTag(item.tag)
+                    if (shown.isNotBlank()) next[shown] = item.urlTestDelay
+                }
+            }
+            outboundDelays = next
             requestTopologyPublish(force = true)
         }
     }
@@ -821,6 +844,8 @@ class DashboardViewModel :
         liveFlowing = false
         liveSamples = emptyList()
         groupHints = emptyList()
+        outboundDelays = emptyMap()
+        delayPrimed = false
         viewModelScope.launch(Dispatchers.Default) {
             connectionsMutex.withLock { connectionsStore = null }
         }
@@ -832,13 +857,44 @@ class DashboardViewModel :
             path = plannedPath,
             running = running,
             mode = currentState.selectedClashMode,
-            groups = groupHints,
+            groups = hintsWithDelays(),
             liveChain = liveChain,
             destinations = liveDestinations,
             activeConnections = if (liveActive > 0) liveActive else currentState.connectionsCount,
             flowing = liveFlowing,
             samples = liveSamples,
         )
+    }
+
+    private fun hintsWithDelays(): List<GroupHint> {
+        val delays = outboundDelays
+        if (delays.isEmpty()) return groupHints
+        if (groupHints.isEmpty()) return listOf(GroupHint(tag = "", delays = delays))
+        return groupHints.map { hint -> hint.copy(delays = delays + hint.delays) }
+    }
+
+    fun testSelectedDelay() {
+        if (_serviceStatus.value != Status.Started) return
+        val hop = currentState.topology.hops.lastOrNull { live ->
+            (live.role == ChainPathHop.Role.Landing || live.role == ChainPathHop.Role.Exit) &&
+                live.title.isNotBlank() &&
+                !TrafficFlowBuilder.isDirectTag(live.title)
+        }
+        val tag = hop?.title?.ifBlank { hop.subtitle }.orEmpty()
+        if (tag.isBlank() || TrafficFlowBuilder.isDirectTag(tag)) return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { CommandTarget.standaloneClient().urlTest(tag) }
+        }
+    }
+
+    private fun maybePrimeDelay() {
+        if (delayPrimed) return
+        if (_serviceStatus.value != Status.Started) return
+        delayPrimed = true
+        viewModelScope.launch {
+            delay(1200)
+            testSelectedDelay()
+        }
     }
 
     private fun requestTopologyPublish(force: Boolean = false) {

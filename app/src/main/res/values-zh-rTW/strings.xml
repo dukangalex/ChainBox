@@ -704,6 +704,7 @@
     <string name="chain_path_delay">延遲</string>
     <string name="chain_path_running">執行中</string>
     <string name="chain_path_ms">%1$d ms</string>
+    <string name="telegram_channel">Telegram 頻道</string>
     <string name="ads_block">廣告攔截</string>
     <string name="ads_block_summary">拒絕廣告規則集匹配的網域</string>
 </resources>

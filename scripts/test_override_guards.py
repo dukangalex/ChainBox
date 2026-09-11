@@ -380,6 +380,12 @@ def main() -> int:
         errors.append("dashboard must expose live topology")
     if "ConnectionType.Connections" not in dash:
         errors.append("dashboard must subscribe to live connections for topology")
+    if "ConnectionType.Outbounds" not in dash:
+        errors.append("dashboard must subscribe to outbounds for latency")
+    if "updateOutbounds" not in dash:
+        errors.append("dashboard must apply outbound urltest delays")
+    if "testSelectedDelay" not in dash:
+        errors.append("dashboard must be able to urltest the selected node")
     if "TrafficFlowBuilder" not in read("app/src/main/java/io/nekohasekai/sfa/chain/TrafficFlow.kt"):
         errors.append("live topology must build a radiating traffic flow")
     path_card = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/ChainPathCard.kt")
@@ -412,8 +418,14 @@ def main() -> int:
         errors.append("flow nodes/links must flag DIRECT traffic")
     if "MAX_COLUMN" not in flow:
         errors.append("live path must stay within four columns so labels fit")
-    if "BrandMark" not in path_card:
-        errors.append("home hero should include the cube brand mark")
+    if "BrandMark" in path_card:
+        errors.append("decorative cube must be a start/stop control, not BrandMark")
+    if "onToggleService" not in path_card:
+        errors.append("home icon must start/stop the service")
+    if "ic_launcher" not in path_card and "ic_qs_brand" not in path_card:
+        errors.append("home power control must use the AngelaBox icon")
+    if "PowerMark" not in path_card:
+        errors.append("home hero should include a power mark that toggles the service")
     if "ModeChip" not in path_card:
         errors.append("clash mode must stay reachable from the home chips")
     if "onShowProfilePicker" not in path_card:
@@ -424,6 +436,12 @@ def main() -> int:
         errors.append("landing hop labels must be shortened for display")
     if "FlyCat" in readme or "FlyCat" in read("docs/MAINTENANCE.md") or "FlyCat" in read("docs/USER_GUIDE.md"):
         errors.append("docs must not mention FlyCat; this Sankey is original")
+    if "t.me/AngelaBox" not in readme:
+        errors.append("README must link the Telegram channel")
+    if "t.me/AngelaBox" not in read("docs/MAINTENANCE.md"):
+        errors.append("MAINTENANCE must link the Telegram channel")
+    if "topology.destinations.joinToString" in path_card:
+        errors.append("do not show unused destination caption on home")
     if "dukangalex/AngelaBox" not in readme:
         errors.append("README must point at dukangalex/AngelaBox")
     if "dukangalex/AngelaBox" not in read("docs/MAINTENANCE.md"):

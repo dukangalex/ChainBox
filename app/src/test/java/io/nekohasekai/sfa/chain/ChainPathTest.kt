@@ -307,4 +307,91 @@ class ChainPathTest {
         assertEquals("sg-1", topology.hops[1].title)
         assertEquals(12, topology.hops[1].delayMs)
     }
+
+    @Test
+    fun chainedSkipsDirectOverlayHops() {
+        val path = ChainPathBuilder.build(
+            profileName = "UOT",
+            defaultOutboundTag = "节点选择",
+            binding = ChainBinding(1L, "节点选择", 2L, "zgo"),
+            landingProfileName = "VPS",
+        )
+        val (nodes, _) = TrafficFlowBuilder.build(
+            samples = listOf(
+                FlowSample(
+                    source = "172.19.0.1:2",
+                    rule = "geoip-cn",
+                    outbound = "DIRECT",
+                    chain = listOf("DIRECT"),
+                    dest = "www.baidu.com:443",
+                ),
+                FlowSample(
+                    source = "172.19.0.1:3",
+                    rule = "geosite-google",
+                    outbound = "us-9",
+                    chain = listOf("hk-1", "us-9"),
+                    dest = "www.google.com:443",
+                ),
+            ),
+            path = path,
+            chained = true,
+        )
+        assertTrue(nodes.none { it.label == "DIRECT" })
+        assertTrue(nodes.any { it.label == "hk-1" })
+        assertTrue(nodes.any { it.label == "us-9" })
+        assertTrue(nodes.any { it.label == "google" })
+        assertTrue(nodes.none { it.label == "cn" && nodes.any { n -> n.label == "DIRECT" } })
+    }
+
+    @Test
+    fun chainedDirectOnlyFallsBackToSavedHops() {
+        val path = ChainPathBuilder.build(
+            profileName = "UOT",
+            defaultOutboundTag = "节点选择",
+            binding = ChainBinding(1L, "节点选择", 2L, "zgo"),
+            landingProfileName = "VPS",
+        )
+        val (nodes, _) = TrafficFlowBuilder.build(
+            samples = listOf(
+                FlowSample(
+                    source = "172.19.0.1:2",
+                    rule = "geoip-cn",
+                    outbound = "DIRECT",
+                    chain = listOf("DIRECT"),
+                    dest = "www.baidu.com:443",
+                ),
+            ),
+            path = path,
+            chained = true,
+        )
+        assertTrue(nodes.none { it.label == "DIRECT" })
+        assertTrue(nodes.any { it.label == "节点选择" })
+        assertTrue(nodes.any { it.label == "zgo" })
+    }
+
+    @Test
+    fun chainedLiveHopsIgnoreDirectLeaves() {
+        val path = ChainPathBuilder.build(
+            profileName = "UOT",
+            defaultOutboundTag = "节点选择",
+            binding = ChainBinding(1L, "节点选择", 2L, "zgo"),
+            landingProfileName = "VPS",
+        )
+        val topology = LiveTopologyBuilder.fromPath(
+            path,
+            running = true,
+            groups = listOf(
+                GroupHint("节点选择", selected = "hk-1", delays = mapOf("hk-1" to 42)),
+                GroupHint("zgo", selected = "us-9", delays = mapOf("us-9" to 88)),
+            ),
+            liveChain = listOf("DIRECT"),
+        )
+        assertTrue(topology.chained)
+        assertEquals("hk-1", topology.hops[1].title)
+        assertEquals("us-9", topology.hops[2].title)
+        assertEquals(42, topology.hops[1].delayMs)
+        assertEquals(88, topology.hops[2].delayMs)
+        assertTrue(topology.hops.none { it.role == ChainPathHop.Role.Landing && it.title == "DIRECT" })
+        assertTrue(topology.flowNodes.none { it.label == "DIRECT" })
+    }
 }

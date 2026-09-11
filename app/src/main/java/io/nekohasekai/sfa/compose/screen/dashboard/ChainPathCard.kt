@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -20,11 +21,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -39,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -46,9 +50,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -69,6 +75,7 @@ import io.nekohasekai.sfa.chain.SankeyLayout
 import io.nekohasekai.sfa.chain.TrafficFlowBuilder
 import io.nekohasekai.sfa.compose.LineChart
 import io.nekohasekai.sfa.compose.navigation.NewProfileArgs
+import io.nekohasekai.sfa.constant.Status
 
 @Composable
 fun ChainPathCard(
@@ -86,8 +93,12 @@ fun ChainPathCard(
     onClashModeSelected: (String) -> Unit = {},
     onShowProfilePicker: () -> Unit = {},
     onOpenNewProfile: (NewProfileArgs) -> Unit = {},
+    onToggleService: () -> Unit = {},
+    onRequestDelayTest: () -> Unit = {},
+    serviceStatus: Status = Status.Stopped,
 ) {
     val running = topology.running
+    val busy = serviceStatus == Status.Starting || serviceStatus == Status.Stopping
     val exitHop = remember(topology.hops) { pickExitHop(topology.hops) }
     val entryHop = remember(topology.hops) {
         topology.hops.firstOrNull { it.role == ChainPathHop.Role.Entry }
@@ -190,7 +201,12 @@ fun ChainPathCard(
                     )
                 }
             }
-            BrandMark(modifier = Modifier.size(96.dp))
+            PowerMark(
+                running = running,
+                busy = busy,
+                onToggle = onToggleService,
+                modifier = Modifier.size(88.dp),
+            )
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -233,7 +249,10 @@ fun ChainPathCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Column(horizontalAlignment = Alignment.End) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.clickable(onClick = onRequestDelayTest),
+            ) {
                 Text(
                     text = stringResource(R.string.chain_path_delay),
                     style = MaterialTheme.typography.labelSmall,
@@ -311,17 +330,6 @@ fun ChainPathCard(
                 .height(if (running) 280.dp else 180.dp)
                 .clickable(onClick = onOpenChainBuilder),
         )
-
-        if (topology.destinations.isNotEmpty()) {
-            Text(
-                text = topology.destinations.joinToString("  ·  "),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
     }
 }
 
@@ -379,47 +387,57 @@ private fun StatusChip(label: String, emphasized: Boolean, onClick: (() -> Unit)
 }
 
 @Composable
-private fun BrandMark(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        drawCube()
+private fun PowerMark(
+    running: Boolean,
+    busy: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ringColor = when {
+        busy -> MaterialTheme.colorScheme.tertiary
+        running -> Color(0xFF2E9E7A)
+        else -> MaterialTheme.colorScheme.outlineVariant
     }
-}
-
-private fun DrawScope.drawCube() {
-    val w = size.minDimension
-    val cx = size.width / 2f
-    val cy = size.height / 2f
-    val s = w * 0.34f
-    val lift = s * 0.58f
-    val skew = s * 0.72f
-    val top = Color(0xFFF5A623)
-    val front = Color(0xFF4EC3EA)
-    val side = Color(0xFFE45B74)
-    val o = Offset(cx, cy + s * 0.06f)
-    val pTop = Path().apply {
-        moveTo(o.x, o.y - lift)
-        lineTo(o.x + skew, o.y - lift * 0.28f)
-        lineTo(o.x, o.y + lift * 0.18f)
-        lineTo(o.x - skew, o.y - lift * 0.28f)
-        close()
+    val description = if (running || busy) {
+        stringResource(R.string.stop)
+    } else {
+        stringResource(R.string.action_start)
     }
-    val pFront = Path().apply {
-        moveTo(o.x - skew, o.y - lift * 0.28f)
-        lineTo(o.x, o.y + lift * 0.18f)
-        lineTo(o.x, o.y + lift * 0.18f + s)
-        lineTo(o.x - skew, o.y - lift * 0.28f + s)
-        close()
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Surface(
+            onClick = onToggle,
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = if (running) 6.dp else 2.dp,
+            modifier = Modifier.size(80.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Canvas(Modifier.fillMaxSize()) {
+                    drawCircle(
+                        color = ringColor,
+                        radius = size.minDimension / 2f - 3.dp.toPx(),
+                        style = Stroke(width = 3.dp.toPx()),
+                    )
+                }
+                Image(
+                    painter = painterResource(R.mipmap.ic_launcher),
+                    contentDescription = description,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    alpha = if (running || busy) 1f else 0.78f,
+                )
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(72.dp),
+                        strokeWidth = 2.dp,
+                        color = ringColor,
+                    )
+                }
+            }
+        }
     }
-    val pSide = Path().apply {
-        moveTo(o.x + skew, o.y - lift * 0.28f)
-        lineTo(o.x, o.y + lift * 0.18f)
-        lineTo(o.x, o.y + lift * 0.18f + s)
-        lineTo(o.x + skew, o.y - lift * 0.28f + s)
-        close()
-    }
-    drawPath(pFront, front)
-    drawPath(pSide, side)
-    drawPath(pTop, top)
 }
 
 @Composable
@@ -582,11 +600,15 @@ private fun TrafficSankey(
 }
 
 private fun pickExitHop(hops: List<LiveHop>): LiveHop? {
-    return hops.lastOrNull { it.role == ChainPathHop.Role.Landing }
-        ?: hops.lastOrNull { it.role == ChainPathHop.Role.Exit }
-        ?: hops.lastOrNull {
-            it.role != ChainPathHop.Role.Device && it.role != ChainPathHop.Role.Destination
-        }
+    val useful = hops.filter { hop ->
+        hop.role != ChainPathHop.Role.Device &&
+            hop.role != ChainPathHop.Role.Destination &&
+            !TrafficFlowBuilder.isDirectTag(hop.title)
+    }
+    return useful.lastOrNull { it.role == ChainPathHop.Role.Landing }
+        ?: useful.lastOrNull { it.role == ChainPathHop.Role.Exit }
+        ?: useful.lastOrNull()
+        ?: hops.lastOrNull { it.role == ChainPathHop.Role.Landing || it.role == ChainPathHop.Role.Exit }
 }
 
 internal fun splitRate(raw: String): Pair<String, String> {
