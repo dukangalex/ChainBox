@@ -13,12 +13,14 @@ data class FlowNode(
     val label: String,
     val column: Int,
     val weight: Int = 1,
+    val direct: Boolean = false,
 )
 
 data class FlowLink(
     val fromId: String,
     val toId: String,
     val weight: Int = 1,
+    val direct: Boolean = false,
 )
 
 data class PlacedNode(
@@ -38,6 +40,7 @@ data class PlacedRibbon(
     val y0Bottom: Float,
     val y1Top: Float,
     val y1Bottom: Float,
+    val direct: Boolean = false,
 )
 
 /**
@@ -56,14 +59,19 @@ object TrafficFlowBuilder {
         running: Boolean = false,
     ): Pair<List<FlowNode>, List<FlowLink>> {
         if (samples.isNotEmpty()) {
-            return fromSamples(samples, chained)
+            return fromSamples(samples, chained, path)
         }
         return fromHops(path, hops, chained, destinations, running)
     }
 
-    private fun fromSamples(samples: List<FlowSample>, chained: Boolean): Pair<List<FlowNode>, List<FlowLink>> {
+    private fun fromSamples(
+        samples: List<FlowSample>,
+        chained: Boolean,
+        path: ChainPath,
+    ): Pair<List<FlowNode>, List<FlowLink>> {
         val counts = LinkedHashMap<String, Int>()
         val links = LinkedHashMap<Pair<String, String>, Int>()
+        val directIds = HashSet<String>()
         fun bump(id: String, n: Int = 1) {
             counts[id] = (counts[id] ?: 0) + n
         }
@@ -75,17 +83,12 @@ object TrafficFlowBuilder {
         samples.forEach { sample ->
             val src = idOf(0, prettySource(sample.source))
             val rule = idOf(1, prettyRule(sample.rule))
-            val hopTags = sample.chain
-                .map { ChainRuntimeCompiler.displayHopTag(it) }
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .distinct()
-            val hopIds = if (chained && hopTags.size >= 2) {
-                listOf(idOf(2, hopTags.first()), idOf(3, hopTags.last()))
-            } else {
-                val leaf = hopTags.lastOrNull()
-                    ?: ChainRuntimeCompiler.displayHopTag(sample.outbound).ifBlank { sample.outbound }
-                listOf(idOf(2, leaf.ifBlank { "proxy" }))
+            val hopTags = hopLabelsFor(sample, chained, path)
+            val hopIds = hopTags.mapIndexed { index, tag ->
+                val col = if (chained && hopTags.size >= 2) 2 + index else 2
+                val id = idOf(col, tag)
+                if (isDirectTag(tag)) directIds.add(id)
+                id
             }
             val destCol = if (chained && hopTags.size >= 2) 4 else 3
             val dest = idOf(destCol, prettyDest(sample.dest))
@@ -101,7 +104,34 @@ object TrafficFlowBuilder {
             }
             link(prev, dest)
         }
-        return finish(counts, links)
+        return finish(counts, links, directIds)
+    }
+
+    private fun hopLabelsFor(sample: FlowSample, chained: Boolean, path: ChainPath): List<String> {
+        val fromChain = sample.chain
+            .map { prettyHop(it) }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        val leaf = prettyHop(sample.outbound)
+        val tags = when {
+            fromChain.isNotEmpty() -> fromChain
+            leaf.isNotEmpty() -> listOf(leaf)
+            else -> emptyList()
+        }
+        if (tags.size == 1 && isDirectTag(tags.first())) return listOf("DIRECT")
+        if (chained) {
+            val visible = tags.filter { !isDirectTag(it) }
+            val entry = visible.firstOrNull()?.takeIf { it.isNotBlank() }
+                ?: path.entryTag.trim().takeIf { it.isNotEmpty() }
+            val landing = (if (visible.size >= 2) visible.last() else null)?.takeIf { it.isNotBlank() }
+                ?: path.landingTag.trim().takeIf { it.isNotEmpty() }
+            if (!entry.isNullOrBlank() && !landing.isNullOrBlank() && entry != landing) {
+                return listOf(entry, landing)
+            }
+            if (!entry.isNullOrBlank()) return listOf(entry)
+            if (!landing.isNullOrBlank()) return listOf(landing)
+        }
+        return tags.ifEmpty { listOf("proxy") }
     }
 
     private fun fromHops(
@@ -112,50 +142,67 @@ object TrafficFlowBuilder {
         running: Boolean,
     ): Pair<List<FlowNode>, List<FlowLink>> {
         val labels = mutableListOf<String>()
-        labels += "Device"
-        labels += "<final>"
+        val directFlags = mutableListOf<Boolean>()
+        fun addLabel(label: String, direct: Boolean = isDirectTag(label)) {
+            labels += label
+            directFlags += direct
+        }
+        addLabel("Device", false)
+        addLabel("<final>", false)
         val live = hops.filter {
             it.role != ChainPathHop.Role.Device && it.role != ChainPathHop.Role.Destination
         }
         if (live.isNotEmpty()) {
             live.forEach { hop ->
-                labels += hop.title.ifBlank { hop.subtitle }.ifBlank {
-                    when (hop.role) {
+                val title = prettyHop(hop.title).ifBlank {
+                    prettyHop(hop.subtitle)
+                }.ifBlank {
+                    val raw = when (hop.role) {
                         ChainPathHop.Role.Entry -> path.entryTag
                         ChainPathHop.Role.Landing -> path.landingTag
                         ChainPathHop.Role.Exit -> path.profileName
                         else -> "proxy"
-                    }.ifBlank { "proxy" }
+                    }
+                    prettyHop(raw).ifBlank { if (isDirectTag(raw)) "DIRECT" else "proxy" }
                 }
+                addLabel(title)
             }
         } else if (chained) {
-            labels += path.entryTag.ifBlank { "entry" }
-            labels += path.landingTag.ifBlank { "landing" }
+            addLabel(path.entryTag.ifBlank { "entry" })
+            addLabel(path.landingTag.ifBlank { "landing" })
         } else {
-            labels += path.hops.firstOrNull { it.role == ChainPathHop.Role.Exit }?.label
-                ?.ifBlank { path.profileName }
-                .orEmpty()
-                .ifBlank { "proxy" }
+            addLabel(
+                path.hops.firstOrNull { it.role == ChainPathHop.Role.Exit }?.label
+                    ?.ifBlank { path.profileName }
+                    .orEmpty()
+                    .ifBlank { "proxy" },
+            )
         }
         val dest = when {
-            destinations.isNotEmpty() -> destinations.first()
+            destinations.isNotEmpty() -> prettyDest(destinations.first())
             running -> "waiting"
             else -> "Destination"
         }
-        labels += dest
+        addLabel(dest, false)
         val counts = LinkedHashMap<String, Int>()
         val links = LinkedHashMap<Pair<String, String>, Int>()
-        val ids = labels.mapIndexed { index, label -> idOf(index, label) }
+        val directIds = HashSet<String>()
+        val ids = labels.mapIndexed { index, label ->
+            val id = idOf(index, label)
+            if (directFlags.getOrNull(index) == true) directIds.add(id)
+            id
+        }
         ids.forEach { counts[it] = 1 }
         for (i in 0 until ids.size - 1) {
             links[ids[i] to ids[i + 1]] = 1
         }
-        return finish(counts, links)
+        return finish(counts, links, directIds)
     }
 
     private fun finish(
         counts: Map<String, Int>,
         links: Map<Pair<String, String>, Int>,
+        directIds: Set<String>,
     ): Pair<List<FlowNode>, List<FlowLink>> {
         val byCol = counts.entries.groupBy { columnOf(it.key) }
         val kept = mutableSetOf<String>()
@@ -166,7 +213,14 @@ object TrafficFlowBuilder {
             val head = ranked.take(MAX_PER_COLUMN)
             head.forEach { (id, weight) ->
                 kept.add(id)
-                nodes += FlowNode(id = id, label = labelOf(id), column = col, weight = weight)
+                val label = labelOf(id)
+                nodes += FlowNode(
+                    id = id,
+                    label = label,
+                    column = col,
+                    weight = weight,
+                    direct = id in directIds || isDirectTag(label),
+                )
             }
             val rest = ranked.drop(MAX_PER_COLUMN)
             if (rest.isNotEmpty()) {
@@ -181,14 +235,23 @@ object TrafficFlowBuilder {
             val from = if (pair.first in kept) pair.first else overflowOf[columnOf(pair.first)]
             val to = if (pair.second in kept) pair.second else overflowOf[columnOf(pair.second)]
             if (from == null || to == null || from !in kept || to !in kept) return@mapNotNull null
-            FlowLink(from, to, weight)
+            FlowLink(
+                fromId = from,
+                toId = to,
+                weight = weight,
+                direct = from in directIds || to in directIds,
+            )
         }
         val merged = LinkedHashMap<Pair<String, String>, Int>()
+        val mergedDirect = HashMap<Pair<String, String>, Boolean>()
         flowLinks.forEach { link ->
             val key = link.fromId to link.toId
             merged[key] = (merged[key] ?: 0) + link.weight
+            mergedDirect[key] = (mergedDirect[key] == true) || link.direct
         }
-        return nodes to merged.map { (key, weight) -> FlowLink(key.first, key.second, weight) }
+        return nodes to merged.map { (key, weight) ->
+            FlowLink(key.first, key.second, weight, mergedDirect[key] == true)
+        }
     }
 
     internal fun prettySource(raw: String): String {
@@ -203,34 +266,83 @@ object TrafficFlowBuilder {
 
     internal fun prettyRule(raw: String): String {
         val value = raw.trim()
-        if (value.isEmpty()) return "<final>"
-        val lower = value.lowercase()
-        val tag = value.substringAfterLast(':').substringAfterLast('/').trim().ifBlank { value }
-        val short = tag
-            .removePrefix("geosite-")
-            .removePrefix("geoip-")
-            .removePrefix("category-")
-        return when {
-            "geosite" in lower || "geoip" in lower || "rule_set" in lower || "ruleset" in lower ->
-                "RuleSet: $short"
-            "domain_suffix" in lower || "domainsuffix" in lower -> "DomainSuffix: $short"
-            "domain_keyword" in lower -> "Keyword: $short"
-            "ip_cidr" in lower || "ipcidr" in lower -> "IP: $short"
-            else -> short.take(22)
+        if (value.isEmpty() || value == "final" || value == "<final>") return "<final>"
+        extractAssigned(value)?.let { extracted ->
+            val name = stripRuleName(extracted)
+            if (name.isNotEmpty()) return name.take(18)
         }
+        return stripRuleName(value).take(18).ifBlank { value.take(18) }
+    }
+
+    internal fun prettyHop(raw: String): String {
+        val shown = ChainRuntimeCompiler.displayHopTag(raw).trim()
+        if (shown.isNotEmpty()) return if (isDirectTag(shown)) "DIRECT" else shown
+        val t = raw.trim()
+        if (t.isEmpty()) return ""
+        if (t.startsWith(ChainRuntimeCompiler.GENERATED_PREFIX)) return ""
+        if (t == ChainRuntimeCompiler.LEGACY_CHAIN_TAG) return ""
+        if (t.startsWith(ChainRuntimeCompiler.LEGACY_PREFIX)) {
+            return t.removePrefix(ChainRuntimeCompiler.LEGACY_PREFIX)
+        }
+        return if (isDirectTag(t)) "DIRECT" else t
     }
 
     internal fun prettyDest(raw: String): String {
-        val value = raw.trim().ifBlank { "<unknown>" }
-        return if (value.length <= 24) value else value.take(21) + "…"
+        var value = raw.trim().ifBlank { "<unknown>" }
+        if (value.endsWith(":443") || value.endsWith(":80")) {
+            value = value.substringBeforeLast(':')
+        }
+        return if (value.length <= 22) value else value.take(19) + "…"
+    }
+
+    internal fun isDirectTag(tag: String): Boolean {
+        val t = tag.trim()
+        return t.equals("direct", ignoreCase = true) || t == "直连"
+    }
+
+    private fun extractAssigned(value: String): String? {
+        val match = ASSIGNMENT.find(value) ?: return null
+        return match.groupValues[2].trim()
+    }
+
+    private fun stripRuleName(raw: String): String {
+        var s = raw.trim()
+        if (s.startsWith("[")) s = s.removePrefix("[").substringBefore(']').trim()
+        s = s.trim().removeSurrounding("\"").removeSurrounding("'")
+        s = s.substringBefore(',').trim().removeSurrounding("\"").removeSurrounding("'")
+        s = s.substringAfterLast('/')
+        s = s.substringAfterLast(':')
+        s = s.removePrefix("geosite-").removePrefix("geoip-").removePrefix("category-")
+        if (s.startsWith("rule_set", ignoreCase = true)) return ""
+        return s.trim()
     }
 
     private fun idOf(column: Int, label: String): String = "$column|$label"
     private fun columnOf(id: String): Int = id.substringBefore('|').toIntOrNull() ?: 0
     private fun labelOf(id: String): String = id.substringAfter('|', id)
+
+    private val ASSIGNMENT = Regex(
+        """(?i)(rule_set|ruleset|geosite|geoip|domain_suffix|domain_keyword|domain|ip_cidr|ipcidr)\s*=\s*(.+)""",
+    )
 }
 
 object SankeyLayout {
+    fun requiredHeight(
+        nodes: List<FlowNode>,
+        pad: Float,
+        gapY: Float,
+        minHeights: Map<String, Float>,
+        floor: Float,
+    ): Float {
+        if (nodes.isEmpty()) return floor
+        val byCol = nodes.groupBy { it.column }
+        val needed = byCol.values.maxOf { col ->
+            val mins = col.map { node -> (minHeights[node.id] ?: 16f).coerceAtLeast(16f) }
+            pad * 2f + mins.sum() + gapY * (col.size - 1).coerceAtLeast(0)
+        }
+        return needed.coerceAtLeast(floor)
+    }
+
     fun layout(
         nodes: List<FlowNode>,
         links: List<FlowLink>,
@@ -238,39 +350,30 @@ object SankeyLayout {
         height: Float,
         nodeWidth: Float,
         pad: Float,
+        minHeights: Map<String, Float> = emptyMap(),
+        labelReserve: Float = 0f,
+        gapY: Float = 10f,
     ): Pair<List<PlacedNode>, List<PlacedRibbon>> {
         if (nodes.isEmpty() || width <= 0f || height <= 0f) {
             return emptyList<PlacedNode>() to emptyList()
         }
         val columns = nodes.groupBy { it.column }.toSortedMap()
         val nCols = columns.size.coerceAtLeast(1)
-        val inner = (width - 2f * pad).coerceAtLeast(nodeWidth * nCols)
+        val inner = (width - 2f * pad - labelReserve).coerceAtLeast(nodeWidth * nCols)
         val layerWidth = inner / nCols
         val placed = ArrayList<PlacedNode>(nodes.size)
         val byId = HashMap<String, PlacedNode>(nodes.size)
         columns.entries.forEachIndexed { index, (_, colNodes) ->
             val x = pad + index * layerWidth
-            val total = colNodes.sumOf { it.weight }.coerceAtLeast(1)
-            val gapY = 6f
             val n = colNodes.size
-            val usable = (height - 2f * pad - gapY * (n - 1).coerceAtLeast(0)).coerceAtLeast(16f)
-            val minH = 16f
-            val raw = colNodes.map { (usable * it.weight / total).coerceAtLeast(minH) }
-            val overflow = raw.sum() - usable
-            val heights = if (overflow > 0f) {
-                val shrinkable = raw.map { (it - minH).coerceAtLeast(0f) }
-                val shrinkSum = shrinkable.sum()
-                if (shrinkSum > 0f) {
-                    raw.mapIndexed { i, h -> h - overflow * shrinkable[i] / shrinkSum }
-                } else {
-                    List(n) { usable / n }
-                }
-            } else {
-                raw
-            }
+            val mins = colNodes.map { node -> (minHeights[node.id] ?: 16f).coerceAtLeast(16f) }
+            val minTotal = mins.sum() + gapY * (n - 1).coerceAtLeast(0)
+            val usable = (height - 2f * pad).coerceAtLeast(minTotal)
+            val extra = (usable - minTotal).coerceAtLeast(0f)
+            val total = colNodes.sumOf { it.weight }.coerceAtLeast(1)
             var y = pad
             colNodes.forEachIndexed { i, node ->
-                val h = heights[i]
+                val h = mins[i] + extra * node.weight / total
                 val item = PlacedNode(node, x, y, nodeWidth, h)
                 placed += item
                 byId[node.id] = item
@@ -300,6 +403,7 @@ object SankeyLayout {
                 y0Bottom = fy + fh,
                 y1Top = ty,
                 y1Bottom = ty + th,
+                direct = link.direct || from.node.direct || to.node.direct,
             )
             outCursor[from.node.id] = fy + fh
             inCursor[to.node.id] = ty + th

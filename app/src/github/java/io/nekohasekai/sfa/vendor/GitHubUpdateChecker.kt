@@ -15,9 +15,11 @@ import java.io.Closeable
 class GitHubUpdateChecker : Closeable {
     companion object {
         const val RELEASES_URL =
-            "https://api.github.com/repos/dukangalex/ChainBox/releases"
+            "https://api.github.com/repos/dukangalex/AngelaBox/releases"
         const val RELEASES_PAGE_URL =
-            "https://github.com/dukangalex/ChainBox/releases"
+            "https://github.com/dukangalex/AngelaBox/releases"
+        private const val LEGACY_RELEASES_URL =
+            "https://api.github.com/repos/dukangalex/ChainBox/releases"
         private const val PREFERRED_APK = "AngelaBox-android.apk"
     }
 
@@ -86,8 +88,20 @@ class GitHubUpdateChecker : Closeable {
     }
 
     private fun getReleases(githubToken: String): List<GitHubRelease> {
+        return try {
+            fetchReleaseList(RELEASES_URL, githubToken)
+        } catch (first: Exception) {
+            try {
+                fetchReleaseList(LEGACY_RELEASES_URL, githubToken)
+            } catch (_: Exception) {
+                throw first
+            }
+        }
+    }
+
+    private fun fetchReleaseList(url: String, githubToken: String): List<GitHubRelease> {
         val request = client.newRequest()
-        request.setURL(RELEASES_URL)
+        request.setURL(url)
         request.setHeader("Accept", "application/vnd.github.v3+json")
         val token = githubToken.trim()
         if (token.isNotEmpty()) {

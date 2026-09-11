@@ -4,8 +4,8 @@ AngelaBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 A
 
 本项目与 SagerNet 及官方 sing-box 无从属或授权关系，不得使用官方名称及标志进行商业发布或应用商店上架。
 
-- 发行版：[Releases](https://github.com/dukangalex/ChainBox/releases)
-- 构建：[Actions](https://github.com/dukangalex/ChainBox/actions)
+- 发行版：[Releases](https://github.com/dukangalex/AngelaBox/releases)
+- 构建：[Actions](https://github.com/dukangalex/AngelaBox/actions)
 - 使用说明：[docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - 维护说明：[docs/MAINTENANCE.md](docs/MAINTENANCE.md)
 
@@ -15,12 +15,12 @@ AngelaBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 A
 |------|-----|
 | 应用名称 | AngelaBox |
 | 应用包名 | `io.chainbox.app`（保持不变，便于覆盖安装） |
-| 客户端仓库 | [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox)（分支 `dev`） |
+| 客户端仓库 | [dukangalex/AngelaBox](https://github.com/dukangalex/AngelaBox)（分支 `dev`） |
 | 内核仓库 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box)（分支 `chain-dev`） |
 | 更新检查 | 仅本仓库 GitHub Releases |
 | 应用图标 | 白色底、居中立方体（橙黄顶 / 天蓝正面 / 玫红侧面） |
 
-曾用名 ChainBox。产品名称已更名为 AngelaBox；代码仓库路径与应用包名保持不变，以免打断已安装用户的覆盖更新。
+曾用名 ChainBox。产品名称与代码仓库均已更名为 AngelaBox；应用包名仍为 `io.chainbox.app`，以免打断已安装用户的覆盖更新。
 
 ## 上游内核
 
@@ -68,7 +68,7 @@ AngelaBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 A
 设备 → 入口节点 → 落地节点 → 目的站
 ```
 
-仪表页以放射状实时路径显示流量：来源 → 规则 → 当前入口/落地 → 活动目标。Direct 模式显示设备 → DIRECT → 目标。
+仪表页以放射状实时路径显示流量：来源 → 规则 → 当前入口/落地 → 活动目标。直连流量为灰色线束，代理流量为彩色。Direct 模式显示设备 → DIRECT → 目标。
 
 1. 导入并启用配置，确认基础连通。
 2. 在「工具 → 链式代理」中为**当前配置**选择入口与落地并保存。其他配置可各自绑定不同落地。
@@ -82,7 +82,7 @@ AngelaBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 A
 
 ## 下载
 
-请从 [Releases](https://github.com/dukangalex/ChainBox/releases) 下载 `AngelaBox-android.apk`，并用同目录 `AngelaBox-android.apk.sha256` 校验。同内容也会发布 `ChainBox-android.apk`，便于旧版应用内更新。
+请从 [Releases](https://github.com/dukangalex/AngelaBox/releases) 下载 `AngelaBox-android.apk`，并用同目录 `AngelaBox-android.apk.sha256` 校验。同内容也会发布 `ChainBox-android.apk`，便于旧版应用内更新。
 
 ```
 sha256sum -c AngelaBox-android.apk.sha256

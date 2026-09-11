@@ -181,13 +181,71 @@ class ChainPathTest {
         )
         val labels = nodes.map { it.label }
         assertTrue(labels.any { it.contains("172.19.0.1") })
-        assertTrue(labels.any { it.startsWith("RuleSet:") })
+        assertTrue(labels.contains("google"))
+        assertTrue(labels.contains("telegram"))
         assertTrue(labels.contains("hk-1"))
         assertTrue(labels.contains("us-9"))
         assertTrue(links.isNotEmpty())
         val (placed, ribbons) = SankeyLayout.layout(nodes, links, 400f, 200f, 64f, 4f)
         assertEquals(nodes.size, placed.size)
         assertTrue(ribbons.isNotEmpty())
+    }
+
+    @Test
+    fun prettyRuleParsesRuleSetAssignment() {
+        assertEquals("google", TrafficFlowBuilder.prettyRule("""rule_set=["geosite-google"]"""))
+        assertEquals("github", TrafficFlowBuilder.prettyRule("rule_set=geosite-github"))
+        assertEquals("cn", TrafficFlowBuilder.prettyRule("geoip-cn"))
+        assertEquals("<final>", TrafficFlowBuilder.prettyRule(""))
+    }
+
+    @Test
+    fun generatedChainTagIsHidden() {
+        val path = ChainPathBuilder.build(
+            profileName = "UOT",
+            defaultOutboundTag = "节点选择",
+            binding = ChainBinding(1L, "节点选择", 2L, "zgo"),
+            landingProfileName = "VPS",
+        )
+        val (nodes, _) = TrafficFlowBuilder.build(
+            samples = listOf(
+                FlowSample(
+                    source = "172.19.0.1:1",
+                    rule = """rule_set=["geosite-google"]""",
+                    outbound = "chainbox-chain-7-6",
+                    chain = listOf("chainbox-chain-7-6"),
+                    dest = "www.google.com:443",
+                ),
+            ),
+            path = path,
+            chained = true,
+        )
+        assertTrue(nodes.none { it.label.contains("chainbox", ignoreCase = true) })
+        assertTrue(nodes.any { it.label == "节点选择" })
+        assertTrue(nodes.any { it.label == "zgo" })
+        assertTrue(nodes.any { it.label == "google" })
+        assertTrue(nodes.any { it.label == "www.google.com" })
+    }
+
+    @Test
+    fun directHopsUseDistinctFlag() {
+        val path = ChainPath.regular(profileName = "UOT", exitTag = "节点选择")
+        val (nodes, links) = TrafficFlowBuilder.build(
+            samples = listOf(
+                FlowSample(
+                    source = "172.19.0.1:2",
+                    rule = "geoip-cn",
+                    outbound = "DIRECT",
+                    chain = listOf("DIRECT"),
+                    dest = "www.baidu.com:443",
+                ),
+            ),
+            path = path,
+            chained = false,
+        )
+        assertTrue(nodes.any { it.label == "DIRECT" && it.direct })
+        assertTrue(links.any { it.direct })
+        assertTrue(nodes.any { it.label == "cn" })
     }
 
     @Test

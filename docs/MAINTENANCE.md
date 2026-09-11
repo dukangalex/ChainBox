@@ -28,7 +28,7 @@ git merge upstream/dev
 | 仓库 | 分支 | 职责 |
 |------|------|------|
 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box) | `chain-dev` | Chain 内核（低耦合 outbound） |
-| [dukangalex/ChainBox](https://github.com/dukangalex/ChainBox) | `dev` | AngelaBox Android 客户端 |
+| [dukangalex/AngelaBox](https://github.com/dukangalex/AngelaBox) | `dev` | AngelaBox Android 客户端 |
 
 | 项目 | 值 |
 |------|-----|
@@ -39,9 +39,9 @@ git merge upstream/dev
 
 ## 对外身份（已落地）
 
-- 对外产品名、README、About、Release、APK 文件名都是 AngelaBox。仓库路径仍为 `dukangalex/ChainBox`，包名仍为 `io.chainbox.app`。
+- 对外产品名、README、About、Release、APK 文件名、仓库路径都是 AngelaBox。包名仍为 `io.chainbox.app`。
 - 同时发布 `ChainBox-android.apk`（与 AngelaBox 包内容相同），供旧版应用内更新。
-- App 更新只查 `https://api.github.com/repos/dukangalex/ChainBox/releases`。
+- App 更新只查 `https://api.github.com/repos/dukangalex/AngelaBox/releases`（旧仓库名会重定向）。
 - 不走 F-Droid / 官方 SagerNet 更新源。
 - 不得用官方名称上架应用商店。
 

@@ -7,15 +7,19 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material3.Card
@@ -30,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -37,6 +42,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -165,7 +171,7 @@ fun ChainPathCard(
                 flowing = topology.flowing && running,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (running) 300.dp else 200.dp),
+                    .height(if (running) 320.dp else 200.dp),
             )
         }
     }
@@ -208,8 +214,10 @@ private fun TrafficSankey(
     flowing: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurface
+    val scrim = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)
     val labelStyle = TextStyle(
         fontSize = 10.sp,
         fontWeight = FontWeight.Medium,
@@ -229,88 +237,126 @@ private fun TrafficSankey(
     val rule = Color(0xFFA8D4A0)
     val hop = Color(0xFFFDDB8A)
     val dest = Color(0xFFF2A0A0)
-    Canvas(modifier = modifier) {
-        if (nodes.isEmpty()) return@Canvas
-        val barW = 12.dp.toPx()
-        val (placed, ribbons) = SankeyLayout.layout(
-            nodes = nodes,
-            links = links,
-            width = size.width,
-            height = size.height,
-            nodeWidth = barW,
-            pad = 4.dp.toPx(),
-        )
-        fun columnColor(col: Int, last: Int): Color = when {
-            col <= 0 -> source
-            col == last -> dest
-            col == 1 && last >= 3 -> rule
-            else -> hop
-        }
-        val lastCol = nodes.maxOf { it.column }
-        val colXs = placed.groupBy { it.node.column }.mapValues { (_, items) -> items.first().x }
-        val sortedCols = colXs.keys.sorted()
-        ribbons.forEach { ribbon ->
-            val fromC = columnColor(ribbon.columnFrom, lastCol)
-            val toC = columnColor(ribbon.columnTo, lastCol)
-            val path = ribbonPath(ribbon)
-            drawPath(
-                path = path,
-                brush = Brush.horizontalGradient(
-                    colors = listOf(fromC.copy(alpha = 0.40f), toC.copy(alpha = 0.40f)),
-                    startX = ribbon.x0,
-                    endX = ribbon.x1,
-                ),
-            )
-        }
-        if (flowing) {
-            ribbons.forEach { ribbon ->
-                val fromC = columnColor(ribbon.columnFrom, lastCol)
-                val toC = columnColor(ribbon.columnTo, lastCol)
-                val dx = (ribbon.x1 - ribbon.x0) * 0.48f
-                val y0 = (ribbon.y0Top + ribbon.y0Bottom) / 2f
-                val y1 = (ribbon.y1Top + ribbon.y1Bottom) / 2f
-                val dots = 3
-                for (k in 0 until dots) {
-                    val t = (phase + k / dots.toFloat()) % 1f
-                    val p = cubicPoint(
-                        t,
-                        ribbon.x0, y0,
-                        ribbon.x0 + dx, y0,
-                        ribbon.x1 - dx, y1,
-                        ribbon.x1, y1,
+    val direct = Color(0xFF94A3B8)
+    BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        val padPx = with(density) { 6.dp.toPx() }
+        val gapY = with(density) { 10.dp.toPx() }
+        val minLine = with(density) { 20.dp.toPx() }
+        val labelReserve = with(density) { 112.dp.toPx() }
+        val minHeights = remember(nodes) { nodes.associate { it.id to minLine } }
+        val viewport = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+        val canvasH = SankeyLayout.requiredHeight(nodes, padPx, gapY, minHeights, viewport)
+        val canvasDp = with(density) { canvasH.toDp() }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(canvasDp),
+            ) {
+                if (nodes.isEmpty()) return@Canvas
+                val barW = 12.dp.toPx()
+                val (placed, ribbons) = SankeyLayout.layout(
+                    nodes = nodes,
+                    links = links,
+                    width = size.width,
+                    height = size.height,
+                    nodeWidth = barW,
+                    pad = padPx,
+                    minHeights = minHeights,
+                    labelReserve = labelReserve,
+                    gapY = gapY,
+                )
+                fun columnColor(col: Int, last: Int): Color = when {
+                    col <= 0 -> source
+                    col == last -> dest
+                    col == 1 && last >= 3 -> rule
+                    else -> hop
+                }
+                val lastCol = nodes.maxOf { it.column }
+                val colXs = placed.groupBy { it.node.column }.mapValues { (_, items) -> items.first().x }
+                val sortedCols = colXs.keys.sorted()
+                fun fromInk(ribbon: PlacedRibbon): Color =
+                    if (ribbon.direct) direct else columnColor(ribbon.columnFrom, lastCol)
+                fun toInk(ribbon: PlacedRibbon): Color =
+                    if (ribbon.direct) direct else columnColor(ribbon.columnTo, lastCol)
+                ribbons.forEach { ribbon ->
+                    val fromC = fromInk(ribbon)
+                    val toC = toInk(ribbon)
+                    drawPath(
+                        path = ribbonPath(ribbon),
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(fromC.copy(alpha = 0.40f), toC.copy(alpha = 0.40f)),
+                            startX = ribbon.x0,
+                            endX = ribbon.x1,
+                        ),
                     )
-                    val glow = lerp(fromC, toC, t)
-                    drawCircle(glow.copy(alpha = 0.22f), radius = 6.dp.toPx(), center = p)
-                    drawCircle(glow.copy(alpha = 0.75f), radius = 2.4.dp.toPx(), center = p)
-                    drawCircle(Color.White.copy(alpha = 0.90f), radius = 1.1.dp.toPx(), center = p)
+                }
+                if (flowing) {
+                    ribbons.forEach { ribbon ->
+                        val fromC = fromInk(ribbon)
+                        val toC = toInk(ribbon)
+                        val dx = (ribbon.x1 - ribbon.x0) * 0.48f
+                        val y0 = (ribbon.y0Top + ribbon.y0Bottom) / 2f
+                        val y1 = (ribbon.y1Top + ribbon.y1Bottom) / 2f
+                        val dots = 3
+                        for (k in 0 until dots) {
+                            val t = (phase + k / dots.toFloat()) % 1f
+                            val p = cubicPoint(
+                                t,
+                                ribbon.x0, y0,
+                                ribbon.x0 + dx, y0,
+                                ribbon.x1 - dx, y1,
+                                ribbon.x1, y1,
+                            )
+                            val glow = lerp(fromC, toC, t)
+                            drawCircle(glow.copy(alpha = 0.22f), radius = 6.dp.toPx(), center = p)
+                            drawCircle(glow.copy(alpha = 0.75f), radius = 2.4.dp.toPx(), center = p)
+                            drawCircle(Color.White.copy(alpha = 0.90f), radius = 1.1.dp.toPx(), center = p)
+                        }
+                    }
+                }
+                placed.forEach { node ->
+                    val ink = if (node.node.direct) direct else columnColor(node.node.column, lastCol)
+                    drawRoundRect(
+                        color = ink,
+                        topLeft = Offset(node.x, node.y),
+                        size = Size(node.w, node.h),
+                        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
+                    )
+                    val colIndex = sortedCols.indexOf(node.node.column)
+                    val nextX = if (colIndex >= 0 && colIndex < sortedCols.lastIndex) {
+                        colXs[sortedCols[colIndex + 1]] ?: size.width
+                    } else {
+                        size.width - padPx
+                    }
+                    val maxText = (nextX - node.x - node.w - 8.dp.toPx()).coerceAtLeast(24.dp.toPx())
+                    val layout = textMeasurer.measure(
+                        text = node.node.label,
+                        style = labelStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        constraints = Constraints(maxWidth = maxText.toInt()),
+                    )
+                    val tx = node.x + node.w + 5f
+                    val ty = node.y + ((node.h - layout.size.height) / 2f).coerceAtLeast(0f)
+                    val padX = 3.dp.toPx()
+                    val padY = 1.dp.toPx()
+                    drawRoundRect(
+                        color = scrim,
+                        topLeft = Offset(tx - padX, ty - padY),
+                        size = Size(
+                            layout.size.width.toFloat() + padX * 2f,
+                            layout.size.height.toFloat() + padY * 2f,
+                        ),
+                        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx()),
+                    )
+                    drawText(layout, topLeft = Offset(tx, ty))
                 }
             }
-        }
-        placed.forEach { node ->
-            val ink = columnColor(node.node.column, lastCol)
-            drawRoundRect(
-                color = ink,
-                topLeft = Offset(node.x, node.y),
-                size = Size(node.w, node.h),
-                cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
-            )
-            val colIndex = sortedCols.indexOf(node.node.column)
-            val nextX = if (colIndex >= 0 && colIndex < sortedCols.lastIndex) {
-                colXs[sortedCols[colIndex + 1]] ?: size.width
-            } else {
-                size.width - 4.dp.toPx()
-            }
-            val maxText = (nextX - node.x - node.w - 8.dp.toPx()).coerceAtLeast(24.dp.toPx())
-            val layout = textMeasurer.measure(
-                text = node.node.label,
-                style = labelStyle,
-                maxLines = if (node.h >= 28f) 2 else 1,
-                overflow = TextOverflow.Ellipsis,
-                constraints = Constraints(maxWidth = maxText.toInt()),
-            )
-            val tx = node.x + node.w + 5f
-            val ty = node.y + ((node.h - layout.size.height) / 2f).coerceAtLeast(0f)
-            drawText(layout, topLeft = Offset(tx, ty))
         }
     }
 }

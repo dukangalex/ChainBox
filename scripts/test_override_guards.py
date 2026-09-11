@@ -393,8 +393,29 @@ def main() -> int:
         errors.append("sankey labels must sit beside thin bars, not inside wide pills")
     if "0xFF6A6FC5" not in path_card:
         errors.append("sankey colors should follow the radiating source-rule-hop-dest palette")
+    if "0xFF94A3B8" not in path_card:
+        errors.append("DIRECT hops and ribbons must use a distinct slate color")
+    if "verticalScroll" not in path_card:
+        errors.append("sankey must scroll instead of crushing overlapping labels")
+    if "maxLines = 1" not in path_card:
+        errors.append("sankey labels must stay on one line")
     if "headlineSmall" not in path_card:
         errors.append("path card should show live down/up rates like the home topology")
+    flow = read("app/src/main/java/io/nekohasekai/sfa/chain/TrafficFlow.kt")
+    if "prettyHop" not in flow:
+        errors.append("generated chain tags must be stripped before they become hop labels")
+    if "val direct: Boolean" not in flow:
+        errors.append("flow nodes/links must flag DIRECT traffic")
+    if "labelReserve" not in flow:
+        errors.append("sankey layout must reserve dest-label space so names do not overlap bars")
+    if "FlyCat" in readme or "FlyCat" in read("docs/MAINTENANCE.md") or "FlyCat" in read("docs/USER_GUIDE.md"):
+        errors.append("docs must not mention FlyCat; this Sankey is original")
+    if "dukangalex/AngelaBox" not in readme:
+        errors.append("README must point at dukangalex/AngelaBox")
+    if "dukangalex/AngelaBox" not in read("docs/MAINTENANCE.md"):
+        errors.append("MAINTENANCE must point at dukangalex/AngelaBox")
+    if "defaultDisabledCards" not in dash:
+        errors.append("dashboard should hide duplicate upload/download cards by default")
     if "chartHeight = 18.dp" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/UploadTrafficCard.kt"):
         errors.append("traffic cards should use a compact sparkline")
     if "AngelaBox" not in read("app/src/main/res/values/strings.xml"):
@@ -405,6 +426,8 @@ def main() -> int:
     checker = read("app/src/github/java/io/nekohasekai/sfa/vendor/GitHubUpdateChecker.kt")
     if "pickSha256" not in checker:
         errors.append("GitHub update checker must fetch the APK SHA-256 asset")
+    if "dukangalex/AngelaBox/releases" not in checker:
+        errors.append("GitHub update checker must query dukangalex/AngelaBox")
     workflow = read(".github/workflows/build-chainbox.yml")
     if "check_upstream_features.py" not in workflow:
         errors.append("release workflow must check official type constants")

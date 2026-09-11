@@ -108,8 +108,6 @@ data class DashboardUiState(
         setOf(
             CardGroup.ChainPath,
             CardGroup.ClashMode,
-            CardGroup.UploadTraffic,
-            CardGroup.DownloadTraffic,
             CardGroup.Debug,
             CardGroup.Connections,
             CardGroup.SystemProxy,
@@ -921,7 +919,7 @@ class DashboardViewModel :
         updateState {
             copy(
                 cardOrder = getDefaultItemOrder(),
-                visibleCards = CardGroup.values().toSet(),
+                visibleCards = defaultVisibleCards(),
             )
         }
     }
@@ -937,6 +935,13 @@ class DashboardViewModel :
         CardGroup.ClashMode,
         CardGroup.Profiles,
     )
+
+    private fun defaultDisabledCards() = setOf(
+        CardGroup.UploadTraffic,
+        CardGroup.DownloadTraffic,
+    )
+
+    private fun defaultVisibleCards() = CardGroup.values().toSet() - defaultDisabledCards()
 
     private fun loadItemOrder(): List<CardGroup> {
         val savedOrder = Settings.dashboardItemOrder
@@ -983,6 +988,11 @@ class DashboardViewModel :
 
     private fun loadDisabledItems(): Set<CardGroup> {
         val savedDisabled = Settings.dashboardDisabledItems
+        if (savedDisabled.isEmpty() && Settings.dashboardItemOrder.isBlank()) {
+            val defaults = defaultDisabledCards()
+            Settings.dashboardDisabledItems = defaults.map { cardGroupToString(it) }.toSet()
+            return defaults
+        }
         // Filter out Profiles from disabled items (it cannot be disabled)
         return savedDisabled.mapNotNull { stringToCardGroup(it) }
             .filter { it != CardGroup.Profiles }
