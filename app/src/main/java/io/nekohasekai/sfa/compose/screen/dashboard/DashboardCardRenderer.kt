@@ -50,6 +50,11 @@ fun DashboardCardRenderer(
                 uplinkTotal = uiState.uplinkTotal,
                 downlinkHistory = uiState.downlinkHistory,
                 profileName = uiState.selectedProfileName.orEmpty(),
+                clashModes = uiState.clashModes,
+                selectedClashMode = uiState.selectedClashMode,
+                onClashModeSelected = onClashModeSelected,
+                onShowProfilePicker = onShowProfilePickerSheet,
+                onOpenNewProfile = onOpenNewProfile,
                 modifier = modifier,
             )
         }

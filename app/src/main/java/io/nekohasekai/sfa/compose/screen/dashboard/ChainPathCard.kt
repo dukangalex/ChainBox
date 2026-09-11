@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,7 +23,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,7 +34,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -40,6 +46,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -59,7 +66,9 @@ import io.nekohasekai.sfa.chain.LiveHop
 import io.nekohasekai.sfa.chain.LiveTopology
 import io.nekohasekai.sfa.chain.PlacedRibbon
 import io.nekohasekai.sfa.chain.SankeyLayout
+import io.nekohasekai.sfa.chain.TrafficFlowBuilder
 import io.nekohasekai.sfa.compose.LineChart
+import io.nekohasekai.sfa.compose.navigation.NewProfileArgs
 
 @Composable
 fun ChainPathCard(
@@ -72,27 +81,59 @@ fun ChainPathCard(
     uplinkTotal: String = "",
     downlinkHistory: List<Float> = emptyList(),
     profileName: String = "",
+    clashModes: List<String> = emptyList(),
+    selectedClashMode: String = "",
+    onClashModeSelected: (String) -> Unit = {},
+    onShowProfilePicker: () -> Unit = {},
+    onOpenNewProfile: (NewProfileArgs) -> Unit = {},
 ) {
     val running = topology.running
     val exitHop = remember(topology.hops) { pickExitHop(topology.hops) }
     val entryHop = remember(topology.hops) {
         topology.hops.firstOrNull { it.role == ChainPathHop.Role.Entry }
     }
+    val nodeName = remember(exitHop, profileName) {
+        TrafficFlowBuilder.prettyHop(
+            exitHop?.title?.ifBlank { exitHop.subtitle }.orEmpty(),
+        ).ifBlank { profileName.ifBlank { "—" } }
+    }
+    val entryName = remember(entryHop) {
+        TrafficFlowBuilder.prettyHop(
+            entryHop?.title?.ifBlank { entryHop.subtitle }.orEmpty(),
+        )
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onOpenChainBuilder)
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+            .padding(horizontal = 4.dp, vertical = 2.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (profileName.isNotBlank()) {
-                StatusChip(profileName, emphasized = false)
+                StatusChip(profileName, emphasized = false, onClick = onShowProfilePicker)
                 Spacer(modifier = Modifier.width(6.dp))
             }
-            StatusPill(topology)
+            IconButton(
+                onClick = { onOpenNewProfile(NewProfileArgs()) },
+                modifier = Modifier.size(28.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Add,
+                    contentDescription = stringResource(R.string.add_profile),
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (clashModes.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(4.dp))
+                ModeChip(
+                    modes = clashModes,
+                    selected = selectedClashMode,
+                    onSelected = onClashModeSelected,
+                )
+            }
             Spacer(modifier = Modifier.weight(1f))
             IconButton(
                 onClick = onOpenChainBuilder,
@@ -101,65 +142,78 @@ fun ChainPathCard(
                 Icon(
                     imageVector = Icons.Outlined.OpenInNew,
                     contentDescription = stringResource(R.string.chain_builder),
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }
 
-        Text(
-            text = stringResource(R.string.chain_path_downlink),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        val (downNum, downUnit) = remember(downlink) { splitRate(downlink.ifEmpty { "0 B/s" }) }
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                text = downNum,
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF2E9E7A),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = downUnit,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 6.dp),
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = stringResource(R.string.chain_path_uplink),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = uplink.ifEmpty { "0 B/s" },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium,
-            )
-            if (downlinkTotal.isNotEmpty() || uplinkTotal.isNotEmpty()) {
-                Spacer(modifier = Modifier.weight(1f))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "↓ ${downlinkTotal.ifEmpty { "0 B" }}  ↑ ${uplinkTotal.ifEmpty { "0 B" }}",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = stringResource(R.string.chain_path_downlink),
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                val (downNum, downUnit) = remember(downlink) { splitRate(downlink.ifEmpty { "0 B/s" }) }
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = downNum,
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF2E9E7A),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = downUnit,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.chain_path_uplink),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = uplink.ifEmpty { "0 B/s" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
             }
+            BrandMark(modifier = Modifier.size(96.dp))
         }
 
-        if (running) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (running) {
                 StatusChip(stringResource(R.string.chain_path_running), emphasized = true)
                 if (topology.chained) {
                     Spacer(modifier = Modifier.width(6.dp))
                     StatusChip(stringResource(R.string.chain_path_chained), emphasized = false)
                 }
+                if (topology.mode.equals("direct", ignoreCase = true)) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    StatusChip(stringResource(R.string.chain_path_mode_direct), emphasized = false)
+                }
+            } else {
+                StatusChip(stringResource(R.string.chain_path_idle), emphasized = false)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            if (downlinkTotal.isNotEmpty() || uplinkTotal.isNotEmpty()) {
+                Text(
+                    text = "↓ ${downlinkTotal.ifEmpty { "0 B" }}  ↑ ${uplinkTotal.ifEmpty { "0 B" }}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -172,8 +226,7 @@ fun ChainPathCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = exitHop?.title?.ifBlank { exitHop.subtitle }.orEmpty()
-                        .ifBlank { profileName.ifBlank { "—" } },
+                    text = nodeName,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -203,7 +256,7 @@ fun ChainPathCard(
                 )
             }
         }
-        if (topology.chained && entryHop != null) {
+        if (topology.chained && entryName.isNotBlank() && entryName != nodeName) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.chain_path_entry),
@@ -211,7 +264,7 @@ fun ChainPathCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = entryHop.title.ifBlank { entryHop.subtitle }.ifBlank { "—" },
+                text = entryName,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -242,7 +295,7 @@ fun ChainPathCard(
                         "waiting" -> waiting
                         "<unknown>" -> unknown
                         "<final>" -> finalRule
-                        else -> node.label
+                        else -> TrafficFlowBuilder.prettyHop(node.label).ifBlank { node.label }
                     },
                 )
             }
@@ -255,7 +308,8 @@ fun ChainPathCard(
             flowing = topology.flowing && running,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (running) 280.dp else 180.dp),
+                .height(if (running) 280.dp else 180.dp)
+                .clickable(onClick = onOpenChainBuilder),
         )
 
         if (topology.destinations.isNotEmpty()) {
@@ -272,19 +326,34 @@ fun ChainPathCard(
 }
 
 @Composable
-private fun StatusPill(topology: LiveTopology) {
-    val (label, emphasized) = when {
-        !topology.running -> stringResource(R.string.chain_path_idle) to false
-        topology.mode.equals("direct", ignoreCase = true) ->
-            stringResource(R.string.chain_path_mode_direct) to false
-        topology.chained -> stringResource(R.string.chain_path_live_chained) to true
-        else -> stringResource(R.string.chain_path_live_regular) to false
+private fun ModeChip(
+    modes: List<String>,
+    selected: String,
+    onSelected: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        StatusChip(
+            label = selected.ifBlank { modes.first() },
+            emphasized = true,
+            onClick = { expanded = true },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            modes.forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(mode) },
+                    onClick = {
+                        onSelected(mode)
+                        expanded = false
+                    },
+                )
+            }
+        }
     }
-    StatusChip(label, emphasized)
 }
 
 @Composable
-private fun StatusChip(label: String, emphasized: Boolean) {
+private fun StatusChip(label: String, emphasized: Boolean, onClick: (() -> Unit)? = null) {
     Surface(
         shape = RoundedCornerShape(50),
         color = if (emphasized) {
@@ -297,6 +366,7 @@ private fun StatusChip(label: String, emphasized: Boolean) {
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
+        onClick = onClick ?: {},
     ) {
         Text(
             text = label,
@@ -306,6 +376,50 @@ private fun StatusChip(label: String, emphasized: Boolean) {
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+@Composable
+private fun BrandMark(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        drawCube()
+    }
+}
+
+private fun DrawScope.drawCube() {
+    val w = size.minDimension
+    val cx = size.width / 2f
+    val cy = size.height / 2f
+    val s = w * 0.34f
+    val lift = s * 0.58f
+    val skew = s * 0.72f
+    val top = Color(0xFFF5A623)
+    val front = Color(0xFF4EC3EA)
+    val side = Color(0xFFE45B74)
+    val o = Offset(cx, cy + s * 0.06f)
+    val pTop = Path().apply {
+        moveTo(o.x, o.y - lift)
+        lineTo(o.x + skew, o.y - lift * 0.28f)
+        lineTo(o.x, o.y + lift * 0.18f)
+        lineTo(o.x - skew, o.y - lift * 0.28f)
+        close()
+    }
+    val pFront = Path().apply {
+        moveTo(o.x - skew, o.y - lift * 0.28f)
+        lineTo(o.x, o.y + lift * 0.18f)
+        lineTo(o.x, o.y + lift * 0.18f + s)
+        lineTo(o.x - skew, o.y - lift * 0.28f + s)
+        close()
+    }
+    val pSide = Path().apply {
+        moveTo(o.x + skew, o.y - lift * 0.28f)
+        lineTo(o.x, o.y + lift * 0.18f)
+        lineTo(o.x, o.y + lift * 0.18f + s)
+        lineTo(o.x + skew, o.y - lift * 0.28f + s)
+        close()
+    }
+    drawPath(pFront, front)
+    drawPath(pSide, side)
+    drawPath(pTop, top)
 }
 
 @Composable
@@ -365,8 +479,8 @@ private fun TrafficSankey(
             val padH = with(density) { 6.dp.toPx() }
             measured.mapValues { (_, layout) -> layout.size.height + padH }
         }
-        val required = SankeyLayout.requiredHeight(nodes, padPx, gapY, minHeights, viewportPx)
-        val canvasH = required.coerceAtMost(viewportPx * 2.4f)
+        val required = SankeyLayout.requiredHeight(nodes, padPx, gapY, minHeights, 1f)
+        val canvasH = required.coerceAtMost(viewportPx * 2.4f).coerceAtLeast(1f)
         val canvasDp = with(density) { canvasH.toDp() }
         Column(
             Modifier

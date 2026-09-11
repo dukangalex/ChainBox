@@ -412,8 +412,16 @@ def main() -> int:
         errors.append("flow nodes/links must flag DIRECT traffic")
     if "MAX_COLUMN" not in flow:
         errors.append("live path must stay within four columns so labels fit")
-    if "pathShowing" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardScreen.kt"):
-        errors.append("dashboard must hide duplicate upload/download cards while the path is visible")
+    if "BrandMark" not in path_card:
+        errors.append("home hero should include the cube brand mark")
+    if "ModeChip" not in path_card:
+        errors.append("clash mode must stay reachable from the home chips")
+    if "onShowProfilePicker" not in path_card:
+        errors.append("profile picker must stay reachable from the home chips")
+    if "homeHidden" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardScreen.kt"):
+        errors.append("home must hide the duplicate debug/mode/profile cards")
+    if "shortenNodeName" not in flow:
+        errors.append("landing hop labels must be shortened for display")
     if "FlyCat" in readme or "FlyCat" in read("docs/MAINTENANCE.md") or "FlyCat" in read("docs/USER_GUIDE.md"):
         errors.append("docs must not mention FlyCat; this Sankey is original")
     if "dukangalex/AngelaBox" not in readme:

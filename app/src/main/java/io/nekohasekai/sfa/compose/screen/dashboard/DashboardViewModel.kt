@@ -876,11 +876,6 @@ class DashboardViewModel :
     }
 
     fun toggleCardVisibility(cardGroup: CardGroup) {
-        // Profiles card cannot be disabled
-        if (cardGroup == CardGroup.Profiles) {
-            return
-        }
-
         updateState {
             val newVisibleCards =
                 if (visibleCards.contains(cardGroup)) {
@@ -912,14 +907,14 @@ class DashboardViewModel :
     }
 
     fun resetCardOrder() {
-        // Clear saved settings to restore defaults
         Settings.dashboardItemOrder = ""
-        Settings.dashboardDisabledItems = emptySet()
-
+        Settings.dashboardStyleVersion = 2
+        val visible = defaultVisibleCards()
+        saveDisabledItems(visible)
         updateState {
             copy(
                 cardOrder = getDefaultItemOrder(),
-                visibleCards = defaultVisibleCards(),
+                visibleCards = visible,
             )
         }
     }
@@ -939,6 +934,10 @@ class DashboardViewModel :
     private fun defaultDisabledCards() = setOf(
         CardGroup.UploadTraffic,
         CardGroup.DownloadTraffic,
+        CardGroup.Debug,
+        CardGroup.Connections,
+        CardGroup.ClashMode,
+        CardGroup.Profiles,
     )
 
     private fun defaultVisibleCards() = CardGroup.values().toSet() - defaultDisabledCards()
@@ -987,23 +986,24 @@ class DashboardViewModel :
     }
 
     private fun loadDisabledItems(): Set<CardGroup> {
+        if (Settings.dashboardStyleVersion < 2) {
+            Settings.dashboardStyleVersion = 2
+            val defaults = defaultDisabledCards()
+            Settings.dashboardDisabledItems = defaults.map { cardGroupToString(it) }.toSet()
+            return defaults
+        }
         val savedDisabled = Settings.dashboardDisabledItems
         if (savedDisabled.isEmpty() && Settings.dashboardItemOrder.isBlank()) {
             val defaults = defaultDisabledCards()
             Settings.dashboardDisabledItems = defaults.map { cardGroupToString(it) }.toSet()
             return defaults
         }
-        // Filter out Profiles from disabled items (it cannot be disabled)
-        return savedDisabled.mapNotNull { stringToCardGroup(it) }
-            .filter { it != CardGroup.Profiles }
-            .toSet()
+        return savedDisabled.mapNotNull { stringToCardGroup(it) }.toSet()
     }
 
     private fun saveDisabledItems(visibleCards: Set<CardGroup>) {
         val allItems = CardGroup.values().toSet()
-        // Always ensure Profiles is in visibleCards (cannot be disabled)
-        val actualVisibleCards = visibleCards + CardGroup.Profiles
-        val disabledItems = allItems - actualVisibleCards
+        val disabledItems = allItems - visibleCards
         Settings.dashboardDisabledItems = disabledItems.map { cardGroupToString(it) }.toSet()
     }
 

@@ -230,8 +230,7 @@ object ChainRuntimeCompiler {
         if (t.isEmpty() || isGeneratedChainTag(t)) return ""
         if (t.startsWith(ENTRY_PREFIX)) return t.removePrefix(ENTRY_PREFIX)
         if (t.startsWith(LANDING_PREFIX)) {
-            val rest = t.removePrefix(LANDING_PREFIX)
-            return rest.substringAfter("-", rest)
+            return t.removePrefix(LANDING_PREFIX).replaceFirst(Regex("^\\d+-"), "")
         }
         if (t.startsWith(LEGACY_PREFIX)) return t.removePrefix(LEGACY_PREFIX)
         return t

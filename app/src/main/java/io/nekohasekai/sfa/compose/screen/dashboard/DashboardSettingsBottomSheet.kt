@@ -431,11 +431,9 @@ fun DashboardItemCard(
                 )
             }
 
-            // Visibility toggle - Profiles card cannot be disabled
             Switch(
                 checked = isVisible,
                 onCheckedChange = { onToggleVisibility() },
-                enabled = cardGroup != CardGroup.Profiles, // Disable switch for Profiles card
             )
         }
     }

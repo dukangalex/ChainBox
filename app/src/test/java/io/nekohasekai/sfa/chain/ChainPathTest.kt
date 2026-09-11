@@ -199,6 +199,12 @@ class ChainPathTest {
         assertEquals("github", TrafficFlowBuilder.prettyRule("rule_set=geosite-github"))
         assertEquals("cn", TrafficFlowBuilder.prettyRule("geoip-cn"))
         assertEquals("<final>", TrafficFlowBuilder.prettyRule(""))
+        assertEquals(
+            "tracy",
+            TrafficFlowBuilder.prettyHop("chainbox-landing-6-tracy-VLESS_TCP/TLS_WS-example.com"),
+        )
+        assertEquals("ofo.033388.xyz", TrafficFlowBuilder.prettyHop("ofo.033388.xyz"))
+        assertEquals("自动选择", TrafficFlowBuilder.prettyHop("chainbox-entry-自动选择"))
     }
 
     @Test

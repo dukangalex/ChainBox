@@ -245,6 +245,7 @@ class ChainRuntimeCompilerTest {
     fun displayHopTagStripsGeneratedPrefixes() {
         assertEquals("自动选择", ChainRuntimeCompiler.displayHopTag("chainbox-entry-自动选择"))
         assertEquals("zgo", ChainRuntimeCompiler.displayHopTag("chainbox-landing-99-zgo"))
+        assertEquals("tracy-VLESS_TCP/TLS_WS", ChainRuntimeCompiler.displayHopTag("chainbox-landing-6-tracy-VLESS_TCP/TLS_WS"))
         assertEquals("", ChainRuntimeCompiler.displayHopTag("chainbox-chain-1-2"))
         assertEquals("节点选择", ChainRuntimeCompiler.displayHopTag("节点选择"))
     }

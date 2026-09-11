@@ -266,15 +266,34 @@ object TrafficFlowBuilder {
 
     internal fun prettyHop(raw: String): String {
         val shown = ChainRuntimeCompiler.displayHopTag(raw).trim()
-        if (shown.isNotEmpty()) return if (isDirectTag(shown)) "DIRECT" else shown
-        val t = raw.trim()
-        if (t.isEmpty()) return ""
-        if (t.startsWith(ChainRuntimeCompiler.GENERATED_PREFIX)) return ""
-        if (t == ChainRuntimeCompiler.LEGACY_CHAIN_TAG) return ""
-        if (t.startsWith(ChainRuntimeCompiler.LEGACY_PREFIX)) {
-            return t.removePrefix(ChainRuntimeCompiler.LEGACY_PREFIX)
+        val base = when {
+            shown.isNotEmpty() -> shown
+            else -> {
+                val t = raw.trim()
+                if (t.isEmpty()) return ""
+                if (t.startsWith(ChainRuntimeCompiler.GENERATED_PREFIX)) return ""
+                if (t == ChainRuntimeCompiler.LEGACY_CHAIN_TAG) return ""
+                if (t.startsWith(ChainRuntimeCompiler.LEGACY_PREFIX)) {
+                    t.removePrefix(ChainRuntimeCompiler.LEGACY_PREFIX)
+                } else {
+                    t
+                }
+            }
         }
-        return if (isDirectTag(t)) "DIRECT" else t
+        if (isDirectTag(base)) return "DIRECT"
+        return shortenNodeName(base)
+    }
+
+    internal fun shortenNodeName(name: String, maxChars: Int = 22): String {
+        var s = name.trim()
+        if (s.isEmpty()) return s
+        s = s.replaceFirst(Regex("^chainbox-(landing|entry|chain)-\\d+-"), "")
+        s = s.replaceFirst(Regex("^chainbox-(landing|entry|chain)-"), "")
+        val clipped = PROTO_TAIL.replaceFirst(s, "")
+        if (clipped.length >= 2) s = clipped
+        s = s.trim(' ', '-', '_', '[', ']')
+        if (s.length > maxChars) s = s.take(maxChars - 1) + "…"
+        return s.ifBlank { name.take(maxChars) }
     }
 
     internal fun prettyDest(raw: String): String {
@@ -313,6 +332,9 @@ object TrafficFlowBuilder {
 
     private val ASSIGNMENT = Regex(
         """(?i)(rule_set|ruleset|geosite|geoip|domain_suffix|domain_keyword|domain|ip_cidr|ipcidr)\s*=\s*(.+)""",
+    )
+    private val PROTO_TAIL = Regex(
+        """(?i)[-_\s\[]+(vless|vmess|trojan|hysteria2?|tuic|wireguard|shadowsocks|\bss\b|anytls).*""",
     )
 }
 
@@ -354,15 +376,10 @@ object SankeyLayout {
         val byId = HashMap<String, PlacedNode>(nodes.size)
         columns.entries.forEachIndexed { index, (_, colNodes) ->
             val x = pad + index * layerWidth
-            val n = colNodes.size
             val mins = colNodes.map { node -> (minHeights[node.id] ?: 16f).coerceAtLeast(16f) }
-            val minTotal = mins.sum() + gapY * (n - 1).coerceAtLeast(0)
-            val usable = (height - 2f * pad).coerceAtLeast(minTotal)
-            val extra = (usable - minTotal).coerceAtLeast(0f)
-            val total = colNodes.sumOf { it.weight }.coerceAtLeast(1)
             var y = pad
             colNodes.forEachIndexed { i, node ->
-                val h = mins[i] + extra * node.weight / total
+                val h = mins[i]
                 val item = PlacedNode(node, x, y, nodeWidth, h)
                 placed += item
                 byId[node.id] = item

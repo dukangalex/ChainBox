@@ -138,11 +138,17 @@ fun DashboardScreen(
             item { OverrideBanner() }
             val serviceRunning = uiState.isStatusVisible
             val pathShowing = !isRemote && CardGroup.ChainPath in uiState.visibleCards
+            val homeHidden = setOf(
+                CardGroup.UploadTraffic,
+                CardGroup.DownloadTraffic,
+                CardGroup.Debug,
+                CardGroup.Connections,
+                CardGroup.ClashMode,
+                CardGroup.Profiles,
+            )
             val actuallyVisibleCards = uiState.visibleCards.filter { cardGroup ->
                 when {
-                    pathShowing &&
-                        (cardGroup == CardGroup.UploadTraffic || cardGroup == CardGroup.DownloadTraffic) ->
-                        false
+                    pathShowing && cardGroup in homeHidden -> false
                     isRemote ->
                         cardGroup != CardGroup.Profiles &&
                             cardGroup != CardGroup.SystemProxy &&
@@ -224,6 +230,18 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+
+    if (uiState.showProfilePickerSheet) {
+        ProfilePickerSheet(
+            profiles = uiState.profiles,
+            selectedProfileId = uiState.selectedProfileId,
+            onProfileSelected = { profile -> viewModel.selectProfile(profile.id) },
+            onProfileEdit = viewModel::editProfile,
+            onProfileDelete = viewModel::deleteProfile,
+            onProfileMove = viewModel::moveProfile,
+            onDismiss = viewModel::hideProfilePickerSheet,
+        )
     }
 }
 

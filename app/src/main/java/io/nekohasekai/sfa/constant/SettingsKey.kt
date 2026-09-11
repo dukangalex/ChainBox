@@ -60,6 +60,7 @@ object SettingsKey {
 
     const val DASHBOARD_ITEM_ORDER = "dashboard_item_order"
     const val DASHBOARD_DISABLED_ITEMS = "dashboard_disabled_items"
+    const val DASHBOARD_STYLE_VERSION = "dashboard_style_version"
 
     const val ACTIVE_REMOTE_SERVER_ID = "active_remote_server_id"
 
