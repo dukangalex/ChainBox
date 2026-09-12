@@ -10,6 +10,10 @@ on:
         description: "Release tag to announce (empty = latest published release)"
         required: false
         default: ""
+      document_only:
+        description: "true = only upload the APK document (skip the text message)"
+        required: false
+        default: "false"
 
 permissions:
   contents: read
@@ -156,14 +160,14 @@ jobs:
             -X POST \
             "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" \
             -F "chat_id=${TG_CHANNEL_ID}" \
-            -F "document=@AngelaBox-android.apk;filename=AngelaBox-android.apk;type=application/vnd.android.package-archive" \
+            -F "document=@AngelaBox-android.apk;filename=AngelaBox-android.apk" \
             -F "caption=$(cat telegram-caption.txt)" \
             -F "disable_content_type_detection=true")"
           echo "${RESPONSE}" | jq .
           test "$(echo "${RESPONSE}" | jq -r '.ok')" = "true"
 
       - name: Send announcement to Telegram
-        if: steps.creds.outputs.configured == 'true'
+        if: steps.creds.outputs.configured == 'true' && github.event.inputs.document_only != 'true'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}

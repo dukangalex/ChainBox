@@ -316,10 +316,14 @@ jobs:
           if [ -n "${APK}" ] && [ -f "${APK}" ]; then
             ls -lh "$APK"
             echo "Telegram upload path: ${APK}"
+            # curl 26 happens with @/absolute/path;filename=... on this runner.
+            # Copy to a cwd-relative name so sendDocument can read the file.
+            cp -f "$APK" AngelaBox-android.apk
+            test -s AngelaBox-android.apk
             DOC_RESP="$(curl -sS --retry 2 --retry-delay 3 --max-time 180 \
               -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" \
               -F "chat_id=${TG_CHANNEL_ID}" \
-              -F "document=@${APK};filename=AngelaBox-android.apk;type=application/vnd.android.package-archive" \
+              -F "document=@AngelaBox-android.apk;filename=AngelaBox-android.apk" \
               -F "caption=$(cat telegram-caption.txt)" \
               -F "disable_content_type_detection=true" || true)"
             echo "${DOC_RESP}" | jq . || echo "${DOC_RESP}"
