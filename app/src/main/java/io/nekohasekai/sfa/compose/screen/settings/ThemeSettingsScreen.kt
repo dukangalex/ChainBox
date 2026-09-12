@@ -111,21 +111,21 @@ fun ThemeSettingsScreen(navController: NavController) {
                             selected = Appearance.mode == "system",
                             icon = Icons.Outlined.PhoneAndroid,
                             label = stringResource(R.string.theme_mode_system),
-                            onClick = { Appearance.setMode("system") },
+                            onClick = { Appearance.applyMode("system") },
                         )
                         ModeChip(
                             modifier = Modifier.weight(1f),
                             selected = Appearance.mode == "light",
                             icon = Icons.Outlined.LightMode,
                             label = stringResource(R.string.theme_mode_light),
-                            onClick = { Appearance.setMode("light") },
+                            onClick = { Appearance.applyMode("light") },
                         )
                         ModeChip(
                             modifier = Modifier.weight(1f),
                             selected = Appearance.mode == "dark",
                             icon = Icons.Outlined.DarkMode,
                             label = stringResource(R.string.theme_mode_dark),
-                            onClick = { Appearance.setMode("dark") },
+                            onClick = { Appearance.applyMode("dark") },
                         )
                     }
                 }
@@ -158,7 +158,7 @@ fun ThemeSettingsScreen(navController: NavController) {
                                 seed = seed,
                                 selected = Appearance.seed == seed.id,
                                 wallpaper = seed.id == "dynamic",
-                                onClick = { Appearance.setSeed(seed.id) },
+                                onClick = { Appearance.applySeed(seed.id) },
                             )
                         }
                     }
@@ -179,7 +179,7 @@ fun ThemeSettingsScreen(navController: NavController) {
                     trailingContent = {
                         Switch(
                             checked = Appearance.pureBlack,
-                            onCheckedChange = Appearance::setPureBlack,
+                            onCheckedChange = Appearance::applyPureBlack,
                             enabled = Appearance.mode != "light",
                         )
                     },

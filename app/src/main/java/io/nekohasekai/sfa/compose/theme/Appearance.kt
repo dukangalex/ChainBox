@@ -22,7 +22,8 @@ object Appearance {
         pureBlack = Settings.themePureBlack
     }
 
-    fun setMode(value: String) {
+    // apply* names avoid clashing with the generated property setters.
+    fun applyMode(value: String) {
         val next = when (value) {
             "light", "dark" -> value
             else -> "system"
@@ -31,12 +32,12 @@ object Appearance {
         mode = next
     }
 
-    fun setSeed(value: String) {
+    fun applySeed(value: String) {
         Settings.themeSeed = value.ifBlank { "default" }
         seed = Settings.themeSeed
     }
 
-    fun setPureBlack(value: Boolean) {
+    fun applyPureBlack(value: Boolean) {
         Settings.themePureBlack = value
         pureBlack = value
     }

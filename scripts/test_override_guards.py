@@ -301,18 +301,20 @@ def main() -> int:
         errors.append("launcher foreground must be a Rubik cube (orange-yellow top missing)")
     if "#0EA5E9" not in icon_fg:
         errors.append("launcher foreground 正面 must be saturated sky-blue #0EA5E9")
-    if "iso(0," not in gen and "x=0" not in gen:
-        errors.append("cube 正面 must be the left x=0 face, not z=0")
-    if "They meet at (0, 3, 0)" not in gen and "meet at (0, 3, 0)" not in gen:
-        errors.append("cube faces must meet at (0,3,0); drawing x=0 and x=3 is an arch")
-    if "z=0 right" not in gen and "侧面 z=0" not in gen and "right = z=0" not in gen:
-        errors.append("cube 侧面 must be z=0, not the opposite x=3 face")
+    if "They meet at (3, 3, 3)" not in gen and "meet at (3, 3, 3)" not in gen:
+        errors.append("cube faces must meet at (3,3,3) so the silhouette is a solid hexagon")
+    if "z=3" not in gen or "x=3" not in gen:
+        errors.append("cube 正面 is z=3 (left) and 侧面 is x=3 (right); x=0+z=0 is a chevron")
+    if "x=0 + z=0" not in gen and "chevron" not in gen:
+        errors.append("cube generator must document that x=0+z=0 is a chevron, not a cube")
     if "two opposite" not in gen:
         errors.append("cube generator must document that x=0 and x=3 are opposite faces")
     if "#F43F5E" not in icon_fg and "#E11D48" not in icon_fg:
         errors.append("launcher foreground must be a Rubik cube (rose face missing)")
     if "gift" in icon_fg.lower() and "cube" not in icon_fg.lower():
         errors.append("launcher foreground should be a cube, not a gift box")
+    if "assert_solid_cube" not in gen:
+        errors.append("cube generator must assert the silhouette is filled, not a chevron hole")
 
     logs = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/log/LogModels.kt")
     if "filterLogLevel: LogLevel = LogLevel.INFO" not in logs:
@@ -579,8 +581,11 @@ def main() -> int:
     if "settings/theme" not in read("app/src/main/java/io/nekohasekai/sfa/compose/navigation/Navigation.kt"):
         errors.append("theme settings route missing")
     theme_ui = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/ThemeSettingsScreen.kt")
-    if "Appearance.setMode" not in theme_ui or "theme_pure_black" not in theme_ui:
+    if "Appearance.applyMode" not in theme_ui or "theme_pure_black" not in theme_ui:
         errors.append("theme page must expose mode and pure black")
+    appearance = read("app/src/main/java/io/nekohasekai/sfa/compose/theme/Appearance.kt")
+    if "fun setMode" in appearance or "fun setSeed" in appearance or "fun setPureBlack" in appearance:
+        errors.append("Appearance apply* methods must not be named setMode/setSeed/setPureBlack (JVM setter clash)")
     if "字体修复" in theme_ui or "深色图标" in theme_ui:
         errors.append("theme page must not copy ROM-specific font/icon toggles")
     if 'name="theme_settings"' not in cn:

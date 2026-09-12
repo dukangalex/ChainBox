@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Generate a centered isometric Rubik's cube launcher icon.
 
-Visible faces (corner toward viewer) — three faces that actually meet:
-  正面 left  = x=0  sky-blue  #0EA5E9
-  侧面 right = z=0  rose      #F43F5E
+Visible faces of a solid cube (front vertical edge toward the viewer):
+  正面 left  = z=3  sky-blue  #0EA5E9
+  侧面 right = x=3  rose      #F43F5E
   顶   top   = y=3  amber     #FBBF24
 
-They meet at (0, 3, 0). Drawing x=0 and x=3 together is two opposite
-faces of the same axis, which leaves a hole and looks like an arch.
+They meet at (3, 3, 3). The silhouette is a hexagon.
+
+Wrong pairs:
+  x=0 + x=3  — two opposite faces of the same axis → arch / hole
+  x=0 + z=0  — near corner sits at the top → chevron / roof with a V-notch
 """
 from __future__ import annotations
 
@@ -19,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "app/src/main/res"
 
 PLASTIC = (17, 24, 39, 255)
-SKY = (14, 165, 233, 255)       # #0EA5E9 天蓝正面（比 sky-400 更深，小图标可辨）
+SKY = (14, 165, 233, 255)       # #0EA5E9 天蓝正面
 AMBER = (251, 191, 36, 255)     # #FBBF24 橙黄顶
 ROSE = (244, 63, 94, 255)       # #F43F5E 玫红侧面
 
@@ -47,20 +50,20 @@ def sticker_quad(face: str, i: int, j: int) -> list[tuple[float, float]]:
     a, b = i + g, j + g
     c, d = i + 1 - g, j + 1 - g
     if face == "front":
-        # x=0 left vertical: i → z, j → y
-        return [iso(0, b, a), iso(0, b, c), iso(0, d, c), iso(0, d, a)]
+        # z=3 left vertical: i → x, j → y
+        return [iso(a, b, 3), iso(c, b, 3), iso(c, d, 3), iso(a, d, 3)]
     if face == "top":
         return [iso(a, 3, b), iso(c, 3, b), iso(c, 3, d), iso(a, 3, d)]
-    # z=0 right vertical: i → x, j → y
-    return [iso(a, b, 0), iso(c, b, 0), iso(c, d, 0), iso(a, d, 0)]
+    # x=3 right vertical: i → z, j → y
+    return [iso(3, b, a), iso(3, b, c), iso(3, d, c), iso(3, d, a)]
 
 
 def face_outline(face: str) -> list[tuple[float, float]]:
     if face == "front":
-        return [iso(0, 0, 0), iso(0, 0, 3), iso(0, 3, 3), iso(0, 3, 0)]
+        return [iso(0, 0, 3), iso(3, 0, 3), iso(3, 3, 3), iso(0, 3, 3)]
     if face == "top":
         return [iso(0, 3, 0), iso(3, 3, 0), iso(3, 3, 3), iso(0, 3, 3)]
-    return [iso(0, 0, 0), iso(3, 0, 0), iso(3, 3, 0), iso(0, 3, 0)]
+    return [iso(3, 0, 0), iso(3, 0, 3), iso(3, 3, 3), iso(3, 3, 0)]
 
 
 def write_vector() -> None:
@@ -70,14 +73,14 @@ def write_vector() -> None:
         '    android:height="108dp"',
         '    android:viewportWidth="108"',
         '    android:viewportHeight="108">',
-        "    <!-- left=sky 正面, top=amber, right=rose; adaptive safe zone -->",
+        "    <!-- left=sky 正面 z=3, top=amber y=3, right=rose x=3; meet (3,3,3) -->",
     ]
     for face, color in (("front", "#111827"), ("right", "#020617"), ("top", "#1F2937")):
         parts.append(
             f'    <path android:fillColor="{color}" android:pathData="{path(face_outline(face))}" />'
         )
     colors = {"front": "#0EA5E9", "top": "#FBBF24", "right": "#F43F5E"}
-    for face in ("front", "top", "right"):
+    for face in ("front", "right", "top"):
         for i in range(3):
             for j in range(3):
                 parts.append(
@@ -113,10 +116,10 @@ def write_qs_tile() -> None:
     """White cube silhouette for QS tile + notification small icons."""
     def face(f: str) -> list[tuple[float, float]]:
         if f == "front":
-            return [qs_iso(0, 0, 0), qs_iso(0, 0, 3), qs_iso(0, 3, 3), qs_iso(0, 3, 0)]
+            return [qs_iso(0, 0, 3), qs_iso(3, 0, 3), qs_iso(3, 3, 3), qs_iso(0, 3, 3)]
         if f == "top":
             return [qs_iso(0, 3, 0), qs_iso(3, 3, 0), qs_iso(3, 3, 3), qs_iso(0, 3, 3)]
-        return [qs_iso(0, 0, 0), qs_iso(3, 0, 0), qs_iso(3, 3, 0), qs_iso(0, 3, 0)]
+        return [qs_iso(3, 0, 0), qs_iso(3, 0, 3), qs_iso(3, 3, 3), qs_iso(3, 3, 0)]
 
     parts = [
         '<vector xmlns:android="http://schemas.android.com/apk/res/android"',
@@ -138,10 +141,10 @@ def write_qs_brand() -> None:
     """Full-color cube for the quick-settings tile (not status-bar small icons)."""
     def face(f: str) -> list[tuple[float, float]]:
         if f == "front":
-            return [qs_iso(0, 0, 0), qs_iso(0, 0, 3), qs_iso(0, 3, 3), qs_iso(0, 3, 0)]
+            return [qs_iso(0, 0, 3), qs_iso(3, 0, 3), qs_iso(3, 3, 3), qs_iso(0, 3, 3)]
         if f == "top":
             return [qs_iso(0, 3, 0), qs_iso(3, 3, 0), qs_iso(3, 3, 3), qs_iso(0, 3, 3)]
-        return [qs_iso(0, 0, 0), qs_iso(3, 0, 0), qs_iso(3, 3, 0), qs_iso(0, 3, 0)]
+        return [qs_iso(3, 0, 0), qs_iso(3, 0, 3), qs_iso(3, 3, 3), qs_iso(3, 3, 0)]
 
     colors = {"front": "#0EA5E9", "right": "#F43F5E", "top": "#FBBF24"}
     parts = [
@@ -150,7 +153,7 @@ def write_qs_brand() -> None:
         '    android:height="24dp"',
         '    android:viewportWidth="24"',
         '    android:viewportHeight="24">',
-        "    <!-- AngelaBox cube for QS: left=sky 正面, right=rose, top=amber -->",
+        "    <!-- AngelaBox cube for QS: left=sky 正面 z=3, right=rose x=3, top=amber -->",
     ]
     for f in ("front", "right", "top"):
         parts.append(
@@ -182,23 +185,39 @@ def draw_cube(size: int) -> Image.Image:
         a, b = i + g, j + g
         c, d = i + 1 - g, j + 1 - g
         if face == "front":
-            pts = [p(0, b, a), p(0, b, c), p(0, d, c), p(0, d, a)]
+            pts = [p(a, b, 3), p(c, b, 3), p(c, d, 3), p(a, d, 3)]
         elif face == "top":
             pts = [p(a, 3, b), p(c, 3, b), p(c, 3, d), p(a, 3, d)]
         else:
-            pts = [p(a, b, 0), p(c, b, 0), p(c, d, 0), p(a, d, 0)]
+            pts = [p(3, b, a), p(3, b, c), p(3, d, c), p(3, d, a)]
         poly(pts, fill)
 
-    poly([p(0, 0, 0), p(0, 0, 3), p(0, 3, 3), p(0, 3, 0)], PLASTIC)
-    poly([p(0, 0, 0), p(3, 0, 0), p(3, 3, 0), p(0, 3, 0)], (2, 6, 23, 255))
+    poly([p(0, 0, 3), p(3, 0, 3), p(3, 3, 3), p(0, 3, 3)], PLASTIC)
+    poly([p(3, 0, 0), p(3, 0, 3), p(3, 3, 3), p(3, 3, 0)], (2, 6, 23, 255))
     poly([p(0, 3, 0), p(3, 3, 0), p(3, 3, 3), p(0, 3, 3)], (31, 41, 55, 255))
 
     for i in range(3):
         for j in range(3):
             sticker("front", i, j, SKY)
-            sticker("top", i, j, AMBER)
             sticker("right", i, j, ROSE)
+            sticker("top", i, j, AMBER)
     return img
+
+
+def assert_solid_cube(img: Image.Image) -> None:
+    """The former chevron notch (below the front-top corner) must be filled."""
+    w, h = img.size
+    samples = [
+        (w // 2, int(h * 0.68)),
+        (w // 2, int(h * 0.58)),
+        (int(w * 0.36), int(h * 0.58)),
+        (int(w * 0.64), int(h * 0.58)),
+        (w // 2, int(h * 0.32)),
+    ]
+    for x, y in samples:
+        px = img.getpixel((x, y))
+        if px[0] > 240 and px[1] > 240 and px[2] > 240:
+            raise SystemExit(f"cube not solid at {(x, y)}={px}; chevron hole still present")
 
 
 def round_mask(img: Image.Image) -> Image.Image:
@@ -251,6 +270,7 @@ def save_resized(master: Image.Image, path: Path, size: int, rounded: bool) -> N
 def main() -> None:
     write_vector()
     master = draw_cube(1024)
+    assert_solid_cube(master)
     sizes = {
         "mipmap-mdpi": 48,
         "mipmap-hdpi": 72,
@@ -277,8 +297,8 @@ def main() -> None:
     write_og(master, brand / "AngelaBox-og.png")
     write_og(master, hd / "AngelaBox-og.png")
     bbox_pts = [
-        iso(0, 0, 0), iso(0, 0, 3), iso(3, 0, 0), iso(3, 0, 3),
-        iso(0, 3, 0), iso(3, 3, 3),
+        iso(0, 0, 3), iso(3, 0, 0), iso(3, 0, 3),
+        iso(0, 3, 0), iso(3, 3, 0), iso(3, 3, 3), iso(0, 3, 3),
     ]
     xs = [p[0] for p in bbox_pts]
     ys = [p[1] for p in bbox_pts]
