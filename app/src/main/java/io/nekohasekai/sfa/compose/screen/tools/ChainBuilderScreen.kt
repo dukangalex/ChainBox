@@ -3,6 +3,7 @@ package io.nekohasekai.sfa.compose.screen.tools
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -10,15 +11,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -29,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -39,9 +47,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import io.nekohasekai.sfa.R
@@ -272,6 +283,10 @@ fun ChainBuilderScreen(
         }
     }
 
+    val cardColors = CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -286,41 +301,78 @@ fun ChainBuilderScreen(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            if (loadError != null) Text("加载失败: $loadError", color = MaterialTheme.colorScheme.error)
-            Text("当前配置：$currentProfileName", fontWeight = FontWeight.Medium)
-            savedHint?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-            Text(
-                "链路只绑定当前这一份配置。切换到其他配置时，各自使用自己保存的落地，互不影响。订阅更新只换节点列表，不会清掉这份绑定。",
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            if (loadError != null) {
+                Text("加载失败: $loadError", color = MaterialTheme.colorScheme.error)
+            }
+            Card(colors = cardColors, shape = RoundedCornerShape(20.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("当前配置：$currentProfileName", fontWeight = FontWeight.Medium)
+                    PathPreview(entry = entry, landing = exit)
+                    savedHint?.let {
+                        Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text(
+                        "链路只绑定当前这一份配置。切换到其他配置时，各自使用自己保存的落地，互不影响。订阅更新只换节点列表，不会清掉这份绑定。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             if (otherBound > 0) {
                 OutlinedButton(
                     onClick = { showOtherBound = true },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy,
+                    shape = RoundedCornerShape(16.dp),
                 ) {
                     Text("另有 $otherBound 个配置已绑定落地，点此查看是哪几个")
                 }
             }
-            Text(
-                "Chain 按你选的顺序串联现有 outbound：入口 → 落地 → 目标。不绑定机场或协议。链路失败不会自动改走 DIRECT。",
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Card(colors = cardColors, shape = RoundedCornerShape(20.dp)) {
+                Text(
+                    "Chain 按你选的顺序串联现有 outbound：入口 → 落地 → 目标。不绑定机场或协议。链路失败不会自动改走 DIRECT。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
             Text("入口（当前配置）", fontWeight = FontWeight.Medium)
-            Button(onClick = { picker = "entry"; pickerQuery = "" }, modifier = Modifier.fillMaxWidth(), enabled = !busy) {
-                Text(entry?.let { "${it.tag} · ${it.typeLabel}" } ?: "选择入口")
-            }
+            HopPickCard(
+                title = entry?.let { "${it.tag} · ${it.typeLabel}" } ?: "选择入口",
+                type = entry?.type,
+                enabled = !busy,
+                onClick = { picker = "entry"; pickerQuery = "" },
+            )
             Text("落地（当前或其他配置）", fontWeight = FontWeight.Medium)
-            Button(onClick = { picker = "landing"; pickerQuery = "" }, modifier = Modifier.fillMaxWidth(), enabled = !busy) {
-                Text(exit?.displayLine ?: "选择落地")
-            }
-            Button(onClick = { save() }, modifier = Modifier.fillMaxWidth(), enabled = !busy && entry != null && exit != null) {
+            HopPickCard(
+                title = exit?.displayLine ?: "选择落地",
+                type = exit?.type,
+                enabled = !busy,
+                onClick = { picker = "landing"; pickerQuery = "" },
+            )
+            Button(
+                onClick = { save() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !busy && entry != null && exit != null,
+                shape = RoundedCornerShape(16.dp),
+            ) {
                 Text("保存并绑定到「$currentProfileName」")
             }
-            OutlinedButton(onClick = { clearChain() }, modifier = Modifier.fillMaxWidth(), enabled = !busy && chainActive) {
+            OutlinedButton(
+                onClick = { clearChain() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !busy && chainActive,
+                shape = RoundedCornerShape(16.dp),
+            ) {
                 Text("取消当前配置的链式")
             }
         }
@@ -442,6 +494,108 @@ fun ChainBuilderScreen(
             },
             confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },
         )
+    }
+}
+
+@Composable
+private fun PathPreview(entry: HopRef?, landing: HopRef?) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PathNode(
+            modifier = Modifier.weight(1f),
+            caption = "入口",
+            title = entry?.tag ?: "未选择",
+            subtitle = entry?.typeLabel.orEmpty(),
+        )
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        PathNode(
+            modifier = Modifier.weight(1f),
+            caption = "落地",
+            title = landing?.tag ?: "未选择",
+            subtitle = landing?.let { "${it.profileName} · ${it.typeLabel}" }.orEmpty(),
+        )
+    }
+}
+
+@Composable
+private fun PathNode(
+    modifier: Modifier,
+    caption: String,
+    title: String,
+    subtitle: String,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(
+                caption,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HopPickCard(
+    title: String,
+    type: String?,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = if (type == "urltest") Icons.Outlined.Bolt else Icons.Outlined.Hub,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                title,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

@@ -52,6 +52,15 @@
     <string name="title_log">Logs</string>
     <string name="title_settings">Settings</string>
     <string name="title_app_settings">App</string>
+    <string name="theme_settings">Theme</string>
+    <string name="theme_mode">Theme mode</string>
+    <string name="theme_mode_system">Auto</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="theme_color">Theme color</string>
+    <string name="theme_pure_black">Pure black</string>
+    <string name="theme_pure_black_summary">Use a black background in dark mode</string>
+    <string name="theme_color_dynamic">Wallpaper</string>
     <string name="title_new_profile">New Profile</string>
     <string name="title_edit_profile">Edit Profile</string>
     <string name="title_edit_configuration">Edit Configuration</string>

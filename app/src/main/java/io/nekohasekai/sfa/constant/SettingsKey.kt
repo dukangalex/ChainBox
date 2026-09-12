@@ -62,6 +62,10 @@ object SettingsKey {
     const val DASHBOARD_DISABLED_ITEMS = "dashboard_disabled_items"
     const val DASHBOARD_STYLE_VERSION = "dashboard_style_version"
 
+    const val THEME_MODE = "theme_mode"
+    const val THEME_SEED = "theme_seed"
+    const val THEME_PURE_BLACK = "theme_pure_black"
+
     const val ACTIVE_REMOTE_SERVER_ID = "active_remote_server_id"
 
     const val TAILSCALE_SSH_REMEMBERED_USERNAMES = "tailscale_ssh_remembered_usernames"

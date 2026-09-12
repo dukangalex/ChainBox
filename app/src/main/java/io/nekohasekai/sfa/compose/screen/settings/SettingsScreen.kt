@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.SettingsRemote
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,6 +59,14 @@ fun SettingsScreen(navController: NavController) {
                     Icon(Icons.Outlined.Apps, null, tint = MaterialTheme.colorScheme.primary)
                 },
                 modifier = Modifier.clickable { navController.navigate("settings/app") },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.theme_settings), style = MaterialTheme.typography.bodyLarge) },
+                leadingContent = {
+                    Icon(Icons.Outlined.Palette, null, tint = MaterialTheme.colorScheme.primary)
+                },
+                modifier = Modifier.clickable { navController.navigate("settings/theme") },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
             ListItem(

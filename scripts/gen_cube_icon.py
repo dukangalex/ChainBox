@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Generate a centered isometric Rubik's cube launcher icon.
 
-Visible faces (corner toward viewer):
+Visible faces (corner toward viewer) — three faces that actually meet:
   正面 left  = x=0  sky-blue  #0EA5E9
+  侧面 right = z=0  rose      #F43F5E
   顶   top   = y=3  amber     #FBBF24
-  侧面 right = x=3  rose      #F43F5E
 
-Earlier builds drew z=0 as "front", which sits on the RIGHT half of the
-icon; the left vertical face was never painted, so the 正面 looked like
-the yellow top. Always draw x=0 as 正面.
+They meet at (0, 3, 0). Drawing x=0 and x=3 together is two opposite
+faces of the same axis, which leaves a hole and looks like an arch.
 """
 from __future__ import annotations
 
@@ -52,7 +51,8 @@ def sticker_quad(face: str, i: int, j: int) -> list[tuple[float, float]]:
         return [iso(0, b, a), iso(0, b, c), iso(0, d, c), iso(0, d, a)]
     if face == "top":
         return [iso(a, 3, b), iso(c, 3, b), iso(c, 3, d), iso(a, 3, d)]
-    return [iso(3, b, a), iso(3, b, c), iso(3, d, c), iso(3, d, a)]
+    # z=0 right vertical: i → x, j → y
+    return [iso(a, b, 0), iso(c, b, 0), iso(c, d, 0), iso(a, d, 0)]
 
 
 def face_outline(face: str) -> list[tuple[float, float]]:
@@ -60,7 +60,7 @@ def face_outline(face: str) -> list[tuple[float, float]]:
         return [iso(0, 0, 0), iso(0, 0, 3), iso(0, 3, 3), iso(0, 3, 0)]
     if face == "top":
         return [iso(0, 3, 0), iso(3, 3, 0), iso(3, 3, 3), iso(0, 3, 3)]
-    return [iso(3, 0, 0), iso(3, 0, 3), iso(3, 3, 3), iso(3, 3, 0)]
+    return [iso(0, 0, 0), iso(3, 0, 0), iso(3, 3, 0), iso(0, 3, 0)]
 
 
 def write_vector() -> None:
@@ -116,7 +116,7 @@ def write_qs_tile() -> None:
             return [qs_iso(0, 0, 0), qs_iso(0, 0, 3), qs_iso(0, 3, 3), qs_iso(0, 3, 0)]
         if f == "top":
             return [qs_iso(0, 3, 0), qs_iso(3, 3, 0), qs_iso(3, 3, 3), qs_iso(0, 3, 3)]
-        return [qs_iso(3, 0, 0), qs_iso(3, 0, 3), qs_iso(3, 3, 3), qs_iso(3, 3, 0)]
+        return [qs_iso(0, 0, 0), qs_iso(3, 0, 0), qs_iso(3, 3, 0), qs_iso(0, 3, 0)]
 
     parts = [
         '<vector xmlns:android="http://schemas.android.com/apk/res/android"',
@@ -141,7 +141,7 @@ def write_qs_brand() -> None:
             return [qs_iso(0, 0, 0), qs_iso(0, 0, 3), qs_iso(0, 3, 3), qs_iso(0, 3, 0)]
         if f == "top":
             return [qs_iso(0, 3, 0), qs_iso(3, 3, 0), qs_iso(3, 3, 3), qs_iso(0, 3, 3)]
-        return [qs_iso(3, 0, 0), qs_iso(3, 0, 3), qs_iso(3, 3, 3), qs_iso(3, 3, 0)]
+        return [qs_iso(0, 0, 0), qs_iso(3, 0, 0), qs_iso(3, 3, 0), qs_iso(0, 3, 0)]
 
     colors = {"front": "#0EA5E9", "right": "#F43F5E", "top": "#FBBF24"}
     parts = [
@@ -186,11 +186,11 @@ def draw_cube(size: int) -> Image.Image:
         elif face == "top":
             pts = [p(a, 3, b), p(c, 3, b), p(c, 3, d), p(a, 3, d)]
         else:
-            pts = [p(3, b, a), p(3, b, c), p(3, d, c), p(3, d, a)]
+            pts = [p(a, b, 0), p(c, b, 0), p(c, d, 0), p(a, d, 0)]
         poly(pts, fill)
 
     poly([p(0, 0, 0), p(0, 0, 3), p(0, 3, 3), p(0, 3, 0)], PLASTIC)
-    poly([p(3, 0, 0), p(3, 0, 3), p(3, 3, 3), p(3, 3, 0)], (2, 6, 23, 255))
+    poly([p(0, 0, 0), p(3, 0, 0), p(3, 3, 0), p(0, 3, 0)], (2, 6, 23, 255))
     poly([p(0, 3, 0), p(3, 3, 0), p(3, 3, 3), p(0, 3, 3)], (31, 41, 55, 255))
 
     for i in range(3):

@@ -5,6 +5,6 @@
     android:viewportHeight="108">
     <!-- cube silhouette -->
     <path android:fillColor="#FFFFFF" android:pathData="M54.0,54.0 L24.0,69.0 L24.0,39.0 L54.0,24.0 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M84.0,69.0 L54.0,84.0 L54.0,54.0 L84.0,39.0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M54.0,54.0 L84.0,69.0 L84.0,39.0 L54.0,24.0 Z" />
     <path android:fillColor="#FFFFFF" android:pathData="M54.0,24.0 L84.0,39.0 L54.0,54.0 L24.0,39.0 Z" />
 </vector>

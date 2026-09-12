@@ -52,6 +52,15 @@
     <string name="title_log">گزارش‌ها</string>
     <string name="title_settings">تنظیمات</string>
     <string name="title_app_settings">برنامه</string>
+    <string name="theme_settings">تم</string>
+    <string name="theme_mode">حالت تم</string>
+    <string name="theme_mode_system">خودکار</string>
+    <string name="theme_mode_light">روشن</string>
+    <string name="theme_mode_dark">تیره</string>
+    <string name="theme_color">رنگ تم</string>
+    <string name="theme_pure_black">سیاه خالص</string>
+    <string name="theme_pure_black_summary">پس‌زمینه سیاه در حالت تیره</string>
+    <string name="theme_color_dynamic">کاغذدیواری</string>
     <string name="title_new_profile">پروفایل جدید</string>
     <string name="title_edit_profile">ویرایش پروفایل</string>
     <string name="title_edit_configuration">ویرایش پیکربندی</string>

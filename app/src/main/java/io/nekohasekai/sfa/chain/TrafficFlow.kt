@@ -135,6 +135,10 @@ object TrafficFlowBuilder {
             return if (chained) emptyList() else listOf("DIRECT")
         }
         if (chained) {
+            val real = tags.filter { it.isNotEmpty() && !isDirectTag(it) }
+            if (real.size >= 2) {
+                return listOf(real.first(), real.last())
+            }
             return chainedHopPair(path, hops, sample)
         }
         return tags.ifEmpty { listOf("proxy") }
@@ -165,9 +169,12 @@ object TrafficFlowBuilder {
         val liveEntryTitle = prettyHop(liveEntry?.title.orEmpty())
         val liveLandingTitle = prettyHop(liveLanding?.title.orEmpty())
         var landing = liveLandingTitle
-            .ifBlank { sampleTags.lastOrNull().orEmpty() }
+            .ifBlank { sampleTags.lastOrNull { it != liveEntryTitle }.orEmpty() }
             .ifBlank { plannedLanding }
             .ifBlank { "landing" }
+        if (landing == liveEntryTitle && plannedLanding.isNotBlank() && plannedLanding != liveEntryTitle) {
+            landing = plannedLanding
+        }
         var entry = when {
             liveEntryTitle.isNotBlank() && liveEntryTitle != landing -> liveEntryTitle
             sampleTags.size >= 2 && sampleTags.first() != landing -> sampleTags.first()
@@ -177,17 +184,18 @@ object TrafficFlowBuilder {
         }
         if (entry == landing) {
             when {
-                entryGroup.isNotBlank() && liveLandingTitle.isNotBlank() && entryGroup != liveLandingTitle -> {
+                entryGroup.isNotBlank() && liveLandingTitle.isNotBlank() &&
+                    entryGroup != liveLandingTitle && liveLandingTitle != liveEntryTitle -> {
                     entry = entryGroup
                     landing = liveLandingTitle
+                }
+                plannedEntry.isNotBlank() && plannedLanding.isNotBlank() && plannedEntry != plannedLanding -> {
+                    entry = if (liveEntryTitle.isNotBlank()) liveEntryTitle else plannedEntry
+                    landing = plannedLanding
                 }
                 entryGroup.isNotBlank() && landingGroup.isNotBlank() && entryGroup != landingGroup -> {
                     entry = entryGroup
                     landing = landingGroup
-                }
-                plannedEntry.isNotBlank() && plannedLanding.isNotBlank() && plannedEntry != plannedLanding -> {
-                    entry = plannedEntry
-                    landing = plannedLanding
                 }
             }
         }

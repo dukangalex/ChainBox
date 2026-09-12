@@ -190,24 +190,31 @@ object LiveTopologyBuilder {
             .distinct()
         val destTitle = destinations.firstOrNull().orEmpty()
         if (path.chained) {
-            val leaves = useful.filterNot { hop ->
-                hop.equals(path.entryTag, ignoreCase = false) ||
-                    hop.equals(path.landingTag, ignoreCase = false) ||
-                    hop == path.profileName
-            }
-            val entryLive = when {
-                leaves.size >= 2 -> leaves.first()
-                else -> pickLive(useful, path.entryTag, groups, preferFirst = true)
-            }
-            val landLive = when {
-                leaves.size >= 2 -> leaves.last()
-                leaves.size == 1 -> leaves.first()
-                else -> pickLive(useful, path.landingTag, groups, preferFirst = false)
-            }
+            val entryMembers = membersOf(path.entryTag, groups)
+            val landingMembers = membersOf(path.landingTag, groups)
+            val sameHop = path.entryTag.isNotBlank() &&
+                path.entryTag == path.landingTag &&
+                path.landingProfileName.ifBlank { path.profileName } == path.profileName
+            val entryLive = useful.firstOrNull { hop ->
+                hop in entryMembers && (sameHop || hop !in landingMembers)
+            } ?: useful.firstOrNull { hop -> hop !in landingMembers }
+            val landLive = useful.lastOrNull { hop ->
+                hop in landingMembers && (sameHop || hop !in entryMembers)
+            } ?: useful.lastOrNull { hop -> hop !in entryMembers }
             val entryPick = resolve(path.entryTag, groups, entryLive)
             val landPick = resolve(path.landingTag, groups, landLive)
             val entryTitle = displayNonDirect(entryPick.first, path.entryTag, groups)
-            val landTitle = displayNonDirect(landPick.first, path.landingTag, groups)
+            var landTitle = displayNonDirect(landPick.first, path.landingTag, groups)
+            if (!sameHop && landTitle.isNotBlank() && landTitle == entryTitle) {
+                landTitle = displayNonDirect(
+                    leafOf(path.landingTag, groups, 0).first,
+                    path.landingTag,
+                    groups,
+                )
+                if (landTitle == entryTitle) {
+                    landTitle = TrafficFlowBuilder.prettyHop(path.landingTag).ifBlank { landTitle }
+                }
+            }
             return listOf(
                 LiveHop(ChainPathHop.Role.Device, title = ""),
                 LiveHop(

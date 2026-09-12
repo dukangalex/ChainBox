@@ -400,8 +400,8 @@ class ChainPathTest {
         val path = ChainPathBuilder.build(
             profileName = "MYCF",
             defaultOutboundTag = "自动选择",
-            binding = ChainBinding(1L, "自动选择", 1L, "自动选择"),
-            landingProfileName = "MYCF",
+            binding = ChainBinding(1L, "自动选择", 2L, "tracy"),
+            landingProfileName = "Kitty",
         )
         val hops = listOf(
             LiveHop(ChainPathHop.Role.Device, title = ""),
@@ -412,8 +412,8 @@ class ChainPathTest {
             ),
             LiveHop(
                 role = ChainPathHop.Role.Landing,
-                title = "ofo.033388.xyz",
-                subtitle = "MYCF",
+                title = "hk-exit",
+                subtitle = "Kitty",
             ),
             LiveHop(ChainPathHop.Role.Destination, title = ""),
         )
@@ -432,12 +432,75 @@ class ChainPathTest {
             chained = true,
         )
         val pair = TrafficFlowBuilder.chainedHopPair(path, hops)
-        assertEquals("自动选择", pair[0])
-        assertEquals("ofo.033388.xyz", pair[1])
-        assertTrue(nodes.any { it.column == 2 && it.label == "自动选择" })
-        assertTrue(nodes.any { it.column == 3 && it.label == "ofo.033388.xyz" })
+        assertEquals("ofo.033388.xyz", pair[0])
+        assertEquals("hk-exit", pair[1])
+        assertTrue(nodes.any { it.column == 2 && it.label == "ofo.033388.xyz" })
+        assertTrue(nodes.any { it.column == 3 && it.label == "hk-exit" })
         assertTrue(nodes.any { it.label == "google" })
         assertTrue(links.isNotEmpty())
+    }
+
+    @Test
+    fun chainedLiveMustNotUseEntryLeafAsLanding() {
+        val path = ChainPathBuilder.build(
+            profileName = "MYCF",
+            defaultOutboundTag = "自动选择",
+            binding = ChainBinding(1L, "自动选择", 2L, "tracy"),
+            landingProfileName = "Kitty",
+        )
+        val topology = LiveTopologyBuilder.fromPath(
+            path,
+            running = true,
+            groups = listOf(
+                GroupHint(
+                    "自动选择",
+                    selected = "ofo.033388.xyz",
+                    delays = mapOf("ofo.033388.xyz" to 108),
+                ),
+                GroupHint("tracy", selected = "hk-exit", delays = mapOf("hk-exit" to 40)),
+            ),
+            liveChain = listOf("ofo.033388.xyz"),
+        )
+        assertEquals("ofo.033388.xyz", topology.hops[1].title)
+        assertEquals(ChainPathHop.Role.Entry, topology.hops[1].role)
+        assertEquals("hk-exit", topology.hops[2].title)
+        assertEquals(ChainPathHop.Role.Landing, topology.hops[2].role)
+        assertTrue(topology.hops.none { it.role == ChainPathHop.Role.Landing && it.title == "ofo.033388.xyz" })
+    }
+
+    @Test
+    fun trafficFlowUsesLoggedChainHopsWhenPresent() {
+        val path = ChainPathBuilder.build(
+            profileName = "Kitty Network",
+            defaultOutboundTag = "proxy-select",
+            binding = ChainBinding(1L, "proxy-select", 2L, "自动选择"),
+            landingProfileName = "MyZgo",
+        )
+        val (nodes, _) = TrafficFlowBuilder.build(
+            samples = listOf(
+                FlowSample(
+                    source = "172.19.0.1:1",
+                    rule = "geosite-google",
+                    outbound = "tracy",
+                    chain = listOf("Hong Kong 03", "tracy"),
+                    dest = "www.google.com:443",
+                ),
+                FlowSample(
+                    source = "172.19.0.1:2",
+                    rule = "",
+                    outbound = "tracy",
+                    chain = listOf("Hong Kong 03", "tracy"),
+                    dest = "api.example.com:443",
+                ),
+            ),
+            path = path,
+            chained = true,
+        )
+        val labels = nodes.map { it.label }
+        assertTrue(labels.any { it.contains("172.19.0.1") })
+        assertTrue(labels.contains("google"))
+        assertTrue(labels.contains("Hong Kong 03") || labels.any { it.startsWith("Hong Kong") })
+        assertTrue(labels.contains("tracy"))
     }
 
     @Test

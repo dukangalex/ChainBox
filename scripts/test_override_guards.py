@@ -296,12 +296,19 @@ def main() -> int:
         errors.append("launcher background should be #FFFFFF")
 
     icon_fg = read("app/src/main/res/drawable/ic_launcher_foreground.xml")
+    gen = read("scripts/gen_cube_icon.py")
     if "#FBBF24" not in icon_fg and "#F59E0B" not in icon_fg:
         errors.append("launcher foreground must be a Rubik cube (orange-yellow top missing)")
     if "#0EA5E9" not in icon_fg:
         errors.append("launcher foreground 正面 must be saturated sky-blue #0EA5E9")
-    if "iso(0," not in read("scripts/gen_cube_icon.py") and "x=0" not in read("scripts/gen_cube_icon.py"):
+    if "iso(0," not in gen and "x=0" not in gen:
         errors.append("cube 正面 must be the left x=0 face, not z=0")
+    if "They meet at (0, 3, 0)" not in gen and "meet at (0, 3, 0)" not in gen:
+        errors.append("cube faces must meet at (0,3,0); drawing x=0 and x=3 is an arch")
+    if "z=0 right" not in gen and "侧面 z=0" not in gen and "right = z=0" not in gen:
+        errors.append("cube 侧面 must be z=0, not the opposite x=3 face")
+    if "two opposite" not in gen:
+        errors.append("cube generator must document that x=0 and x=3 are opposite faces")
     if "#F43F5E" not in icon_fg and "#E11D48" not in icon_fg:
         errors.append("launcher foreground must be a Rubik cube (rose face missing)")
     if "gift" in icon_fg.lower() and "cube" not in icon_fg.lower():
@@ -553,6 +560,35 @@ def main() -> int:
         errors.append("MAINTENANCE must document the Telegram channel")
     if "TG_BOT_TOKEN" not in read("docs/MAINTENANCE.md"):
         errors.append("MAINTENANCE must document Telegram bot secrets")
+
+    live = read("app/src/main/java/io/nekohasekai/sfa/chain/ChainPath.kt")
+    if "leaves.size == 1" in live:
+        errors.append("single live-chain leaf must not be assigned as landing")
+    if "hop !in landingMembers" not in live:
+        errors.append("entry live hop must not be taken from the landing group")
+    if "hop !in entryMembers" not in live:
+        errors.append("landing live hop must not be taken from the entry group")
+    if "Role.Landing" not in path_card or "firstOrNull { it.role == ChainPathHop.Role.Landing }" not in path_card:
+        errors.append("header 出口 must prefer Role.Landing over an entry leaf")
+    if "real.size >= 2" not in flow:
+        errors.append("sankey must use logged chain hops when the sample has two or more")
+    if "THEME_MODE" not in read("app/src/main/java/io/nekohasekai/sfa/constant/SettingsKey.kt"):
+        errors.append("SettingsKey.THEME_MODE missing")
+    if "themeMode" not in settings:
+        errors.append("Settings.themeMode missing")
+    if "settings/theme" not in read("app/src/main/java/io/nekohasekai/sfa/compose/navigation/Navigation.kt"):
+        errors.append("theme settings route missing")
+    theme_ui = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/settings/ThemeSettingsScreen.kt")
+    if "Appearance.setMode" not in theme_ui or "theme_pure_black" not in theme_ui:
+        errors.append("theme page must expose mode and pure black")
+    if "字体修复" in theme_ui or "深色图标" in theme_ui:
+        errors.append("theme page must not copy ROM-specific font/icon toggles")
+    if 'name="theme_settings"' not in cn:
+        errors.append("zh-rCN missing theme_settings")
+    if "PathPreview" not in ui:
+        errors.append("chain builder should show an entry → landing path preview")
+    if "surfaceContainer" not in ui:
+        errors.append("chain builder polish should use surface cards")
 
     if errors:
         print("FAIL")

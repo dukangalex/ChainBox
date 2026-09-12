@@ -112,7 +112,11 @@ fun ChainPathCard(
 ) {
     val running = topology.running
     val busy = serviceStatus == Status.Starting || serviceStatus == Status.Stopping
-    val exitHop = remember(topology.hops) { pickExitHop(topology.hops) }
+    val exitHop = remember(topology.hops) {
+        topology.hops.firstOrNull { it.role == ChainPathHop.Role.Landing }
+            ?: topology.hops.firstOrNull { it.role == ChainPathHop.Role.Exit }
+            ?: pickExitHop(topology.hops)
+    }
     val entryHop = remember(topology.hops) {
         topology.hops.firstOrNull { it.role == ChainPathHop.Role.Entry }
     }
@@ -121,18 +125,9 @@ fun ChainPathCard(
             exitHop?.title?.ifBlank { exitHop.subtitle }.orEmpty(),
         ).ifBlank { profileName.ifBlank { "—" } }
     }
-    val entryName = remember(entryHop) {
-        TrafficFlowBuilder.prettyHop(
-            entryHop?.title?.ifBlank { entryHop.subtitle }.orEmpty(),
-        )
-    }
-    val shownEntry = remember(entryHop, entryName, nodeName) {
-        if (entryName.isNotBlank() && entryName != nodeName) {
-            entryName
-        } else {
-            TrafficFlowBuilder.prettyHop(entryHop?.subtitle.orEmpty())
-                .ifBlank { entryName }
-        }
+    val shownEntry = remember(entryHop) {
+        TrafficFlowBuilder.prettyHop(entryHop?.title.orEmpty())
+            .ifBlank { TrafficFlowBuilder.prettyHop(entryHop?.subtitle.orEmpty()) }
     }
     Column(
         modifier = modifier

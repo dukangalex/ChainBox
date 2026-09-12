@@ -38,6 +38,7 @@ import io.nekohasekai.sfa.compose.screen.settings.ProfileOverrideScreen
 import io.nekohasekai.sfa.compose.screen.settings.RemoteControlScreen
 import io.nekohasekai.sfa.compose.screen.settings.ServiceSettingsScreen
 import io.nekohasekai.sfa.compose.screen.settings.SettingsScreen
+import io.nekohasekai.sfa.compose.screen.settings.ThemeSettingsScreen
 import io.nekohasekai.sfa.compose.screen.settings.TailscaleFontPickerScreen
 import io.nekohasekai.sfa.compose.screen.settings.TailscaleGhosttyConfigEditorScreen
 import io.nekohasekai.sfa.compose.screen.settings.TailscaleTerminalConfigScreen
@@ -312,6 +313,9 @@ fun NavHost(
         }
         composable(route = "settings/app", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             AppSettingsScreen(navController = navController)
+        }
+        composable(route = "settings/theme", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
+            ThemeSettingsScreen(navController = navController)
         }
         composable(route = "settings/core", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             CoreSettingsScreen(navController = navController)

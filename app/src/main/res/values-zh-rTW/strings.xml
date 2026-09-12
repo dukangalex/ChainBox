@@ -52,6 +52,15 @@
     <string name="title_log">日誌</string>
     <string name="title_settings">設定</string>
     <string name="title_app_settings">應用程式</string>
+    <string name="theme_settings">主題</string>
+    <string name="theme_mode">主題模式</string>
+    <string name="theme_mode_system">自動</string>
+    <string name="theme_mode_light">淺色</string>
+    <string name="theme_mode_dark">深色</string>
+    <string name="theme_color">主題色彩</string>
+    <string name="theme_pure_black">純黑模式</string>
+    <string name="theme_pure_black_summary">深色模式下使用純黑背景</string>
+    <string name="theme_color_dynamic">桌布色彩</string>
     <string name="title_new_profile">新增設定檔</string>
     <string name="title_edit_profile">編輯設定檔</string>
     <string name="title_edit_configuration">編輯設定</string>

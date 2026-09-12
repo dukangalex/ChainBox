@@ -52,6 +52,15 @@
     <string name="title_log">Логи</string>
     <string name="title_settings">Параметры</string>
     <string name="title_app_settings">Приложение</string>
+    <string name="theme_settings">Тема</string>
+    <string name="theme_mode">Режим темы</string>
+    <string name="theme_mode_system">Авто</string>
+    <string name="theme_mode_light">Светлая</string>
+    <string name="theme_mode_dark">Тёмная</string>
+    <string name="theme_color">Цвет темы</string>
+    <string name="theme_pure_black">Чисто чёрный</string>
+    <string name="theme_pure_black_summary">Чёрный фон в тёмном режиме</string>
+    <string name="theme_color_dynamic">Обои</string>
     <string name="title_new_profile">Новый профиль</string>
     <string name="title_edit_profile">Редактировать профиль</string>
     <string name="title_edit_configuration">Редактировать конфигурацию</string>
