@@ -95,6 +95,10 @@ fun ChainPathCard(
     onOpenNewProfile: (NewProfileArgs) -> Unit = {},
     onToggleService: () -> Unit = {},
     onRequestDelayTest: () -> Unit = {},
+    onUpdateCurrentProfile: () -> Unit = {},
+    canUpdateCurrentProfile: Boolean = false,
+    updatingCurrentProfile: Boolean = false,
+    updatedCurrentProfile: Boolean = false,
     serviceStatus: Status = Status.Stopped,
 ) {
     val running = topology.running
@@ -113,6 +117,14 @@ fun ChainPathCard(
             entryHop?.title?.ifBlank { entryHop.subtitle }.orEmpty(),
         )
     }
+    val shownEntry = remember(entryHop, entryName, nodeName) {
+        if (entryName.isNotBlank() && entryName != nodeName) {
+            entryName
+        } else {
+            TrafficFlowBuilder.prettyHop(entryHop?.subtitle.orEmpty())
+                .ifBlank { entryName }
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -122,9 +134,30 @@ fun ChainPathCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            StatusChip(
+                stringResource(R.string.title_configuration),
+                emphasized = false,
+                onClick = onShowProfilePicker,
+            )
             if (profileName.isNotBlank()) {
-                StatusChip(profileName, emphasized = false, onClick = onShowProfilePicker)
                 Spacer(modifier = Modifier.width(6.dp))
+                StatusChip(profileName, emphasized = false, onClick = onShowProfilePicker)
+            }
+            if (canUpdateCurrentProfile) {
+                Spacer(modifier = Modifier.width(6.dp))
+                StatusChip(
+                    label = when {
+                        updatedCurrentProfile -> stringResource(R.string.success)
+                        updatingCurrentProfile -> stringResource(R.string.loading)
+                        else -> stringResource(R.string.update_current_profile)
+                    },
+                    emphasized = true,
+                    onClick = {
+                        if (!updatingCurrentProfile && !updatedCurrentProfile) {
+                            onUpdateCurrentProfile()
+                        }
+                    },
+                )
             }
             IconButton(
                 onClick = { onOpenNewProfile(NewProfileArgs()) },
@@ -234,60 +267,104 @@ fun ChainPathCard(
         }
 
         Spacer(modifier = Modifier.height(14.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.chain_path_node),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = nodeName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+        if (topology.chained) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.chain_path_entry),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = shownEntry.ifBlank { "—" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.chain_path_exit),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = nodeName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.clickable(onClick = onRequestDelayTest),
+                ) {
+                    Text(
+                        text = stringResource(R.string.chain_path_delay),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val delayMs = exitHop?.delayMs ?: 0
+                    Text(
+                        text = if (delayMs > 0) {
+                            stringResource(R.string.chain_path_ms, delayMs)
+                        } else {
+                            "—"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = if (delayMs in 1..200) {
+                            Color(0xFF2E9E7A)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                }
             }
-            Column(
-                horizontalAlignment = Alignment.End,
-                modifier = Modifier.clickable(onClick = onRequestDelayTest),
-            ) {
-                Text(
-                    text = stringResource(R.string.chain_path_delay),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                val delayMs = exitHop?.delayMs ?: 0
-                Text(
-                    text = if (delayMs > 0) {
-                        stringResource(R.string.chain_path_ms, delayMs)
-                    } else {
-                        "—"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = if (delayMs in 1..200) {
-                        Color(0xFF2E9E7A)
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                )
+        } else {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.chain_path_node),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = nodeName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.clickable(onClick = onRequestDelayTest),
+                ) {
+                    Text(
+                        text = stringResource(R.string.chain_path_delay),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val delayMs = exitHop?.delayMs ?: 0
+                    Text(
+                        text = if (delayMs > 0) {
+                            stringResource(R.string.chain_path_ms, delayMs)
+                        } else {
+                            "—"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = if (delayMs in 1..200) {
+                            Color(0xFF2E9E7A)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                }
             }
-        }
-        if (topology.chained && entryName.isNotBlank() && entryName != nodeName) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.chain_path_entry),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = entryName,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
 
         if (running && downlinkHistory.any { it > 0f }) {

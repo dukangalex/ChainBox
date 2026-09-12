@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import io.nekohasekai.sfa.compose.navigation.NewProfileArgs
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.utils.CommandClient
 
 @Composable
@@ -43,6 +44,7 @@ fun DashboardCardRenderer(
 ) {
     when (cardGroup) {
         CardGroup.ChainPath -> {
+            val selected = profiles.find { it.id == selectedProfileId }
             ChainPathCard(
                 topology = uiState.topology,
                 onOpenChainBuilder = onOpenChainBuilder,
@@ -59,6 +61,12 @@ fun DashboardCardRenderer(
                 onOpenNewProfile = onOpenNewProfile,
                 onToggleService = onToggleService,
                 onRequestDelayTest = onRequestDelayTest,
+                onUpdateCurrentProfile = {
+                    selected?.let(onProfileUpdate)
+                },
+                canUpdateCurrentProfile = selected?.typed?.type == TypedProfile.Type.Remote,
+                updatingCurrentProfile = updatingProfileId != null && updatingProfileId == selectedProfileId,
+                updatedCurrentProfile = updatedProfileId != null && updatedProfileId == selectedProfileId,
                 serviceStatus = serviceStatus,
                 modifier = modifier,
             )

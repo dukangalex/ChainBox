@@ -3,11 +3,8 @@ package io.nekohasekai.sfa.utils
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
-import android.net.Network
-import android.net.NetworkCapabilities
 import android.net.SSLCertificateSocketFactory
 import android.util.Base64
-import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.bg.BoxService
 import io.nekohasekai.sfa.constant.Path
 import io.nekohasekai.sfa.constant.SettingsKey
@@ -23,7 +20,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
-import java.net.Proxy
 import java.net.URL
 import java.security.KeyStore
 import java.security.SecureRandom
@@ -441,7 +437,7 @@ object BackupManager {
             text.contains("CertificateException", true)
         ) {
             return IllegalStateException(
-                "证书校验失败。备份已尽量绕过 VPN 走系统网络直连。请确认设备时间正确，以及 WebDAV 站点证书链完整（常见于 TeraCLOUD / 自签证书）。原始错误：${e.message}",
+                "证书校验失败。WebDAV 按分流走内核路由（海外网盘会走代理）。请确认设备时间正确，以及 WebDAV 站点证书链完整（常见于 TeraCLOUD / 自签证书）。原始错误：${e.message}",
                 e,
             )
         }
@@ -463,13 +459,7 @@ object BackupManager {
     }
 
     private fun openConnection(url: URL): HttpURLConnection {
-        val network = pickNonVpnNetwork()
-        val conn = try {
-            if (network != null) network.openConnection(url) as HttpURLConnection
-            else url.openConnection(Proxy.NO_PROXY) as HttpURLConnection
-        } catch (_: Exception) {
-            url.openConnection(Proxy.NO_PROXY) as HttpURLConnection
-        }
+        val conn = url.openConnection() as HttpURLConnection
         if (conn is HttpsURLConnection) {
             conn.sslSocketFactory = platformSslSocketFactory()
             conn.hostnameVerifier = HttpsURLConnection.getDefaultHostnameVerifier()
@@ -487,28 +477,6 @@ object BackupManager {
             } catch (_: Exception) {
                 systemSslSocketFactory
             }
-        }
-    }
-
-    private fun pickNonVpnNetwork(): Network? {
-        return try {
-            val cm = Application.connectivity
-            val candidates = mutableListOf<Pair<Int, Network>>()
-            for (n in cm.allNetworks) {
-                val caps = cm.getNetworkCapabilities(n) ?: continue
-                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
-                val score = when {
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> 3
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> 2
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 1
-                    else -> 0
-                }
-                if (score > 0) candidates.add(score to n)
-            }
-            candidates.maxByOrNull { it.first }?.second
-        } catch (_: Exception) {
-            null
         }
     }
 

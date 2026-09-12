@@ -23,7 +23,8 @@ class BackupManagerTest {
         val wrapped = BackupManager.friendlySsl(raw)
         val msg = wrapped.message.orEmpty()
         assertTrue(msg.contains("证书校验失败"))
-        assertTrue(msg.contains("绕过 VPN"))
+        assertTrue(msg.contains("按分流"))
+        assertFalse(msg.contains("绕过 VPN"))
     }
 
     @Test

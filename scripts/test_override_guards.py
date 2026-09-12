@@ -224,8 +224,12 @@ def main() -> int:
         errors.append("compiler must keep generated entry hops from becoming the public exit")
 
     dav = read("app/src/main/java/io/nekohasekai/sfa/utils/BackupManager.kt")
-    if "pickNonVpnNetwork" not in dav:
-        errors.append("WebDAV should bypass VPN using the underlying network")
+    if "pickNonVpnNetwork" in dav:
+        errors.append("WebDAV must follow split routing, not bypass VPN with pickNonVpnNetwork")
+    if "Proxy.NO_PROXY" in dav:
+        errors.append("WebDAV must not force Proxy.NO_PROXY; traffic should follow TUN/split routing")
+    if "绕过 VPN" in dav:
+        errors.append("WebDAV error copy must not say traffic bypasses the VPN")
     if "TrustManagerFactory" not in dav:
         errors.append("WebDAV should use the system TrustManager explicitly")
     if "AndroidCAStore" not in dav:
@@ -434,12 +438,25 @@ def main() -> int:
         errors.append("clash mode must stay reachable from the home chips")
     if "onShowProfilePicker" not in path_card:
         errors.append("profile picker must stay reachable from the home chips")
+    if "onUpdateCurrentProfile" not in path_card:
+        errors.append("home must expose 更新当前配置")
+    if "title_configuration" not in path_card:
+        errors.append("home must expose a 配置 button that opens all profiles")
+    if "chain_path_exit" not in path_card:
+        errors.append("chained node row must show 出口 together with 入口")
+    if "topology.chained && entryName.isNotBlank() && entryName != nodeName" in path_card:
+        errors.append("chained 入口 must stay visible even when the title matches 出口")
     if "homeHidden" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardScreen.kt"):
         errors.append("home must hide the duplicate debug/mode/profile cards")
     if "shortenNodeName" not in flow:
         errors.append("landing hop labels must be shortened for display")
+    if "chainedHopPair" not in flow:
+        errors.append("chained sankey must keep entry and landing as two hops")
     if "FlyCat" in readme or "FlyCat" in read("docs/MAINTENANCE.md") or "FlyCat" in read("docs/USER_GUIDE.md"):
         errors.append("docs must not mention FlyCat; this Sankey is original")
+    guide = read("docs/USER_GUIDE.md")
+    if "按分流" not in guide and "按当前分流" not in guide:
+        errors.append("USER_GUIDE must say WebDAV follows split routing")
     if "t.me/AngelaBox" not in readme:
         errors.append("README must link the Telegram channel")
     if "t.me/AngelaBox" not in read("docs/MAINTENANCE.md"):
@@ -475,15 +492,19 @@ def main() -> int:
         errors.append("release workflow must record the kernel commit SHA")
     if "TG_BOT_TOKEN" not in workflow or "api.telegram.org" not in workflow:
         errors.append("build-chainbox.yml must notify Telegram after publish")
+    if "sendDocument" not in workflow:
+        errors.append("build-chainbox.yml must upload the APK to Telegram")
     if "same-bytes alias" not in workflow:
         errors.append("release notes must say ChainBox-android.apk is the same file")
-    telegram = read(".github/workflows/telegram-release.yml")
+    telegram = read(".github/workflows/telegram.yml")
     if "TG_BOT_TOKEN" not in telegram or "TG_CHANNEL_ID" not in telegram:
-        errors.append("telegram-release.yml must use TG_BOT_TOKEN and TG_CHANNEL_ID")
+        errors.append("telegram.yml must use TG_BOT_TOKEN and TG_CHANNEL_ID")
     if "sendDocument" not in telegram:
-        errors.append("telegram-release.yml should upload AngelaBox-android.apk")
+        errors.append("telegram.yml should upload AngelaBox-android.apk")
     if "configured=false" not in telegram:
-        errors.append("telegram-release.yml must skip when secrets are missing")
+        errors.append("telegram.yml must skip when secrets are missing")
+    if "name: Telegram Release" not in telegram:
+        errors.append("telegram.yml must be named Telegram Release so it is findable in Actions")
     if "t.me/AngelaBox" not in read("docs/MAINTENANCE.md"):
         errors.append("MAINTENANCE must document the Telegram channel")
     if "TG_BOT_TOKEN" not in read("docs/MAINTENANCE.md"):

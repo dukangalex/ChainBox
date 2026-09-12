@@ -128,6 +128,7 @@
     <string name="no_profiles">No profiles configured</string>
     <string name="add_profile">Add Profile</string>
     <string name="update_profile">Update profile</string>
+    <string name="update_current_profile">Update current profile</string>
     <string name="import_remote_profile">Import remote profile</string>
     <string name="import_remote_profile_message">Are you sure to import remote profile %1$s? You will connect to %2$s to download the configuration.</string>
     <string name="import_from_file_description">Import configuration from a local file</string>

@@ -287,6 +287,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TG_BOT_TOKEN:-}" ] || [ -z "${TG_CHANNEL_ID:-}" ]; then
+            echo "::warning::Set repo secrets TG_BOT_TOKEN and TG_CHANNEL_ID=@AngelaBox so releases post to https://t.me/AngelaBox"
             echo "TG_BOT_TOKEN / TG_CHANNEL_ID not set; skip channel notify"
             exit 0
           fi
@@ -296,3 +297,11 @@ jobs:
             --data-urlencode "chat_id=${TG_CHANNEL_ID}" \
             --data-urlencode "text=${TEXT}" \
             --data-urlencode "disable_web_page_preview=false"
+          if [ -f dist/AngelaBox-android.apk ]; then
+            SHA="$(awk '{print $1}' dist/AngelaBox-android.apk.sha256 2>/dev/null || true)"
+            CAPTION="$(printf 'AngelaBox %s\n\n请安装这个 APK。ChainBox-android.apk 是同内容别名，不必另下。\n\nSHA256:\n%s\n\n%s' "$VERSION_TAG" "$SHA" "$URL")"
+            curl -fsS -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" \
+              -F "chat_id=${TG_CHANNEL_ID}" \
+              -F "document=@dist/AngelaBox-android.apk" \
+              -F "caption=${CAPTION}"
+          fi

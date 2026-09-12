@@ -61,7 +61,7 @@ object TrafficFlowBuilder {
         running: Boolean = false,
     ): Pair<List<FlowNode>, List<FlowLink>> {
         if (samples.isNotEmpty()) {
-            return fromSamples(samples, chained, path)
+            return fromSamples(samples, chained, path, hops)
         }
         return fromHops(path, hops, chained)
     }
@@ -70,6 +70,7 @@ object TrafficFlowBuilder {
         samples: List<FlowSample>,
         chained: Boolean,
         path: ChainPath,
+        hops: List<LiveHop>,
     ): Pair<List<FlowNode>, List<FlowLink>> {
         val counts = LinkedHashMap<String, Int>()
         val links = LinkedHashMap<Pair<String, String>, Int>()
@@ -83,7 +84,7 @@ object TrafficFlowBuilder {
             links[key] = (links[key] ?: 0) + n
         }
         samples.forEach { sample ->
-            val hopTags = hopLabelsFor(sample, chained, path)
+            val hopTags = hopLabelsFor(sample, chained, path, hops)
             if (chained && (hopTags.isEmpty() || hopTags.all { isDirectTag(it) })) {
                 return@forEach
             }
@@ -107,12 +108,17 @@ object TrafficFlowBuilder {
         }
         val hasExit = counts.keys.any { columnOf(it) >= 2 }
         if (chained && !hasExit) {
-            return fromHops(path, emptyList(), chained = true)
+            return fromHops(path, hops, chained = true)
         }
         return finish(counts, links, directIds)
     }
 
-    private fun hopLabelsFor(sample: FlowSample, chained: Boolean, path: ChainPath): List<String> {
+    private fun hopLabelsFor(
+        sample: FlowSample,
+        chained: Boolean,
+        path: ChainPath,
+        hops: List<LiveHop>,
+    ): List<String> {
         val fromChain = sample.chain
             .map { prettyHop(it) }
             .filter { it.isNotEmpty() }
@@ -129,18 +135,63 @@ object TrafficFlowBuilder {
             return if (chained) emptyList() else listOf("DIRECT")
         }
         if (chained) {
-            val visible = tags.filter { !isDirectTag(it) }
-            val entry = visible.firstOrNull()?.takeIf { it.isNotBlank() }
-                ?: path.entryTag.trim().takeIf { it.isNotEmpty() }
-            val landing = (if (visible.size >= 2) visible.last() else null)?.takeIf { it.isNotBlank() }
-                ?: path.landingTag.trim().takeIf { it.isNotEmpty() }
-            if (!entry.isNullOrBlank() && !landing.isNullOrBlank() && entry != landing) {
-                return listOf(entry, landing)
-            }
-            if (!entry.isNullOrBlank()) return listOf(entry)
-            if (!landing.isNullOrBlank()) return listOf(landing)
+            return chainedHopPair(path, hops, sample)
         }
         return tags.ifEmpty { listOf("proxy") }
+    }
+
+    /**
+     * Chained path is always two hop columns: entry then landing.
+     * Kernel samples often report a single group tag (urltest/selector);
+     * live hops and the saved binding fill in the missing side so the
+     * diagram does not collapse to 自动选择 / one leaf.
+     */
+    internal fun chainedHopPair(
+        path: ChainPath,
+        hops: List<LiveHop> = emptyList(),
+        sample: FlowSample? = null,
+    ): List<String> {
+        val liveEntry = hops.firstOrNull { it.role == ChainPathHop.Role.Entry }
+        val liveLanding = hops.firstOrNull { it.role == ChainPathHop.Role.Landing }
+            ?: hops.lastOrNull { it.role == ChainPathHop.Role.Exit }
+        val plannedEntry = prettyHop(path.entryTag)
+        val plannedLanding = prettyHop(path.landingTag)
+        val entryGroup = prettyHop(liveEntry?.subtitle.orEmpty()).ifBlank { plannedEntry }
+        val landingGroup = prettyHop(liveLanding?.subtitle.orEmpty()).ifBlank { plannedLanding }
+        val sampleTags = buildList {
+            sample?.chain?.forEach { add(prettyHop(it)) }
+            sample?.let { add(prettyHop(it.outbound)) }
+        }.filter { it.isNotEmpty() && !isDirectTag(it) }.distinct()
+        val liveEntryTitle = prettyHop(liveEntry?.title.orEmpty())
+        val liveLandingTitle = prettyHop(liveLanding?.title.orEmpty())
+        var landing = liveLandingTitle
+            .ifBlank { sampleTags.lastOrNull().orEmpty() }
+            .ifBlank { plannedLanding }
+            .ifBlank { "landing" }
+        var entry = when {
+            liveEntryTitle.isNotBlank() && liveEntryTitle != landing -> liveEntryTitle
+            sampleTags.size >= 2 && sampleTags.first() != landing -> sampleTags.first()
+            entryGroup.isNotBlank() && entryGroup != landing -> entryGroup
+            liveEntryTitle.isNotBlank() -> liveEntryTitle
+            else -> entryGroup.ifBlank { "entry" }
+        }
+        if (entry == landing) {
+            when {
+                entryGroup.isNotBlank() && liveLandingTitle.isNotBlank() && entryGroup != liveLandingTitle -> {
+                    entry = entryGroup
+                    landing = liveLandingTitle
+                }
+                entryGroup.isNotBlank() && landingGroup.isNotBlank() && entryGroup != landingGroup -> {
+                    entry = entryGroup
+                    landing = landingGroup
+                }
+                plannedEntry.isNotBlank() && plannedLanding.isNotBlank() && plannedEntry != plannedLanding -> {
+                    entry = plannedEntry
+                    landing = plannedLanding
+                }
+            }
+        }
+        return listOf(entry.ifBlank { "entry" }, landing.ifBlank { "landing" })
     }
 
     private fun fromHops(
@@ -156,34 +207,35 @@ object TrafficFlowBuilder {
         }
         addLabel("Device", false)
         addLabel("<final>", false)
-        val live = hops.filter {
-            it.role != ChainPathHop.Role.Device && it.role != ChainPathHop.Role.Destination
-        }
-        if (live.isNotEmpty()) {
-            live.forEach { hop ->
-                val title = prettyHop(hop.title).ifBlank {
-                    prettyHop(hop.subtitle)
-                }.ifBlank {
-                    val raw = when (hop.role) {
-                        ChainPathHop.Role.Entry -> path.entryTag
-                        ChainPathHop.Role.Landing -> path.landingTag
-                        ChainPathHop.Role.Exit -> path.profileName
-                        else -> "proxy"
-                    }
-                    prettyHop(raw).ifBlank { if (isDirectTag(raw)) "DIRECT" else "proxy" }
-                }
-                addLabel(title)
-            }
-        } else if (chained) {
-            addLabel(path.entryTag.ifBlank { "entry" })
-            addLabel(path.landingTag.ifBlank { "landing" })
+        if (chained) {
+            chainedHopPair(path, hops).forEach { addLabel(it) }
         } else {
-            addLabel(
-                path.hops.firstOrNull { it.role == ChainPathHop.Role.Exit }?.label
-                    ?.ifBlank { path.profileName }
-                    .orEmpty()
-                    .ifBlank { "proxy" },
-            )
+            val live = hops.filter {
+                it.role != ChainPathHop.Role.Device && it.role != ChainPathHop.Role.Destination
+            }
+            if (live.isNotEmpty()) {
+                live.forEach { hop ->
+                    val title = prettyHop(hop.title).ifBlank {
+                        prettyHop(hop.subtitle)
+                    }.ifBlank {
+                        val raw = when (hop.role) {
+                            ChainPathHop.Role.Entry -> path.entryTag
+                            ChainPathHop.Role.Landing -> path.landingTag
+                            ChainPathHop.Role.Exit -> path.profileName
+                            else -> "proxy"
+                        }
+                        prettyHop(raw).ifBlank { if (isDirectTag(raw)) "DIRECT" else "proxy" }
+                    }
+                    addLabel(title)
+                }
+            } else {
+                addLabel(
+                    path.hops.firstOrNull { it.role == ChainPathHop.Role.Exit }?.label
+                        ?.ifBlank { path.profileName }
+                        .orEmpty()
+                        .ifBlank { "proxy" },
+                )
+            }
         }
         val counts = LinkedHashMap<String, Int>()
         val links = LinkedHashMap<Pair<String, String>, Int>()

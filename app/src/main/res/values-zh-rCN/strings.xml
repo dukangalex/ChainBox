@@ -113,6 +113,7 @@
     <string name="no_profiles">尚未设定任何配置</string>
     <string name="add_profile">新增配置</string>
     <string name="update_profile">更新配置</string>
+    <string name="update_current_profile">更新当前配置</string>
     <string name="import_remote_profile">汇入远端设定</string>
     <string name="import_remote_profile_message">您确定要汇入远端配置 %1$s 吗？您将连接到 %2$s 以下载设定。</string>
     <string name="import_from_file_description">从本机档案汇入设定</string>

@@ -394,4 +394,74 @@ class ChainPathTest {
         assertTrue(topology.hops.none { it.role == ChainPathHop.Role.Landing && it.title == "DIRECT" })
         assertTrue(topology.flowNodes.none { it.label == "DIRECT" })
     }
+
+    @Test
+    fun chainedSingleTagSampleKeepsEntryAndLanding() {
+        val path = ChainPathBuilder.build(
+            profileName = "MYCF",
+            defaultOutboundTag = "自动选择",
+            binding = ChainBinding(1L, "自动选择", 1L, "自动选择"),
+            landingProfileName = "MYCF",
+        )
+        val hops = listOf(
+            LiveHop(ChainPathHop.Role.Device, title = ""),
+            LiveHop(
+                role = ChainPathHop.Role.Entry,
+                title = "ofo.033388.xyz",
+                subtitle = "自动选择",
+            ),
+            LiveHop(
+                role = ChainPathHop.Role.Landing,
+                title = "ofo.033388.xyz",
+                subtitle = "MYCF",
+            ),
+            LiveHop(ChainPathHop.Role.Destination, title = ""),
+        )
+        val (nodes, links) = TrafficFlowBuilder.build(
+            samples = listOf(
+                FlowSample(
+                    source = "172.19.0.1:1",
+                    rule = "geosite-google",
+                    outbound = "自动选择",
+                    chain = listOf("自动选择"),
+                    dest = "www.google.com:443",
+                ),
+            ),
+            path = path,
+            hops = hops,
+            chained = true,
+        )
+        val pair = TrafficFlowBuilder.chainedHopPair(path, hops)
+        assertEquals("自动选择", pair[0])
+        assertEquals("ofo.033388.xyz", pair[1])
+        assertTrue(nodes.any { it.column == 2 && it.label == "自动选择" })
+        assertTrue(nodes.any { it.column == 3 && it.label == "ofo.033388.xyz" })
+        assertTrue(nodes.any { it.label == "google" })
+        assertTrue(links.isNotEmpty())
+    }
+
+    @Test
+    fun chainedOneHopSampleFallsBackToSavedTags() {
+        val path = ChainPathBuilder.build(
+            profileName = "UOT",
+            defaultOutboundTag = "节点选择",
+            binding = ChainBinding(1L, "节点选择", 2L, "zgo"),
+            landingProfileName = "VPS",
+        )
+        val (nodes, _) = TrafficFlowBuilder.build(
+            samples = listOf(
+                FlowSample(
+                    source = "172.19.0.1:9",
+                    rule = "geosite-google",
+                    outbound = "hk-1",
+                    chain = listOf("hk-1"),
+                    dest = "www.google.com:443",
+                ),
+            ),
+            path = path,
+            chained = true,
+        )
+        assertTrue(nodes.any { it.column == 2 && it.label == "节点选择" })
+        assertTrue(nodes.any { it.column == 3 && it.label == "hk-1" })
+    }
 }

@@ -128,6 +128,7 @@
     <string name="no_profiles">尚未設定任何設定檔</string>
     <string name="add_profile">新增設定檔</string>
     <string name="update_profile">更新設定檔</string>
+    <string name="update_current_profile">更新目前設定檔</string>
     <string name="import_remote_profile">匯入遠端設定</string>
     <string name="import_remote_profile_message">您確定要匯入遠端設定檔 %1$s 嗎？您將連線到 %2$s 以下載設定。</string>
     <string name="import_from_file_description">從本機檔案匯入設定</string>
