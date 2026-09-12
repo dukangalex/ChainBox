@@ -86,8 +86,8 @@ jobs:
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "${API_URL}" > release.json
-          APK_URL="$(jq -r '.assets[] | select(.name == \"AngelaBox-android.apk\") | .browser_download_url' release.json | head -n1)"
-          SHA_URL="$(jq -r '.assets[] | select(.name == \"AngelaBox-android.apk.sha256\") | .browser_download_url' release.json | head -n1)"
+          APK_URL="$(jq -r '.assets[] | select(.name == "AngelaBox-android.apk") | .browser_download_url' release.json | head -n1)"
+          SHA_URL="$(jq -r '.assets[] | select(.name == "AngelaBox-android.apk.sha256") | .browser_download_url' release.json | head -n1)"
           jq -r '.body // ""' release.json > release-body.txt
           if [ -z "${APK_URL}" ] || [ "${APK_URL}" = "null" ]; then
             echo "::error::AngelaBox-android.apk was not found in the release."

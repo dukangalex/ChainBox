@@ -54,7 +54,7 @@ Telegram 频道：[https://t.me/AngelaBox](https://t.me/AngelaBox)
 
 频道：[https://t.me/AngelaBox](https://t.me/AngelaBox)
 
-GitHub Release 发布成功后，`telegram-release.yml` 会发一条消息并上传 `AngelaBox-android.apk`。需仓库管理员一次性配置：
+GitHub Release 发布成功后，`build-chainbox.yml` 会直接往频道发一条消息（GitHub 默认 token 不会触发其它 workflow，所以通知写在发版步骤里）。`telegram-release.yml` 可手动补发并上传 APK。需仓库管理员一次性配置：
 
 1. Telegram 打开 [@BotFather](https://t.me/BotFather)，`/newbot` 拿到 token。
 2. 把该 bot 加进频道 **AngelaBox**，授予「发布消息」权限。

@@ -276,3 +276,23 @@ jobs:
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Telegram channel
+        if: success() && github.event_name == 'workflow_dispatch' && (inputs.publish_release == 'true' || inputs.publish_release == true)
+        continue-on-error: true
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
+          VERSION_TAG: ${{ inputs.version_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TG_BOT_TOKEN:-}" ] || [ -z "${TG_CHANNEL_ID:-}" ]; then
+            echo "TG_BOT_TOKEN / TG_CHANNEL_ID not set; skip channel notify"
+            exit 0
+          fi
+          URL="https://github.com/dukangalex/AngelaBox/releases/tag/${VERSION_TAG}"
+          TEXT="$(printf 'AngelaBox %s 已发布\n%s\n\n请安装 AngelaBox-android.apk（ChainBox-android.apk 是同内容别名，不必下两个）。' "$VERSION_TAG" "$URL")"
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHANNEL_ID}" \
+            --data-urlencode "text=${TEXT}" \
+            --data-urlencode "disable_web_page_preview=false"

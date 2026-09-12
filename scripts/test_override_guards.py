@@ -473,6 +473,8 @@ def main() -> int:
         errors.append("release workflow must attach APK SHA-256")
     if "KERNEL_COMMIT" not in workflow:
         errors.append("release workflow must record the kernel commit SHA")
+    if "TG_BOT_TOKEN" not in workflow or "api.telegram.org" not in workflow:
+        errors.append("build-chainbox.yml must notify Telegram after publish")
     if "same-bytes alias" not in workflow:
         errors.append("release notes must say ChainBox-android.apk is the same file")
     telegram = read(".github/workflows/telegram-release.yml")
