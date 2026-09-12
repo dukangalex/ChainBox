@@ -148,40 +148,17 @@ jobs:
           set -euo pipefail
           python3 scripts/telegram_announce.py
 
-      - name: Send APK document to Telegram
+      - name: Send to Telegram
         if: steps.creds.outputs.configured == 'true'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
+          APK_FILE: AngelaBox-android.apk
+          DOCUMENT_ONLY: ${{ github.event.inputs.document_only }}
         run: |
           set -euo pipefail
           ls -lh AngelaBox-android.apk
-          RESPONSE="$(curl -sS --retry 2 --retry-delay 3 --max-time 180 \
-            -X POST \
-            "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" \
-            -F "chat_id=${TG_CHANNEL_ID}" \
-            -F "document=@AngelaBox-android.apk;filename=AngelaBox-android.apk" \
-            -F "caption=$(cat telegram-caption.txt)" \
-            -F "disable_content_type_detection=true")"
-          echo "${RESPONSE}" | jq .
-          test "$(echo "${RESPONSE}" | jq -r '.ok')" = "true"
-
-      - name: Send announcement to Telegram
-        if: steps.creds.outputs.configured == 'true' && github.event.inputs.document_only != 'true'
-        env:
-          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-          TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
-        run: |
-          set -euo pipefail
-          RESPONSE="$(curl -sS --retry 3 --retry-delay 2 \
-            -X POST \
-            "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TG_CHANNEL_ID}" \
-            --data-urlencode "text=$(cat telegram-message.txt)" \
-            --data-urlencode "reply_markup=$(cat telegram-markup.json)" \
-            --data-urlencode "disable_web_page_preview=true")"
-          echo "${RESPONSE}" | jq .
-          test "$(echo "${RESPONSE}" | jq -r '.ok')" = "true"
+          python3 scripts/telegram_send.py
 
       - name: Complete
         run: |

@@ -316,31 +316,9 @@ jobs:
           if [ -n "${APK}" ] && [ -f "${APK}" ]; then
             ls -lh "$APK"
             echo "Telegram upload path: ${APK}"
-            # curl 26 happens with @/absolute/path;filename=... on this runner.
-            # Copy to a cwd-relative name so sendDocument can read the file.
-            cp -f "$APK" AngelaBox-android.apk
-            test -s AngelaBox-android.apk
-            DOC_RESP="$(curl -sS --retry 2 --retry-delay 3 --max-time 180 \
-              -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" \
-              -F "chat_id=${TG_CHANNEL_ID}" \
-              -F "document=@AngelaBox-android.apk;filename=AngelaBox-android.apk" \
-              -F "caption=$(cat telegram-caption.txt)" \
-              -F "disable_content_type_detection=true" || true)"
-            echo "${DOC_RESP}" | jq . || echo "${DOC_RESP}"
-            if [ "$(echo "${DOC_RESP}" | jq -r '.ok // false')" != "true" ]; then
-              echo "::warning::Telegram sendDocument failed"
-            fi
+            APK_FILE="${APK}" python3 "${ROOT}/sing-box-for-android/scripts/telegram_send.py"
           else
             echo "::warning::AngelaBox-android.apk not found for Telegram upload"
             find "$ROOT" -name '*.apk' | head
-          fi
-          MSG_RESP="$(curl -sS --retry 3 --retry-delay 2 \
-            -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TG_CHANNEL_ID}" \
-            --data-urlencode "text=$(cat telegram-message.txt)" \
-            --data-urlencode "reply_markup=$(cat telegram-markup.json)" \
-            --data-urlencode "disable_web_page_preview=true" || true)"
-          echo "${MSG_RESP}" | jq . || echo "${MSG_RESP}"
-          if [ "$(echo "${MSG_RESP}" | jq -r '.ok // false')" != "true" ]; then
-            echo "::warning::Telegram sendMessage failed"
+            SKIP_DOCUMENT=true python3 "${ROOT}/sing-box-for-android/scripts/telegram_send.py"
           fi
