@@ -424,6 +424,10 @@ def main() -> int:
         errors.append("home icon must start/stop the service")
     if "ic_launcher" not in path_card and "ic_qs_brand" not in path_card:
         errors.append("home power control must use the AngelaBox icon")
+    if "painterResource(R.mipmap" in path_card or "R.mipmap.ic_launcher" in path_card:
+        errors.append("Compose must not load adaptive mipmap icons; that crashes on launch")
+    if "ic_launcher_foreground" not in path_card and "ic_qs_brand" not in path_card:
+        errors.append("home power control must use a vector drawable, not an adaptive icon")
     if "PowerMark" not in path_card:
         errors.append("home hero should include a power mark that toggles the service")
     if "ModeChip" not in path_card:
@@ -469,6 +473,19 @@ def main() -> int:
         errors.append("release workflow must attach APK SHA-256")
     if "KERNEL_COMMIT" not in workflow:
         errors.append("release workflow must record the kernel commit SHA")
+    if "same-bytes alias" not in workflow:
+        errors.append("release notes must say ChainBox-android.apk is the same file")
+    telegram = read(".github/workflows/telegram-release.yml")
+    if "TG_BOT_TOKEN" not in telegram or "TG_CHANNEL_ID" not in telegram:
+        errors.append("telegram-release.yml must use TG_BOT_TOKEN and TG_CHANNEL_ID")
+    if "sendDocument" not in telegram:
+        errors.append("telegram-release.yml should upload AngelaBox-android.apk")
+    if "configured=false" not in telegram:
+        errors.append("telegram-release.yml must skip when secrets are missing")
+    if "t.me/AngelaBox" not in read("docs/MAINTENANCE.md"):
+        errors.append("MAINTENANCE must document the Telegram channel")
+    if "TG_BOT_TOKEN" not in read("docs/MAINTENANCE.md"):
+        errors.append("MAINTENANCE must document Telegram bot secrets")
 
     if errors:
         print("FAIL")

@@ -42,12 +42,27 @@ Telegram 频道：[https://t.me/AngelaBox](https://t.me/AngelaBox)
 ## 对外身份（已落地）
 
 - 对外产品名、README、About、Release、APK 文件名、仓库路径都是 AngelaBox。包名仍为 `io.chainbox.app`。
-- 同时发布 `ChainBox-android.apk`（与 AngelaBox 包内容相同），供旧版应用内更新。
+- 同时发布 `ChainBox-android.apk`（与 AngelaBox 包内容相同，仅文件名不同），供旧版覆盖安装。用户只需安装其中一个。
+- 发版后工作流 `telegram-release.yml` 会向 [t.me/AngelaBox](https://t.me/AngelaBox) 发通知并上传 APK。需仓库 Secrets：`TG_BOT_TOKEN`、`TG_CHANNEL_ID`。
 - App 更新只查 `https://api.github.com/repos/dukangalex/AngelaBox/releases`（旧仓库名会重定向）。
 - 不走 F-Droid / 官方 SagerNet 更新源。
 - 不得用官方名称上架应用商店。
 
 不做事：整包重命名 `io.nekohasekai.sfa`。那会改数千个文件、容易跟丢上游同步能力，对用户无益。
+
+## Telegram 发版通知
+
+频道：[https://t.me/AngelaBox](https://t.me/AngelaBox)
+
+GitHub Release 发布成功后，`telegram-release.yml` 会发一条消息并上传 `AngelaBox-android.apk`。需仓库管理员一次性配置：
+
+1. Telegram 打开 [@BotFather](https://t.me/BotFather)，`/newbot` 拿到 token。
+2. 把该 bot 加进频道 **AngelaBox**，授予「发布消息」权限。
+3. 仓库 **Settings → Secrets and variables → Actions** 增加：
+   - `TG_BOT_TOKEN`：BotFather 给出的 token
+   - `TG_CHANNEL_ID`：`@AngelaBox`（或频道的 `-100…` 数字 ID）
+
+未配置时发版仍成功，只是跳过频道通知。配好后也可在 Actions 里手动跑 **Telegram Release**。
 
 ## 内核同步
 

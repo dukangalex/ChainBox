@@ -21,8 +21,22 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false }}
 
     steps:
+      - name: Check Telegram secrets
+        id: creds
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
+        run: |
+          if [ -z "${TG_BOT_TOKEN:-}" ] || [ -z "${TG_CHANNEL_ID:-}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Set repo secrets TG_BOT_TOKEN and TG_CHANNEL_ID (@AngelaBox) to enable channel notify."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Resolve release
         id: release
+        if: steps.creds.outputs.configured == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -59,6 +73,7 @@ jobs:
 
       - name: Find release assets
         id: assets
+        if: steps.creds.outputs.configured == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -87,6 +102,7 @@ jobs:
           echo "sha_url=${SHA_URL}" >> "$GITHUB_OUTPUT"
 
       - name: Download release assets
+        if: steps.creds.outputs.configured == 'true'
         env:
           APK_URL: ${{ steps.assets.outputs.apk_url }}
           SHA_URL: ${{ steps.assets.outputs.sha_url }}
@@ -100,6 +116,7 @@ jobs:
 
       - name: Verify APK checksum
         id: checksum
+        if: steps.creds.outputs.configured == 'true'
         run: |
           set -euo pipefail
           EXPECTED="$(awk '{print $1}' AngelaBox-android.apk.sha256)"
@@ -113,6 +130,7 @@ jobs:
           echo "sha256=${ACTUAL}" >> "$GITHUB_OUTPUT"
 
       - name: Build Telegram message
+        if: steps.creds.outputs.configured == 'true'
         env:
           TAG: ${{ steps.release.outputs.tag }}
           RELEASE_NAME: ${{ steps.release.outputs.name }}
@@ -130,18 +148,28 @@ jobs:
           sha256 = os.environ["SHA256"]
           if len(release_body) > 2600:
               release_body = release_body[:2600].rstrip() + "\n…"
-          message = f"""🚀 AngelaBox {tag}\n\n{release_name}\n\n{release_body}\n\n📱 Android\nPackage: io.chainbox.app\n\n🔐 SHA256\n{sha256}\n\n🔗 GitHub Release\n{release_url}\n"""
+          message = f"""AngelaBox {tag}
+
+{release_name}
+
+{release_body}
+
+请安装 AngelaBox-android.apk（ChainBox-android.apk 是同内容别名，不必下两个）。
+
+Package: io.chainbox.app
+SHA256: {sha256}
+{release_url}
+"""
           Path("telegram-message.txt").write_text(message, encoding="utf-8")
           PY
 
       - name: Send announcement to Telegram
+        if: steps.creds.outputs.configured == 'true'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
         run: |
           set -euo pipefail
-          test -n "${TG_BOT_TOKEN}"
-          test -n "${TG_CHANNEL_ID}"
           RESPONSE="$(curl -fsSL --retry 3 --retry-delay 2 \
             -X POST \
             "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
@@ -152,6 +180,7 @@ jobs:
           test "$(echo "${RESPONSE}" | jq -r '.ok')" = "true"
 
       - name: Upload APK to Telegram
+        if: steps.creds.outputs.configured == 'true'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
@@ -160,7 +189,14 @@ jobs:
           SHA256: ${{ steps.checksum.outputs.sha256 }}
         run: |
           set -euo pipefail
-          CAPTION="📱 AngelaBox ${TAG}\n\nOfficial Android APK\n\nSHA256:\n${SHA256}\n\nGitHub Release:\n${RELEASE_URL}"
+          CAPTION="AngelaBox ${TAG}
+
+请安装这个 APK。ChainBox-android.apk 是同内容别名，不必另下。
+
+SHA256:
+${SHA256}
+
+${RELEASE_URL}"
           RESPONSE="$(curl -fsSL --retry 3 --retry-delay 2 \
             -X POST \
             "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" \
@@ -172,4 +208,8 @@ jobs:
 
       - name: Complete
         run: |
-          echo "Telegram release publication completed: ${{ steps.release.outputs.tag }}"
+          if [ "${{ steps.creds.outputs.configured }}" = "true" ]; then
+            echo "Telegram release publication completed: ${{ steps.release.outputs.tag }}"
+          else
+            echo "Skipped Telegram notify (secrets TG_BOT_TOKEN / TG_CHANNEL_ID not set)"
+          fi

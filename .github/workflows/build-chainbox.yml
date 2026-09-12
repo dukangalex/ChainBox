@@ -247,7 +247,11 @@ jobs:
           body: |
             AngelaBox ${{ inputs.version_tag }}
 
-            Install `AngelaBox-android.apk` (arm64). `ChainBox-android.apk` is the same build for overlay updates from earlier names. Verify:
+            Install `AngelaBox-android.apk` (arm64). That is the only file you need.
+
+            `ChainBox-android.apk` is a **same-bytes alias** for overlay updates from the old name. Do not install both.
+
+            Verify:
 
             ```
             sha256sum -c AngelaBox-android.apk.sha256

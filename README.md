@@ -20,6 +20,7 @@ AngelaBox 是基于 [sing-box](https://github.com/SagerNet/sing-box) 内核的 A
 | 内核仓库 | [dukangalex/sing-box](https://github.com/dukangalex/sing-box)（分支 `chain-dev`） |
 | 更新检查 | 仅本仓库 GitHub Releases |
 | 应用图标 | 白色底、居中立方体（橙黄顶 / 天蓝正面 / 玫红侧面） |
+| 安装包 | 只需 `AngelaBox-android.apk`。`ChainBox-android.apk` 是同内容别名，给旧名覆盖安装用，不要两个都装 |
 
 曾用名 ChainBox。产品名称与代码仓库均已更名为 AngelaBox；应用包名仍为 `io.chainbox.app`，以免打断已安装用户的覆盖更新。
 
