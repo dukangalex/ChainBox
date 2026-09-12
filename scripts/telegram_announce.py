@@ -37,12 +37,16 @@ def main() -> None:
             notes or f"AngelaBox {tag} 已发布。",
             "",
             "请安装 AngelaBox-android.apk（ChainBox-android.apk 是同内容别名，不必下两个）。",
-            "",
-            "Package: io.chainbox.app",
         ]
     )
     if sha:
-        lines.append(f"SHA256: {sha}")
+        lines.extend(
+            [
+                "",
+                "安装包校验 SHA-256（用于核对文件是否完整、是否被篡改）：",
+                sha,
+            ]
+        )
     Path("telegram-message.txt").write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
     Path("telegram-markup.json").write_text(
         json.dumps(
@@ -64,7 +68,13 @@ def main() -> None:
         "点这条消息即可安装。ChainBox-android.apk 是同内容别名，不必另下。",
     ]
     if sha:
-        caption.extend(["", f"SHA256: {sha}"])
+        caption.extend(
+            [
+                "",
+                "安装包 SHA-256（核对文件是否完整）：",
+                sha,
+            ]
+        )
     caption.extend(["", url])
     text = "\n".join(caption)
     if len(text) > 1000:

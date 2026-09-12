@@ -73,6 +73,7 @@ object Settings {
     var themeMode by dataStore.string(SettingsKey.THEME_MODE) { "system" }
     var themeSeed by dataStore.string(SettingsKey.THEME_SEED) { "default" }
     var themePureBlack by dataStore.boolean(SettingsKey.THEME_PURE_BLACK) { false }
+    var overlayScriptsJson by dataStore.string(SettingsKey.OVERLAY_SCRIPTS) { "[]" }
 
     const val PER_APP_PROXY_DISABLED = 0
     const val PER_APP_PROXY_EXCLUDE = 1

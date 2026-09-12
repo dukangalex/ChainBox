@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.NetworkCheck
@@ -399,8 +400,33 @@ fun ToolsScreen(
                     )
                 },
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                     .clickable { navController.navigate("tools/chain_builder") },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            ListItem(
+                headlineContent = {
+                    Text(
+                        stringResource(R.string.overlay_scripts),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        stringResource(R.string.overlay_scripts_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.Code,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
+                    .clickable { navController.navigate("tools/scripts") },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             )
         }

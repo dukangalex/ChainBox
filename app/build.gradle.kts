@@ -223,6 +223,7 @@ dependencies {
     implementation("sh.calvin.reorderable:reorderable:3.1.0")
     implementation("com.github.jeziellago:compose-markdown:0.7.2")
     implementation("org.kodein.emoji:emoji-kt:2.5.0")
+    implementation("org.mozilla:rhino:1.7.15")
 
     // Terminal emulator
     val libghosttyVersion = "0.1.0-alpha01"

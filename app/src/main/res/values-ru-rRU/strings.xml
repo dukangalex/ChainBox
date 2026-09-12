@@ -686,4 +686,23 @@
     <string name="taildrop_dismiss">Закрыть</string>
     <string name="taildrop_open_app">Открыть sing-box</string>
     <string name="taildrop_notification_title">Отправка файлов</string>
+    <string name="overlay_scripts">Скрипты</string>
+    <string name="overlay_scripts_subtitle">Глобальные скрипты sing-box</string>
+    <string name="overlay_scripts_hint">Скрипты меняют только рабочий JSON при запуске. Нужна function main(config) для sing-box. Ключи Clash игнорируются.</string>
+    <string name="overlay_scripts_empty">Скриптов нет. Нажмите +, чтобы импортировать код, URL, файл или образец.</string>
+    <string name="overlay_scripts_import">Импорт</string>
+    <string name="overlay_scripts_import_code">Импорт из кода</string>
+    <string name="overlay_scripts_import_url">Импорт по URL</string>
+    <string name="overlay_scripts_import_file">Импорт из файла</string>
+    <string name="overlay_scripts_import_sample">Импорт образца</string>
+    <string name="overlay_scripts_edit">Правка скрипта</string>
+    <string name="overlay_scripts_code">Код</string>
+    <string name="overlay_scripts_from_code">Вставленный код</string>
+    <string name="overlay_scripts_from_url">Из URL</string>
+    <string name="overlay_scripts_from_file">Из файла</string>
+    <string name="overlay_scripts_from_sample">Образец</string>
+    <string name="overlay_scripts_imported">Импортированный скрипт</string>
+    <string name="overlay_scripts_duplicate">Дублировать</string>
+    <string name="overlay_scripts_failed">Не удалось сохранить скрипт</string>
+    <string name="overlay_scripts_empty_file">Файл пуст</string>
 </resources>

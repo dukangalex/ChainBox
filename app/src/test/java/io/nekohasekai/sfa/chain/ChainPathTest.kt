@@ -527,4 +527,70 @@ class ChainPathTest {
         assertTrue(nodes.any { it.column == 2 && it.label == "节点选择" })
         assertTrue(nodes.any { it.column == 3 && it.label == "hk-1" })
     }
+
+    @Test
+    fun landingGroupTagExpandsToSelectedLeaf() {
+        val path = ChainPathBuilder.build(
+            profileName = "MYCF",
+            defaultOutboundTag = "自动选择",
+            binding = ChainBinding(1L, "自动选择", 1L, "⚡ 自动选择"),
+            landingProfileName = "MYCF",
+        )
+        val topology = LiveTopologyBuilder.fromPath(
+            path,
+            running = true,
+            groups = listOf(
+                GroupHint(
+                    "自动选择",
+                    selected = "cf.553314.xyz",
+                    delays = mapOf("cf.553314.xyz" to 80),
+                ),
+                GroupHint(
+                    "⚡ 自动选择",
+                    selected = "jp-tokyo-1",
+                    delays = mapOf("jp-tokyo-1" to 120),
+                ),
+            ),
+            liveChain = listOf("cf.553314.xyz", "⚡ 自动选择"),
+        )
+        assertEquals("cf.553314.xyz", topology.hops[1].title)
+        assertEquals(ChainPathHop.Role.Entry, topology.hops[1].role)
+        assertEquals("jp-tokyo-1", topology.hops[2].title)
+        assertEquals(ChainPathHop.Role.Landing, topology.hops[2].role)
+        assertTrue(topology.hops.none { it.role == ChainPathHop.Role.Landing && it.title.contains("自动选择") })
+    }
+
+    @Test
+    fun trafficFlowExpandsGroupTagToLeaf() {
+        val path = ChainPathBuilder.build(
+            profileName = "MYCF",
+            defaultOutboundTag = "自动选择",
+            binding = ChainBinding(1L, "自动选择", 1L, "⚡ 自动选择"),
+            landingProfileName = "MYCF",
+        )
+        val hops = listOf(
+            LiveHop(ChainPathHop.Role.Device, title = ""),
+            LiveHop(ChainPathHop.Role.Entry, title = "cf.553314.xyz", subtitle = "自动选择"),
+            LiveHop(ChainPathHop.Role.Landing, title = "jp-tokyo-1", subtitle = "⚡ 自动选择"),
+            LiveHop(ChainPathHop.Role.Destination, title = ""),
+        )
+        val (nodes, _) = TrafficFlowBuilder.build(
+            samples = listOf(
+                FlowSample(
+                    source = "172.19.0.1:1",
+                    rule = "geosite-google",
+                    outbound = "⚡ 自动选择",
+                    chain = listOf("cf.553314.xyz", "⚡ 自动选择"),
+                    dest = "www.google.com:443",
+                ),
+            ),
+            path = path,
+            hops = hops,
+            chained = true,
+        )
+        val labels = nodes.map { it.label }
+        assertTrue(labels.contains("cf.553314.xyz") || labels.any { it.startsWith("cf.553314") })
+        assertTrue(labels.contains("jp-tokyo-1"))
+        assertTrue(labels.none { it.contains("自动选择") })
+    }
 }

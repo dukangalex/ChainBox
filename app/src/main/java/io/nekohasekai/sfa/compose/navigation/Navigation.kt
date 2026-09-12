@@ -61,6 +61,7 @@ import io.nekohasekai.sfa.compose.screen.tools.PowerReportFileContentScreen
 import io.nekohasekai.sfa.compose.screen.tools.PowerReportListScreen
 import io.nekohasekai.sfa.compose.screen.tools.PowerReportMetadataScreen
 import io.nekohasekai.sfa.compose.screen.tools.STUNTestScreen
+import io.nekohasekai.sfa.compose.screen.tools.ScriptListScreen
 import io.nekohasekai.sfa.compose.screen.tools.TailscaleSSHSharedViewModel
 import io.nekohasekai.sfa.compose.screen.tools.TailscaleStatusViewModel
 import io.nekohasekai.sfa.compose.screen.tools.ToolsScreen
@@ -281,6 +282,9 @@ fun NavHost(
         }
         composable(route = "tools/chain_builder", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             ChainBuilderScreen(navController = navController, serviceStatus = serviceStatus)
+        }
+        composable(route = "tools/scripts", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
+            ScriptListScreen(navController = navController, serviceStatus = serviceStatus)
         }
         composable(route = "tools/network_quality", enterTransition = slideInFromRight, exitTransition = slideOutToLeft, popEnterTransition = slideInFromLeft, popExitTransition = slideOutToRight) {
             NetworkQualityScreen(navController = navController, serviceStatus = serviceStatus)

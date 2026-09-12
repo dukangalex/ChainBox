@@ -292,7 +292,7 @@ fun ChainPathCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         if (topology.chained) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -393,14 +393,23 @@ fun ChainPathCard(
             }
         }
 
-        if (running && downlinkHistory.any { it > 0f }) {
+        if (running) {
             Spacer(modifier = Modifier.height(8.dp))
-            LineChart(
-                data = downlinkHistory,
-                chartHeight = 28.dp,
-                lineColor = Color(0xFF2E9E7A),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(28.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (downlinkHistory.any { it > 0f }) {
+                    LineChart(
+                        data = downlinkHistory,
+                        chartHeight = 28.dp,
+                        lineColor = Color(0xFF2E9E7A),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
         }
 
         val device = stringResource(R.string.chain_path_device)
@@ -423,14 +432,14 @@ fun ChainPathCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         TrafficSankey(
             nodes = localizedNodes,
             links = topology.flowLinks,
             flowing = topology.flowing && running,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (running) 280.dp else 180.dp)
+                .height(if (running) 200.dp else 148.dp)
                 .clickable(onClick = onOpenChainBuilder),
         )
     }
@@ -603,12 +612,15 @@ private fun TrafficSankey(
         val required = SankeyLayout.requiredHeight(nodes, padPx, gapY, minHeights, 1f)
         val canvasH = required.coerceAtMost(viewportPx * 2.4f).coerceAtLeast(1f)
         val canvasDp = with(density) { canvasH.toDp() }
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-        ) {
-            Canvas(Modifier.fillMaxWidth().height(canvasDp)) {
+        val needScroll = canvasH > viewportPx + 1f
+        val scroll = rememberScrollState()
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .then(if (needScroll) Modifier.verticalScroll(scroll) else Modifier),
+            ) {
+                Canvas(Modifier.fillMaxWidth().height(canvasDp)) {
                 val (placed, ribbons) = SankeyLayout.layout(
                     nodes = nodes,
                     links = links,
@@ -696,6 +708,7 @@ private fun TrafficSankey(
                     val tx = node.x + node.w + 5f
                     val ty = node.y + ((node.h - drawn.size.height) / 2f).coerceAtLeast(0f)
                     drawText(drawn, topLeft = Offset(tx, ty))
+                }
                 }
             }
         }

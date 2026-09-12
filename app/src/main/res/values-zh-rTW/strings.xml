@@ -718,4 +718,23 @@
     <string name="telegram_channel">Telegram 頻道</string>
     <string name="ads_block">廣告攔截</string>
     <string name="ads_block_summary">拒絕廣告規則集匹配的網域</string>
+    <string name="overlay_scripts">腳本</string>
+    <string name="overlay_scripts_subtitle">設定全域覆寫腳本（sing-box）</string>
+    <string name="overlay_scripts_hint">腳本只在啟動時改寫執行時設定，不改訂閱檔。需要 function main(config)，config 為 sing-box JSON。Clash 欄位不會被辨識。內建開關仍會在腳本之後生效。</string>
+    <string name="overlay_scripts_empty">還沒有腳本。點右下角 +，可用程式碼、URL、檔案或示例匯入。</string>
+    <string name="overlay_scripts_import">匯入</string>
+    <string name="overlay_scripts_import_code">透過程式碼匯入</string>
+    <string name="overlay_scripts_import_url">透過 URL 匯入</string>
+    <string name="overlay_scripts_import_file">透過檔案匯入</string>
+    <string name="overlay_scripts_import_sample">匯入示例（地區分組 / DNS / 分流）</string>
+    <string name="overlay_scripts_edit">編輯腳本</string>
+    <string name="overlay_scripts_code">程式碼</string>
+    <string name="overlay_scripts_from_code">程式碼匯入</string>
+    <string name="overlay_scripts_from_url">URL 匯入</string>
+    <string name="overlay_scripts_from_file">檔案匯入</string>
+    <string name="overlay_scripts_from_sample">示例腳本</string>
+    <string name="overlay_scripts_imported">匯入的腳本</string>
+    <string name="overlay_scripts_duplicate">複製</string>
+    <string name="overlay_scripts_failed">無法儲存腳本</string>
+    <string name="overlay_scripts_empty_file">檔案是空的</string>
 </resources>

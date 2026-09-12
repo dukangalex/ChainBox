@@ -595,6 +595,65 @@ def main() -> int:
     if "surfaceContainer" not in ui:
         errors.append("chain builder polish should use surface cards")
 
+    if "looksLikeGroupTag" not in flow:
+        errors.append("sankey must expand group tags like 自动选择 to the selected leaf")
+    if "expandHopLabel" not in flow:
+        errors.append("logged hops that are group tags must expand to the live leaf")
+    if "findGroup" not in live:
+        errors.append("live topology must match group tags with leading emoji stripped")
+    if "looksLikeGroupTag" not in live:
+        errors.append("displayNonDirect must not keep a group tag as 出口")
+    if "200.dp" not in path_card and "220.dp" not in path_card:
+        errors.append("running sankey must not stay at 280.dp; it sits too low")
+    if "280.dp" in path_card:
+        errors.append("sankey running height 280.dp pushes the path diagram too low")
+    if "contentAlignment = Alignment.Center" not in path_card:
+        errors.append("sankey must be vertically centered in its slot")
+    if "覆写脚本" not in override:
+        errors.append("ConfigQuicOverride must apply overlay scripts")
+    if "ConfigScriptOverride.apply" not in override:
+        errors.append("runtime overlay must run user scripts")
+    if "function main" not in read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigScriptOverride.kt"):
+        errors.append("script engine must require function main(config)")
+    if "initSafeStandardObjects" not in read("app/src/main/java/io/nekohasekai/sfa/utils/ConfigScriptOverride.kt"):
+        errors.append("Rhino must use initSafeStandardObjects")
+    if "org.mozilla:rhino" not in read("app/build.gradle.kts"):
+        errors.append("app must depend on Mozilla Rhino to run overlay scripts")
+    if "tools/scripts" not in read("app/src/main/java/io/nekohasekai/sfa/compose/navigation/Navigation.kt"):
+        errors.append("scripts route missing")
+    tools = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ToolsScreen.kt")
+    if "overlay_scripts" not in tools:
+        errors.append("Tools must expose 脚本")
+    if "function main(config)" not in read("app/src/main/assets/scripts/airport-region.js"):
+        errors.append("bundled sample must be a sing-box function main(config) script")
+    if "proxy-groups" in read("app/src/main/assets/scripts/airport-region.js"):
+        errors.append("bundled sample must not emit Clash proxy-groups")
+    if "type: \"urltest\"" not in read("app/src/main/assets/scripts/airport-region.js") and 'type: "urltest"' not in read("app/src/main/assets/scripts/airport-region.js"):
+        errors.append("bundled sample must create sing-box urltest outbounds")
+    if "load-balance" in read("app/src/main/assets/scripts/airport-region.js") and "GROUP_TYPES" not in read("app/src/main/assets/scripts/airport-region.js"):
+        errors.append("bundled sample must not create Clash load-balance outbounds")
+    sample = read("app/src/main/assets/scripts/airport-region.js")
+    if '"type": "load-balance"' in sample or "type: \"load-balance\"" in sample:
+        errors.append("bundled sample must not create load-balance outbounds (sing-box has no such type)")
+    if "testingcf.jsdelivr.net" not in sample:
+        errors.append("bundled sample rule-set URLs must use testingcf jsDelivr")
+    if "Package: io.chainbox.app" in read("scripts/telegram_announce.py"):
+        errors.append("Telegram copy must not show Package: to ordinary users")
+    if "SHA256:" in read("scripts/telegram_announce.py") and "核对" not in read("scripts/telegram_announce.py"):
+        errors.append("Telegram SHA-256 line must explain it is a file checksum")
+    if "核对文件是否完整" not in read("scripts/telegram_announce.py"):
+        errors.append("Telegram SHA-256 must be explained in plain language")
+    if "overlayScriptsJson" not in settings:
+        errors.append("Settings.overlayScriptsJson missing")
+    if "OVERLAY_SCRIPTS" not in read("app/src/main/java/io/nekohasekai/sfa/constant/SettingsKey.kt"):
+        errors.append("SettingsKey.OVERLAY_SCRIPTS missing")
+    if 'name="overlay_scripts"' not in cn:
+        errors.append("zh-rCN missing overlay_scripts")
+    if "ScriptListScreen" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/tools/ScriptListScreen.kt"):
+        errors.append("ScriptListScreen missing")
+    if "painterResource(R.mipmap" in path_card:
+        errors.append("Compose must not load adaptive mipmap icons")
+
     if errors:
         print("FAIL")
         for e in errors:

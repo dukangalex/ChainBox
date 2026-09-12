@@ -682,4 +682,23 @@
     <string name="telegram_channel">Telegram 频道</string>
     <string name="ads_block">广告拦截</string>
     <string name="ads_block_summary">拒绝广告规则集匹配的域名</string>
+    <string name="overlay_scripts">脚本</string>
+    <string name="overlay_scripts_subtitle">配置全局覆写脚本（sing-box）</string>
+    <string name="overlay_scripts_hint">脚本只在启动时改写运行时配置，不改订阅文件。需要 function main(config)，config 为 sing-box JSON。Clash 字段不会被识别。内置开关仍会在脚本之后生效。</string>
+    <string name="overlay_scripts_empty">还没有脚本。点右下角 +，可用代码、URL、文件或示例导入。</string>
+    <string name="overlay_scripts_import">导入</string>
+    <string name="overlay_scripts_import_code">通过代码导入</string>
+    <string name="overlay_scripts_import_url">通过 URL 导入</string>
+    <string name="overlay_scripts_import_file">通过文件导入</string>
+    <string name="overlay_scripts_import_sample">导入示例（地区分组 / DNS / 分流）</string>
+    <string name="overlay_scripts_edit">编辑脚本</string>
+    <string name="overlay_scripts_code">代码</string>
+    <string name="overlay_scripts_from_code">代码导入</string>
+    <string name="overlay_scripts_from_url">URL 导入</string>
+    <string name="overlay_scripts_from_file">文件导入</string>
+    <string name="overlay_scripts_from_sample">示例脚本</string>
+    <string name="overlay_scripts_imported">导入的脚本</string>
+    <string name="overlay_scripts_duplicate">复制</string>
+    <string name="overlay_scripts_failed">无法保存脚本</string>
+    <string name="overlay_scripts_empty_file">文件是空的</string>
 </resources>

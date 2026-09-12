@@ -272,9 +272,7 @@ object LiveTopologyBuilder {
 
     private fun membersOf(groupTag: String, groups: List<GroupHint>): Set<String> {
         val key = ChainRuntimeCompiler.displayHopTag(groupTag).ifBlank { groupTag.trim() }
-        val group = groups.find {
-            it.tag == key || ChainRuntimeCompiler.displayHopTag(it.tag) == key
-        }
+        val group = findGroup(groupTag, groups)
         return buildSet {
             add(key)
             if (group != null) {
@@ -286,6 +284,17 @@ object LiveTopologyBuilder {
         }.filter { it.isNotBlank() }.toSet()
     }
 
+    private fun findGroup(tag: String, groups: List<GroupHint>): GroupHint? {
+        val raw = tag.trim()
+        val key = TrafficFlowBuilder.groupKey(tag)
+        if (raw.isEmpty() && key.isEmpty()) return null
+        groups.find { group ->
+            group.tag == raw || ChainRuntimeCompiler.displayHopTag(group.tag) == raw
+        }?.let { return it }
+        val keyed = groups.filter { TrafficFlowBuilder.groupKey(it.tag) == key && key.isNotEmpty() }
+        return keyed.singleOrNull() ?: keyed.find { it.tag.endsWith(key) }
+    }
+
     private fun resolve(
         groupTag: String,
         groups: List<GroupHint>,
@@ -293,6 +302,24 @@ object LiveTopologyBuilder {
     ): Pair<String, Int> {
         val override = liveOverride?.trim().orEmpty()
         if (override.isNotEmpty()) {
+            val overrideGroup = findGroup(override, groups)
+            if (overrideGroup != null) {
+                val leaf = leafOf(overrideGroup.tag, groups, 0)
+                if (leaf.first.isNotEmpty() &&
+                    TrafficFlowBuilder.groupKey(leaf.first) != TrafficFlowBuilder.groupKey(override)
+                ) {
+                    return leaf
+                }
+                if (TrafficFlowBuilder.looksLikeGroupTag(override) || overrideGroup.selected.isNotBlank()) {
+                    return leaf
+                }
+            }
+            if (TrafficFlowBuilder.looksLikeGroupTag(override)) {
+                val planned = leafOf(groupTag, groups, 0)
+                if (planned.first.isNotEmpty() && !TrafficFlowBuilder.looksLikeGroupTag(planned.first)) {
+                    return planned
+                }
+            }
             val delay = delayOf(override, groups)
             return override to delay
         }
@@ -302,15 +329,12 @@ object LiveTopologyBuilder {
     private fun leafOf(tag: String, groups: List<GroupHint>, depth: Int): Pair<String, Int> {
         val key = ChainRuntimeCompiler.displayHopTag(tag).ifBlank { tag.trim() }
         if (key.isEmpty() || depth > 6) return key to 0
-        val group = groups.find { it.tag == key || ChainRuntimeCompiler.displayHopTag(it.tag) == key }
-            ?: return key to 0
+        val group = findGroup(tag, groups) ?: return key to 0
         val selected = group.selected.trim()
-        if (selected.isEmpty() || selected == key) {
+        if (selected.isEmpty() || selected == key || TrafficFlowBuilder.groupKey(selected) == TrafficFlowBuilder.groupKey(key)) {
             return key to (group.delays[key] ?: 0)
         }
-        val nested = groups.find {
-            it.tag == selected || ChainRuntimeCompiler.displayHopTag(it.tag) == selected
-        }
+        val nested = findGroup(selected, groups)
         return if (nested != null) {
             leafOf(selected, groups, depth + 1)
         } else {
@@ -324,10 +348,29 @@ object LiveTopologyBuilder {
         groups: List<GroupHint>,
     ): String {
         val shown = candidate.trim()
-        if (shown.isNotEmpty() && !TrafficFlowBuilder.isDirectTag(shown)) return shown
+        if (shown.isNotEmpty() &&
+            !TrafficFlowBuilder.isDirectTag(shown) &&
+            findGroup(shown, groups) == null &&
+            !TrafficFlowBuilder.looksLikeGroupTag(shown)
+        ) {
+            return shown
+        }
+        val fromCandidate = if (shown.isNotEmpty()) leafOf(shown, groups, 0).first else ""
+        if (fromCandidate.isNotEmpty() &&
+            !TrafficFlowBuilder.isDirectTag(fromCandidate) &&
+            findGroup(fromCandidate, groups) == null &&
+            !TrafficFlowBuilder.looksLikeGroupTag(fromCandidate)
+        ) {
+            return fromCandidate
+        }
         val leaf = leafOf(groupTag, groups, 0).first
-        if (leaf.isNotEmpty() && !TrafficFlowBuilder.isDirectTag(leaf)) return leaf
-        return groupTag.trim().ifBlank { shown }
+        if (leaf.isNotEmpty() &&
+            !TrafficFlowBuilder.isDirectTag(leaf) &&
+            !TrafficFlowBuilder.looksLikeGroupTag(leaf)
+        ) {
+            return leaf
+        }
+        return shown.ifBlank { groupTag.trim() }
     }
 
     private fun delayOf(tag: String, groups: List<GroupHint>): Int {

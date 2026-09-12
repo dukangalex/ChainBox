@@ -21,3 +21,6 @@
 #-renamesourcefileattribute SourceFile
 
 -keep class com.itsaky.androidide.treesitter.** { *; }
+-keep class org.mozilla.javascript.** { *; }
+-dontwarn org.mozilla.javascript.**
+

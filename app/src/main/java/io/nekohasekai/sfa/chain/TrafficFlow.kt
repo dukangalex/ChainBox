@@ -137,11 +137,61 @@ object TrafficFlowBuilder {
         if (chained) {
             val real = tags.filter { it.isNotEmpty() && !isDirectTag(it) }
             if (real.size >= 2) {
-                return listOf(real.first(), real.last())
+                return listOf(
+                    expandHopLabel(real.first(), hops, path, landing = false),
+                    expandHopLabel(real.last(), hops, path, landing = true),
+                )
             }
             return chainedHopPair(path, hops, sample)
         }
         return tags.ifEmpty { listOf("proxy") }
+    }
+
+    internal fun expandHopLabel(
+        tag: String,
+        hops: List<LiveHop>,
+        path: ChainPath,
+        landing: Boolean,
+    ): String {
+        val pretty = prettyHop(tag)
+        val hop = if (landing) {
+            hops.firstOrNull { it.role == ChainPathHop.Role.Landing }
+                ?: hops.firstOrNull { it.role == ChainPathHop.Role.Exit }
+        } else {
+            hops.firstOrNull { it.role == ChainPathHop.Role.Entry }
+        }
+        val title = prettyHop(hop?.title.orEmpty())
+        val sub = prettyHop(hop?.subtitle.orEmpty())
+        val planned = prettyHop(if (landing) path.landingTag else path.entryTag)
+        if (title.isNotBlank() && title != pretty) {
+            val matchesGroup = groupKey(pretty) == groupKey(sub) ||
+                pretty == sub ||
+                groupKey(pretty) == groupKey(planned) ||
+                looksLikeGroupTag(pretty)
+            if (matchesGroup && (!looksLikeGroupTag(title) || groupKey(title) != groupKey(pretty))) {
+                return title
+            }
+        }
+        return pretty
+    }
+
+    internal fun groupKey(tag: String): String {
+        val shown = ChainRuntimeCompiler.displayHopTag(tag).ifBlank { tag }.trim()
+        return shown.replaceFirst(LEADING_DECOR, "").trim()
+    }
+
+    internal fun looksLikeGroupTag(tag: String): Boolean {
+        val key = groupKey(tag)
+        if (key.isEmpty()) return false
+        return key.contains("自动选择") ||
+            key.contains("節點選擇") ||
+            key.contains("节点选择") ||
+            key.contains("负载均衡") ||
+            key.contains("負載均衡") ||
+            key.contains("手动选择") ||
+            key.contains("urltest", ignoreCase = true) ||
+            key.contains("selector", ignoreCase = true) ||
+            key.equals("proxy", ignoreCase = true)
     }
 
     /**
@@ -407,6 +457,7 @@ object TrafficFlowBuilder {
     private val PROTO_TAIL = Regex(
         """(?i)[-_\s\[]+(vless|vmess|trojan|hysteria2?|tuic|wireguard|shadowsocks|\bss\b|anytls).*""",
     )
+    private val LEADING_DECOR = Regex("^[\\p{So}\\p{Sk}\\uFE0F\\u200D\\s]+")
 }
 
 object SankeyLayout {
@@ -448,7 +499,9 @@ object SankeyLayout {
         columns.entries.forEachIndexed { index, (_, colNodes) ->
             val x = pad + index * layerWidth
             val mins = colNodes.map { node -> (minHeights[node.id] ?: 16f).coerceAtLeast(16f) }
-            var y = pad
+            val used = mins.sum() + gapY * (colNodes.size - 1).coerceAtLeast(0)
+            val inner = (height - pad * 2f).coerceAtLeast(used)
+            var y = pad + ((inner - used) / 2f).coerceAtLeast(0f)
             colNodes.forEachIndexed { i, node ->
                 val h = mins[i]
                 val item = PlacedNode(node, x, y, nodeWidth, h)

@@ -65,6 +65,7 @@ object SettingsKey {
     const val THEME_MODE = "theme_mode"
     const val THEME_SEED = "theme_seed"
     const val THEME_PURE_BLACK = "theme_pure_black"
+    const val OVERLAY_SCRIPTS = "overlay_scripts"
 
     const val ACTIVE_REMOTE_SERVER_ID = "active_remote_server_id"
 

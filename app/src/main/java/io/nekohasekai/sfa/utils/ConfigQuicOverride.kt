@@ -39,7 +39,26 @@ object ConfigQuicOverride {
         }
 
         try {
-            val root = JSONObject(out)
+            var root = JSONObject(out)
+            applyLogLevel(root)
+            applyOne(warnings, "覆写脚本") {
+                ConfigScriptOverride.apply(root)
+            }
+            out = ConfigCompat.sanitize(root.toString())
+            if (binding != null) {
+                try {
+                    out = ConfigChainReapply.apply(out)
+                } catch (e: Exception) {
+                    val notice = OverrideNotice(
+                        title = "链式代理未生效，已停止启动",
+                        reason = e.message ?: "无法串联出站",
+                        hint = "链路只绑定当前配置，订阅更新不会清掉绑定。请到「工具 → 链式代理」确认入口和落地。失败不会自动改走 DIRECT。",
+                    )
+                    OverrideStatus.set(warnings + notice)
+                    throw ChainApplyException(notice.reason)
+                }
+            }
+            root = JSONObject(out)
             applyLogLevel(root)
             applyOne(warnings, "中国直连") {
                 if (Settings.chinaDirect) ConfigChinaDirect.apply(root)
@@ -65,6 +84,8 @@ object ConfigQuicOverride {
             }
             ConfigCompat.stripBrokenDnsDetours(root)
             out = root.toString()
+        } catch (e: ChainApplyException) {
+            throw e
         } catch (e: Exception) {
             warnings += OverrideNotice(
                 title = "网络增强开关部分未生效",
