@@ -9,9 +9,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -77,6 +80,7 @@ import io.nekohasekai.sfa.compose.LineChart
 import io.nekohasekai.sfa.compose.navigation.NewProfileArgs
 import io.nekohasekai.sfa.constant.Status
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChainPathCard(
     topology: LiveTopology,
@@ -99,6 +103,11 @@ fun ChainPathCard(
     canUpdateCurrentProfile: Boolean = false,
     updatingCurrentProfile: Boolean = false,
     updatedCurrentProfile: Boolean = false,
+    systemProxyVisible: Boolean = false,
+    systemProxyEnabled: Boolean = false,
+    onSystemProxyToggle: (Boolean) -> Unit = {},
+    memory: String = "",
+    goroutines: String = "",
     serviceStatus: Status = Status.Stopped,
 ) {
     val running = topology.running
@@ -130,9 +139,11 @@ fun ChainPathCard(
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 2.dp),
     ) {
-        Row(
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
             StatusChip(
                 stringResource(R.string.title_configuration),
@@ -140,11 +151,9 @@ fun ChainPathCard(
                 onClick = onShowProfilePicker,
             )
             if (profileName.isNotBlank()) {
-                Spacer(modifier = Modifier.width(6.dp))
                 StatusChip(profileName, emphasized = false, onClick = onShowProfilePicker)
             }
             if (canUpdateCurrentProfile) {
-                Spacer(modifier = Modifier.width(6.dp))
                 StatusChip(
                     label = when {
                         updatedCurrentProfile -> stringResource(R.string.success)
@@ -171,14 +180,12 @@ fun ChainPathCard(
                 )
             }
             if (clashModes.isNotEmpty()) {
-                Spacer(modifier = Modifier.width(4.dp))
                 ModeChip(
                     modes = clashModes,
                     selected = selectedClashMode,
                     onSelected = onClashModeSelected,
                 )
             }
-            Spacer(modifier = Modifier.weight(1f))
             IconButton(
                 onClick = onOpenChainBuilder,
                 modifier = Modifier.size(28.dp),
@@ -253,16 +260,40 @@ fun ChainPathCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     StatusChip(stringResource(R.string.chain_path_mode_direct), emphasized = false)
                 }
+                if (systemProxyVisible) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    StatusChip(
+                        label = stringResource(R.string.system_proxy),
+                        emphasized = systemProxyEnabled,
+                        onClick = { onSystemProxyToggle(!systemProxyEnabled) },
+                    )
+                }
             } else {
                 StatusChip(stringResource(R.string.chain_path_idle), emphasized = false)
             }
             Spacer(modifier = Modifier.weight(1f))
-            if (downlinkTotal.isNotEmpty() || uplinkTotal.isNotEmpty()) {
-                Text(
-                    text = "↓ ${downlinkTotal.ifEmpty { "0 B" }}  ↑ ${uplinkTotal.ifEmpty { "0 B" }}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Column(horizontalAlignment = Alignment.End) {
+                if (downlinkTotal.isNotEmpty() || uplinkTotal.isNotEmpty()) {
+                    Text(
+                        text = "↓ ${downlinkTotal.ifEmpty { "0 B" }}  ↑ ${uplinkTotal.ifEmpty { "0 B" }}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (memory.isNotBlank() || goroutines.isNotBlank()) {
+                    Text(
+                        text = listOfNotNull(
+                            memory.takeIf { it.isNotBlank() }?.let {
+                                "${stringResource(R.string.memory)} $it"
+                            },
+                            goroutines.takeIf { it.isNotBlank() }?.let {
+                                "${stringResource(R.string.goroutines)} $it"
+                            },
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 

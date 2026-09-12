@@ -238,34 +238,39 @@ jobs:
             dist/ChainBox-android.apk.sha256
           if-no-files-found: error
 
+      - name: Build release notes
+        if: success() && github.event_name == 'workflow_dispatch' && (inputs.publish_release == 'true' || inputs.publish_release == true)
+        run: |
+          set -euo pipefail
+          NOTES="sing-box-for-android/docs/RELEASE_NOTES.md"
+          {
+            if [ -f "$NOTES" ]; then cat "$NOTES"; echo; fi
+            echo "Install \`AngelaBox-android.apk\` (arm64). That is the only file you need."
+            echo
+            echo "\`ChainBox-android.apk\` is a **same-bytes alias** for overlay updates from the old name. Do not install both."
+            echo
+            echo "Verify:"
+            echo
+            echo '```'
+            echo "sha256sum -c AngelaBox-android.apk.sha256"
+            echo '```'
+            echo
+            echo "- Product: AngelaBox"
+            echo "- Package: \`io.chainbox.app\`"
+            echo "- Kernel branch: \`chain-dev\`"
+            echo "- Kernel tag: \`${KERNEL_DESCRIBE}\`"
+            echo "- Kernel commit: \`${KERNEL_COMMIT}\`"
+            echo "- Official baseline: SagerNet/sing-box \`${KERNEL_UPSTREAM_TAG}\`"
+            echo "- Official type-constant check: \`${OFFICIAL_FEATURE_CHECK}\`"
+          } > release-body.md
+
       - name: Publish GitHub Release
         if: success() && github.event_name == 'workflow_dispatch' && (inputs.publish_release == 'true' || inputs.publish_release == true)
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           tag_name: ${{ inputs.version_tag }}
           name: AngelaBox ${{ inputs.version_tag }}
-          body: |
-            AngelaBox ${{ inputs.version_tag }}
-
-            Install `AngelaBox-android.apk` (arm64). That is the only file you need.
-
-            `ChainBox-android.apk` is a **same-bytes alias** for overlay updates from the old name. Do not install both.
-
-            Verify:
-
-            ```
-            sha256sum -c AngelaBox-android.apk.sha256
-            ```
-
-            - Product: AngelaBox
-            - Package: `io.chainbox.app` (unchanged so overlay install still works)
-            - Kernel branch: `chain-dev`
-            - Kernel tag: `${{ env.KERNEL_DESCRIBE }}`
-            - Kernel commit: `${{ env.KERNEL_COMMIT }}`
-            - Official baseline: SagerNet/sing-box `${{ env.KERNEL_UPSTREAM_TAG }}`
-            - Official type-constant check: `${{ env.OFFICIAL_FEATURE_CHECK }}`
-
-            Added features exist only to make ordinary operation easier. The kernel remains official sing-box plus the chain outbound overlay.
+          body_path: release-body.md
           files: |
             dist/AngelaBox-android.apk
             dist/AngelaBox-android.apk.sha256
@@ -284,24 +289,54 @@ jobs:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
           VERSION_TAG: ${{ inputs.version_tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           if [ -z "${TG_BOT_TOKEN:-}" ] || [ -z "${TG_CHANNEL_ID:-}" ]; then
             echo "::warning::Set repo secrets TG_BOT_TOKEN and TG_CHANNEL_ID=@AngelaBox so releases post to https://t.me/AngelaBox"
-            echo "TG_BOT_TOKEN / TG_CHANNEL_ID not set; skip channel notify"
             exit 0
           fi
+          ROOT="${GITHUB_WORKSPACE:-.}"
+          cd "$ROOT"
+          APK="${ROOT}/dist/AngelaBox-android.apk"
+          if [ ! -f "$APK" ]; then
+            APK="$(find "$ROOT" -type f -name 'AngelaBox-android.apk' -size +1M | head -n1 || true)"
+          fi
+          SHA_FILE="${ROOT}/dist/AngelaBox-android.apk.sha256"
+          if [ ! -f "$SHA_FILE" ]; then
+            SHA_FILE="$(find "$ROOT" -type f -name 'AngelaBox-android.apk.sha256' | head -n1 || true)"
+          fi
+          SHA=""
+          if [ -n "${SHA_FILE}" ] && [ -f "${SHA_FILE}" ]; then SHA="$(awk '{print $1}' "$SHA_FILE")"; fi
           URL="https://github.com/dukangalex/AngelaBox/releases/tag/${VERSION_TAG}"
-          TEXT="$(printf 'AngelaBox %s 已发布\n%s\n\n请安装 AngelaBox-android.apk（ChainBox-android.apk 是同内容别名，不必下两个）。' "$VERSION_TAG" "$URL")"
-          curl -fsS -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TG_CHANNEL_ID}" \
-            --data-urlencode "text=${TEXT}" \
-            --data-urlencode "disable_web_page_preview=false"
-          if [ -f dist/AngelaBox-android.apk ]; then
-            SHA="$(awk '{print $1}' dist/AngelaBox-android.apk.sha256 2>/dev/null || true)"
-            CAPTION="$(printf 'AngelaBox %s\n\n请安装这个 APK。ChainBox-android.apk 是同内容别名，不必另下。\n\nSHA256:\n%s\n\n%s' "$VERSION_TAG" "$SHA" "$URL")"
-            curl -fsS -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" \
+          APK_URL="https://github.com/dukangalex/AngelaBox/releases/download/${VERSION_TAG}/AngelaBox-android.apk"
+          TAG="${VERSION_TAG}" RELEASE_URL="${URL}" SHA256="${SHA}" APK_URL="${APK_URL}" \
+            NOTES_FILE="${ROOT}/sing-box-for-android/docs/RELEASE_NOTES.md" \
+            python3 "${ROOT}/sing-box-for-android/scripts/telegram_announce.py"
+          if [ -n "${APK}" ] && [ -f "${APK}" ]; then
+            ls -lh "$APK"
+            echo "Telegram upload path: ${APK}"
+            DOC_RESP="$(curl -sS --retry 2 --retry-delay 3 --max-time 180 \
+              -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" \
               -F "chat_id=${TG_CHANNEL_ID}" \
-              -F "document=@dist/AngelaBox-android.apk" \
-              -F "caption=${CAPTION}"
+              -F "document=@${APK};filename=AngelaBox-android.apk;type=application/vnd.android.package-archive" \
+              -F "caption=$(cat telegram-caption.txt)" \
+              -F "disable_content_type_detection=true" || true)"
+            echo "${DOC_RESP}" | jq . || echo "${DOC_RESP}"
+            if [ "$(echo "${DOC_RESP}" | jq -r '.ok // false')" != "true" ]; then
+              echo "::warning::Telegram sendDocument failed"
+            fi
+          else
+            echo "::warning::AngelaBox-android.apk not found for Telegram upload"
+            find "$ROOT" -name '*.apk' | head
+          fi
+          MSG_RESP="$(curl -sS --retry 3 --retry-delay 2 \
+            -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHANNEL_ID}" \
+            --data-urlencode "text=$(cat telegram-message.txt)" \
+            --data-urlencode "reply_markup=$(cat telegram-markup.json)" \
+            --data-urlencode "disable_web_page_preview=true" || true)"
+          echo "${MSG_RESP}" | jq . || echo "${MSG_RESP}"
+          if [ "$(echo "${MSG_RESP}" | jq -r '.ok // false')" != "true" ]; then
+            echo "::warning::Telegram sendMessage failed"
           fi

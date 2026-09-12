@@ -215,6 +215,7 @@
     <string name="auto_redirect">Auto Redirect</string>
     <string name="auto_redirect_description">ROOT permission required</string>
     <string name="system_http_proxy">System HTTP Proxy</string>
+    <string name="system_http_proxy_summary">Offer the HTTP proxy to apps that read the system proxy</string>
     <string name="update_settings">Update Settings</string>
 
     <!-- Per-App Proxy -->

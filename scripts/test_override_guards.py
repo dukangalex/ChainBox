@@ -448,6 +448,17 @@ def main() -> int:
         errors.append("chained 入口 must stay visible even when the title matches 出口")
     if "homeHidden" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardScreen.kt"):
         errors.append("home must hide the duplicate debug/mode/profile cards")
+    dash = read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/DashboardScreen.kt")
+    if "localHomeCards" not in dash:
+        errors.append("local dashboard must only render the new path UI")
+    if "if (!isRemote)" not in dash and "if (!isRemote) {" not in dash:
+        errors.append("local home must force ChainPath even when dashboard_items hid it")
+    if "dashboard_items" in dash:
+        errors.append("local dashboard must not expose the official card picker")
+    if "systemProxyVisible" not in path_card:
+        errors.append("system proxy must stay reachable from the new home")
+    if "R.string.memory" not in path_card:
+        errors.append("debug memory/goroutines must stay visible on the new home")
     if "shortenNodeName" not in flow:
         errors.append("landing hop labels must be shortened for display")
     if "chainedHopPair" not in flow:
@@ -467,7 +478,7 @@ def main() -> int:
         errors.append("README must point at dukangalex/AngelaBox")
     if "dukangalex/AngelaBox" not in read("docs/MAINTENANCE.md"):
         errors.append("MAINTENANCE must point at dukangalex/AngelaBox")
-    if "defaultDisabledCards" not in dash:
+    if "defaultDisabledCards" not in dash and "localHomeCards" not in dash:
         errors.append("dashboard should hide duplicate upload/download cards by default")
     if "chartHeight = 18.dp" not in read("app/src/main/java/io/nekohasekai/sfa/compose/screen/dashboard/UploadTrafficCard.kt"):
         errors.append("traffic cards should use a compact sparkline")
@@ -494,6 +505,18 @@ def main() -> int:
         errors.append("build-chainbox.yml must notify Telegram after publish")
     if "sendDocument" not in workflow:
         errors.append("build-chainbox.yml must upload the APK to Telegram")
+    if "telegram_announce.py" not in workflow:
+        errors.append("build-chainbox.yml must build Telegram notes from telegram_announce.py")
+    if "reply_markup" not in workflow:
+        errors.append("Telegram notify must include a download button")
+    if "disable_web_page_preview=true" not in workflow:
+        errors.append("Telegram notify must disable GitHub link preview so the channel shows notes+APK")
+    if "telegram-caption.txt" not in workflow:
+        errors.append("Telegram APK caption must come from telegram_announce.py")
+    if "filename=AngelaBox-android.apk" not in workflow:
+        errors.append("Telegram sendDocument must set filename= so the APK is installable")
+    if "body_path: release-body.md" not in workflow:
+        errors.append("GitHub release body must come from generated notes")
     if "same-bytes alias" not in workflow:
         errors.append("release notes must say ChainBox-android.apk is the same file")
     telegram = read(".github/workflows/telegram.yml")
@@ -505,6 +528,21 @@ def main() -> int:
         errors.append("telegram.yml must skip when secrets are missing")
     if "name: Telegram Release" not in telegram:
         errors.append("telegram.yml must be named Telegram Release so it is findable in Actions")
+    if "telegram_announce.py" not in telegram:
+        errors.append("telegram.yml must use telegram_announce.py so notes and download button match")
+    if "disable_web_page_preview=true" not in telegram:
+        errors.append("telegram.yml must disable GitHub link preview")
+    if "docs/brand/AngelaBox-icon-512.png" not in readme:
+        errors.append("README must show the cube icon on the repository homepage")
+    brand512 = ROOT / "docs/brand/AngelaBox-icon-512.png"
+    brand1024 = ROOT / "docs/brand/AngelaBox-icon-1024.png"
+    brand_og = ROOT / "docs/brand/AngelaBox-og.png"
+    if not brand512.is_file() or brand512.stat().st_size < 1000:
+        errors.append("docs/brand/AngelaBox-icon-512.png missing")
+    if not brand1024.is_file() or brand1024.stat().st_size < 1000:
+        errors.append("docs/brand/AngelaBox-icon-1024.png missing")
+    if not brand_og.is_file() or brand_og.stat().st_size < 1000:
+        errors.append("docs/brand/AngelaBox-og.png missing (GitHub social preview)")
     if "t.me/AngelaBox" not in read("docs/MAINTENANCE.md"):
         errors.append("MAINTENANCE must document the Telegram channel")
     if "TG_BOT_TOKEN" not in read("docs/MAINTENANCE.md"):

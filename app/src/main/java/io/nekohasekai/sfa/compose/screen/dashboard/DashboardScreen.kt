@@ -10,28 +10,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -46,7 +40,6 @@ import io.nekohasekai.sfa.compose.topbar.LocalScaffoldPadding
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.utils.RemoteControlManager
-import kotlinx.coroutines.launch
 
 data class CardRenderItem(val cards: List<CardGroup>, val isRow: Boolean)
 
@@ -75,44 +68,15 @@ fun DashboardScreen(
         TopAppBar(
             title = { Text(stringResource(R.string.title_dashboard)) },
             actions = {
-                Box {
-                    IconButton(onClick = { showOthersMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.title_others))
+                if (remoteServers.isNotEmpty()) {
+                    Box {
+                        IconButton(onClick = { showOthersMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.title_others))
+                        }
+                        DropdownMenu(expanded = showOthersMenu, onDismissRequest = { showOthersMenu = false }) {
+                            RemoteControlMenuItems(servers = remoteServers, onAction = { showOthersMenu = false })
+                        }
                     }
-                    DropdownMenu(expanded = showOthersMenu, onDismissRequest = { showOthersMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.dashboard_items)) },
-                            leadingIcon = {
-                                Icon(Icons.Default.GridView, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            },
-                            onClick = {
-                                showOthersMenu = false
-                                viewModel.toggleCardSettingsDialog()
-                            },
-                        )
-                        RemoteControlMenuItems(servers = remoteServers, onAction = { showOthersMenu = false })
-                    }
-                }
-            },
-        )
-    }
-
-    val sheetState = rememberModalBottomSheetState()
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-
-    if (uiState.showCardSettingsDialog) {
-        DashboardSettingsBottomSheet(
-            sheetState = sheetState,
-            visibleCards = uiState.visibleCards,
-            cardOrder = uiState.cardOrder,
-            onToggleCard = viewModel::toggleCardVisibility,
-            onReorderCards = viewModel::reorderCards,
-            onResetOrder = viewModel::resetCardOrder,
-            onDismiss = {
-                scope.launch {
-                    sheetState.hide()
-                    viewModel.closeCardSettingsDialog()
                 }
             },
         )
@@ -137,7 +101,9 @@ fun DashboardScreen(
         ) {
             item { OverrideBanner() }
             val serviceRunning = uiState.isStatusVisible
-            val pathShowing = !isRemote && CardGroup.ChainPath in uiState.visibleCards
+            // Local home is only the new path UI. Official SFA cards stay in
+            // the codebase so their functions can be called from chips / the
+            // status bar / Settings, but they are not shown as a second dashboard.
             val homeHidden = setOf(
                 CardGroup.UploadTraffic,
                 CardGroup.DownloadTraffic,
@@ -145,21 +111,25 @@ fun DashboardScreen(
                 CardGroup.Connections,
                 CardGroup.ClashMode,
                 CardGroup.Profiles,
+                CardGroup.SystemProxy,
             )
-            val actuallyVisibleCards = uiState.visibleCards.filter { cardGroup ->
-                when {
-                    pathShowing && cardGroup in homeHidden -> false
-                    isRemote ->
-                        cardGroup != CardGroup.Profiles &&
-                            cardGroup != CardGroup.SystemProxy &&
-                            cardGroup != CardGroup.ChainPath &&
-                            serviceRunning &&
-                            isCardAvailableWhenServiceRunning(cardGroup, uiState)
-                    cardGroup == CardGroup.Profiles || cardGroup == CardGroup.ChainPath -> true
-                    else -> serviceRunning && isCardAvailableWhenServiceRunning(cardGroup, uiState)
-                }
-            }.toSet()
-            val cardRenderItems = processCardsForRendering(uiState.cardOrder, actuallyVisibleCards, uiState.cardWidths)
+            val localHomeCards = setOf(CardGroup.ChainPath)
+            val actuallyVisibleCards = if (!isRemote) {
+                localHomeCards
+            } else {
+                uiState.visibleCards.filter { cardGroup ->
+                    cardGroup !in homeHidden &&
+                        cardGroup != CardGroup.ChainPath &&
+                        serviceRunning &&
+                        isCardAvailableWhenServiceRunning(cardGroup, uiState)
+                }.toSet()
+            }
+            val cardOrder = if (!isRemote) {
+                listOf(CardGroup.ChainPath)
+            } else {
+                uiState.cardOrder
+            }
+            val cardRenderItems = processCardsForRendering(cardOrder, actuallyVisibleCards, uiState.cardWidths)
             items(cardRenderItems) { renderItem ->
                 if (renderItem.isRow && renderItem.cards.size >= 2) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -67,6 +67,11 @@ fun DashboardCardRenderer(
                 canUpdateCurrentProfile = selected?.typed?.type == TypedProfile.Type.Remote,
                 updatingCurrentProfile = updatingProfileId != null && updatingProfileId == selectedProfileId,
                 updatedCurrentProfile = updatedProfileId != null && updatedProfileId == selectedProfileId,
+                systemProxyVisible = uiState.systemProxyVisible,
+                systemProxyEnabled = uiState.systemProxyEnabled,
+                onSystemProxyToggle = onSystemProxyToggle,
+                memory = uiState.memory,
+                goroutines = uiState.goroutines,
                 serviceStatus = serviceStatus,
                 modifier = modifier,
             )

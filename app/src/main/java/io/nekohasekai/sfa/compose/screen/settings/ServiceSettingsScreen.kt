@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.bg.ServiceConnection
 import io.nekohasekai.sfa.compose.base.UiEvent
@@ -93,6 +94,7 @@ fun ServiceSettingsScreen(
     val scope = rememberCoroutineScope()
     var isBatteryOptimizationIgnored by remember { mutableStateOf(false) }
     var allowBypass by remember { mutableStateOf(Settings.allowBypass) }
+    var systemProxyEnabled by remember { mutableStateOf(Settings.systemProxyEnabled) }
     val notifyApplyChange = rememberApplyServiceChangeNotifier(serviceStatus)
     val requestBatteryOptimizationLauncher =
         rememberLauncherForActivityResult(
@@ -272,6 +274,43 @@ fun ServiceSettingsScreen(
                                 Settings.allowBypass = checked
                                 withContext(Dispatchers.Main) {
                                     notifyApplyChange(UiEvent.ApplyServiceChange.Mode.Reload)
+                                }
+                            }
+                        },
+                    )
+                },
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)),
+                colors =
+                ListItemDefaults.colors(
+                    containerColor = Color.Transparent,
+                ),
+            )
+
+            ListItem(
+                headlineContent = {
+                    Text(
+                        stringResource(R.string.system_http_proxy),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        stringResource(R.string.system_http_proxy_summary),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                trailingContent = {
+                    Switch(
+                        checked = systemProxyEnabled,
+                        onCheckedChange = { checked ->
+                            systemProxyEnabled = checked
+                            scope.launch(Dispatchers.IO) {
+                                Settings.systemProxyEnabled = checked
+                                if (serviceStatus == Status.Started) {
+                                    runCatching {
+                                        Libbox.newStandaloneCommandClient().setSystemProxyEnabled(checked)
+                                    }
                                 }
                             }
                         },

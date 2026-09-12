@@ -212,6 +212,34 @@ def round_mask(img: Image.Image) -> Image.Image:
     return out
 
 
+def write_og(master: Image.Image, path: Path) -> None:
+    """GitHub social preview / Open Graph: 1280x640 cube + product name."""
+    from PIL import ImageFont
+
+    w, h = 1280, 640
+    canvas = Image.new("RGBA", (w, h), (255, 255, 255, 255))
+    cube = master.resize((360, 360), Image.Resampling.LANCZOS)
+    canvas.paste(cube, ((w - 360) // 2, 88), cube)
+    draw = ImageDraw.Draw(canvas)
+    font = None
+    for candidate in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSans-Bold.ttf",
+    ):
+        if Path(candidate).is_file():
+            font = ImageFont.truetype(candidate, 56)
+            break
+    if font is None:
+        font = ImageFont.load_default()
+    label = "AngelaBox"
+    bbox = draw.textbbox((0, 0), label, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    draw.text(((w - tw) / 2, 470), label, fill=(17, 24, 39, 255), font=font)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.convert("RGB").save(path, "PNG")
+
+
 def save_resized(master: Image.Image, path: Path, size: int, rounded: bool) -> None:
     im = master.resize((size, size), Image.Resampling.LANCZOS)
     if rounded:
@@ -242,6 +270,12 @@ def main() -> None:
     hd.mkdir(parents=True, exist_ok=True)
     master.save(hd / "AngelaBox-icon-1024.png", "PNG")
     master.resize((512, 512), Image.Resampling.LANCZOS).save(hd / "AngelaBox-icon-512.png", "PNG")
+    brand = ROOT / "docs/brand"
+    brand.mkdir(parents=True, exist_ok=True)
+    master.save(brand / "AngelaBox-icon-1024.png", "PNG")
+    master.resize((512, 512), Image.Resampling.LANCZOS).save(brand / "AngelaBox-icon-512.png", "PNG")
+    write_og(master, brand / "AngelaBox-og.png")
+    write_og(master, hd / "AngelaBox-og.png")
     bbox_pts = [
         iso(0, 0, 0), iso(0, 0, 3), iso(3, 0, 0), iso(3, 0, 3),
         iso(0, 3, 0), iso(3, 3, 3),

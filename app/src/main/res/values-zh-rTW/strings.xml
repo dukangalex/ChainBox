@@ -215,6 +215,7 @@
     <string name="auto_redirect">自動重定向</string>
     <string name="auto_redirect_description">需要 ROOT 權限</string>
     <string name="system_http_proxy">系統 HTTP 代理</string>
+    <string name="system_http_proxy_summary">把 HTTP 代理提供給會讀取系統代理的應用</string>
     <string name="update_settings">更新設定</string>
 
     <!-- Per-App Proxy -->
